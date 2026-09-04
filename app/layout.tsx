@@ -10,7 +10,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // Intentionally do NOT cap maximumScale: students must be able to pinch-zoom
+  // into equations and the problem photo (accessibility — WCAG 1.4.4).
   themeColor: "#3563ff",
 };
 

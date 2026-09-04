@@ -35,6 +35,10 @@ export default function TutorWorkspace() {
   const [turnError, setTurnError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Ensures the initial auto-analysis fires exactly once, so a double effect
+  // invocation (StrictMode / Fast Refresh) can never append a duplicate opener.
+  // Manual retries call runAnalysis directly and are unaffected.
+  const startedRef = useRef(false);
 
   // Load the captured image and analyze it.
   const runAnalysis = useCallback(async (dataUrl: string) => {
@@ -60,6 +64,8 @@ export default function TutorWorkspace() {
   }, []);
 
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
     const stored =
       typeof window !== "undefined" ? sessionStorage.getItem(IMAGE_KEY) : null;
     if (!stored) {
