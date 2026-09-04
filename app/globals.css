@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* KaTeX styles, imported locally so math renders offline without a CDN. */
+@import "katex/dist/katex.min.css";
+
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+}
+
+html,
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* Keep long equations from breaking the mobile layout. */
+.katex-display {
+  @apply overflow-x-auto overflow-y-hidden py-1;
+}
+
+/* Subtle entrance for newly added chat messages. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-rise {
+  animation: rise 0.18s ease-out;
+}
