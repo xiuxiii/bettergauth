@@ -45,6 +45,18 @@ No environment variables are required. `AI_PROVIDER` defaults to `mock`
   concept-right-but-arithmetic, wrong-equation, wrong-assumption, chemistry- and
   algebra-misconception, and partially-correct scenarios (see
   `lib/ai/mockProvider.ts`; type `scenario:<id>` in an attempt to force one).
+- **Practice — "I'm ready, give me one like this"** (`components/PracticeCard.tsx`)
+  — generates a fresh problem on the *same concept* with changed numbers/context
+  (memorization is useless) at matching or slightly higher difficulty. The
+  solution is withheld until the student submits, so they solve independently;
+  then the attempt is evaluated across five axes (concept selection, reasoning,
+  setup, execution, final answer) with concise feedback on the single most
+  important issue, and the worked solution is revealed. Generation and evaluation
+  run through `AIProvider.generatePractice` / `evaluatePractice`
+  (`/api/practice/generate`, `/api/practice/evaluate`); the mock keeps a couple of
+  variants per concept (not a database) and infers the outcome from the attempt
+  (`outcome:<id>` forces one). The solution is never sent to the client before
+  submission.
 
 ## Architecture
 

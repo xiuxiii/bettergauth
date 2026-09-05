@@ -1,5 +1,9 @@
 import type {
   CheckWorkRequest,
+  EvaluatePracticeRequest,
+  GeneratePracticeRequest,
+  PracticeEvaluation,
+  PracticeProblem,
   ProblemAnalysis,
   TutorRequest,
   TutorTurn,
@@ -27,4 +31,21 @@ export interface AIProvider {
    * not merely whether the final answer is wrong.
    */
   checkWork(request: CheckWorkRequest): Promise<WorkCheck>;
+
+  /**
+   * Practice mode — generate a fresh problem testing the same concept as the
+   * original, with changed numbers/context so memorization is useless, at
+   * matching or slightly higher difficulty. The solution is intentionally NOT
+   * included so the student solves it independently first.
+   */
+  generatePractice(request: GeneratePracticeRequest): Promise<PracticeProblem>;
+
+  /**
+   * Evaluate a submitted practice attempt across five axes (concept selection,
+   * reasoning, setup, execution, final answer), give concise feedback on the
+   * most important issue, and reveal the worked solution.
+   */
+  evaluatePractice(
+    request: EvaluatePracticeRequest,
+  ): Promise<PracticeEvaluation>;
 }

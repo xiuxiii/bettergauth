@@ -17,6 +17,7 @@ import ProblemCard from "@/components/ProblemCard";
 import MessageBubble from "@/components/MessageBubble";
 import ActionBar from "@/components/ActionBar";
 import AttemptComposer from "@/components/AttemptComposer";
+import PracticeCard from "@/components/PracticeCard";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 
 /** A chat message plus any structured payloads attached to a turn. */
@@ -27,6 +28,11 @@ type DisplayMessage = ChatMessage & {
   workCheck?: WorkCheck;
   /** Attached to a student turn: a photo of their attempt. */
   attemptImage?: string;
+  /**
+   * When set, this entry renders a self-contained practice widget (generate →
+   * solve → evaluate) seeded from the given source problem, instead of a bubble.
+   */
+  practiceFor?: ProblemAnalysis;
 };
 
 type Phase = "loading" | "ready" | "error" | "empty";
@@ -200,6 +206,22 @@ export default function TutorWorkspace() {
     }
   }
 
+  function handlePractice() {
+    if (!analysis || turnBusy) return;
+    // Append a self-contained practice widget; it generates and evaluates on
+    // its own via /api/practice/*.
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uid("p"),
+        role: "tutor",
+        content: "",
+        createdAt: Date.now(),
+        practiceFor: analysis,
+      },
+    ]);
+  }
+
   // ---- Render ----
 
   if (phase === "empty") {
@@ -239,16 +261,20 @@ export default function TutorWorkspace() {
           <ProblemCard image={image} analysis={analysis} />
         )}
 
-        {messages.map((m) => (
-          <MessageBubble
-            key={m.id}
-            message={m}
-            solution={m.solution}
-            similarProblem={m.similarProblem}
-            workCheck={m.workCheck}
-            attemptImage={m.attemptImage}
-          />
-        ))}
+        {messages.map((m) =>
+          m.practiceFor ? (
+            <PracticeCard key={m.id} source={m.practiceFor} />
+          ) : (
+            <MessageBubble
+              key={m.id}
+              message={m}
+              solution={m.solution}
+              similarProblem={m.similarProblem}
+              workCheck={m.workCheck}
+              attemptImage={m.attemptImage}
+            />
+          ),
+        )}
 
         {turnBusy && <LoadingState label="Tutor is thinking…" />}
 
@@ -268,6 +294,7 @@ export default function TutorWorkspace() {
           onAction={handleAction}
           onAsk={handleAsk}
           onCheckWork={() => setComposerOpen(true)}
+          onPractice={handlePractice}
         />
       )}
 

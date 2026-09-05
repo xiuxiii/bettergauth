@@ -140,3 +140,64 @@ export interface CheckWorkRequest {
   problem: ProblemAnalysis;
   attempt: StudentAttempt;
 }
+
+// ---------------------------------------------------------------------------
+// "I'm Ready — Give Me One Like This" practice mode
+// ---------------------------------------------------------------------------
+
+/**
+ * A freshly generated practice problem. Client-facing and deliberately WITHOUT
+ * the solution: the student must solve it independently and submit before the
+ * worked solution is revealed (it comes back only in the evaluation).
+ */
+export interface PracticeProblem {
+  problemText: string;
+  subject: Subject;
+  topic: string;
+  /** The underlying concept it tests — the same one as the original problem. */
+  concept: string;
+  /** Relative to the original: matches it, or slightly exceeds it. */
+  difficulty: "same" | "slightly_harder";
+}
+
+/** The five axes the tutor evaluates a submitted attempt against. */
+export type PracticeAxis =
+  | "concept_selection"
+  | "reasoning"
+  | "setup"
+  | "execution"
+  | "final_answer";
+
+export type RubricStatus = "correct" | "minor_issue" | "incorrect" | "not_shown";
+
+export interface RubricResult {
+  axis: PracticeAxis;
+  status: RubricStatus;
+  /** Short note for this axis. */
+  note: string;
+}
+
+/** The tutor's evaluation of a practice attempt, with the solution revealed. */
+export interface PracticeEvaluation {
+  verdict: "correct" | "partially_correct" | "incorrect";
+  /** All five axes, in display order. */
+  rubric: RubricResult[];
+  /** The single most important thing to fix or reinforce — concise. */
+  focus: string;
+  /** One-line overall message. */
+  summary: string;
+  /** Revealed only now, after the student has submitted. */
+  solution: StructuredSolution;
+}
+
+/** What the client sends to /api/practice/generate. */
+export interface GeneratePracticeRequest {
+  problem: ProblemAnalysis;
+}
+
+/** What the client sends to /api/practice/evaluate. */
+export interface EvaluatePracticeRequest {
+  practice: PracticeProblem;
+  /** The student's attempt. Empty attempt = "just show me the solution". */
+  attempt: StudentAttempt;
+}

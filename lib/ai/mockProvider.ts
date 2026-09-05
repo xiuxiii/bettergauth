@@ -1,7 +1,12 @@
 import type { AIProvider } from "@/lib/ai/types";
 import type {
   CheckWorkRequest,
+  EvaluatePracticeRequest,
+  GeneratePracticeRequest,
+  PracticeEvaluation,
+  PracticeProblem,
   ProblemAnalysis,
+  RubricResult,
   StructuredSolution,
   TutorRequest,
   TutorTurn,
@@ -469,6 +474,334 @@ function diagnoseAttempt(problemText: string, attemptText: string): WorkCheck {
   return matched?.check ?? entry.fallback;
 }
 
+// ---------------------------------------------------------------------------
+// Practice mode ("I'm ready — give me one like this")
+//
+// A small set of variants per concept — NOT a database. Each variant tests the
+// same concept with different numbers/context (so memorization is useless) at
+// matching or slightly higher difficulty. A real provider would generate these;
+// the mock templates them, keeping the solution server-side until evaluation.
+// ---------------------------------------------------------------------------
+
+interface PracticeVariant {
+  /** Client-facing problem (no solution). */
+  problem: PracticeProblem;
+  /** Substrings that indicate the student reached the correct final answer. */
+  answerKeywords: string[];
+  /** Substrings signalling a wrong concept/model choice. */
+  wrongConceptKeywords: string[];
+  /** Revealed only at evaluation time. */
+  solution: StructuredSolution;
+}
+
+const PRACTICE_BANK: Record<string, PracticeVariant[]> = {
+  [PHYSICS_ENERGY]: [
+    {
+      problem: {
+        problemText:
+          "A 3.0 kg cart is released from rest and rolls down a frictionless track, dropping a vertical height of 2.5 m. What is its speed at the bottom? (g = 9.8 m/s².)",
+        subject: "Physics",
+        topic: "Conservation of mechanical energy",
+        concept: "Conservation of mechanical energy",
+        difficulty: "same",
+      },
+      answerKeywords: ["7.0", "7 m/s", "= 7", "√49", "sqrt(49)"],
+      wrongConceptKeywords: ["v = u + at", "v=u+at", "suvat", "f = ma", "kinematic"],
+      solution: {
+        understanding:
+          "A 3.0 kg cart starts from rest and drops 2.5 m down a frictionless track; find its speed at the bottom.",
+        keyConcept:
+          "Conservation of mechanical energy — with no friction, all gravitational PE becomes KE.",
+        reasoning:
+          "Starting at rest, the energy is all potential, $mgh$; at the bottom it's all kinetic, $\\tfrac12 mv^2$. Frictionless means they're equal, and the mass cancels.",
+        solution:
+          "$$mgh=\\tfrac12 mv^2 \\;\\Rightarrow\\; v=\\sqrt{2gh}=\\sqrt{2\\cdot 9.8\\cdot 2.5}=\\sqrt{49}=7.0\\ \\text{m/s}$$",
+        finalAnswer: "$v = 7.0\\ \\text{m/s}$",
+        takeaway:
+          "Same drop ⇒ same speed, whatever the mass. Energy conservation only cares about the height.",
+      },
+    },
+    {
+      problem: {
+        problemText:
+          "A ball on the end of a 1.2 m string is released from rest with the string horizontal. Ignoring air resistance, how fast is the ball moving at the lowest point of its swing? (g = 9.8 m/s².)",
+        subject: "Physics",
+        topic: "Conservation of mechanical energy",
+        concept: "Conservation of mechanical energy",
+        difficulty: "slightly_harder",
+      },
+      answerKeywords: ["4.8", "4.85", "4.9", "√23.5", "sqrt(23.5)"],
+      wrongConceptKeywords: [
+        "v = u + at",
+        "suvat",
+        "centripetal",
+        "mv^2/r",
+        "mv²/r",
+        "circular motion",
+      ],
+      solution: {
+        understanding:
+          "A ball swings down on a 1.2 m string from horizontal; find its speed at the lowest point.",
+        keyConcept:
+          "Conservation of mechanical energy — and the vertical drop equals the string length.",
+        reasoning:
+          "The subtlety: from horizontal to the lowest point the height dropped is the full string length, $h=1.2$ m. Tension does no work (it's perpendicular to the motion), so mechanical energy is conserved.",
+        solution:
+          "$$v=\\sqrt{2gh}=\\sqrt{2\\cdot 9.8\\cdot 1.2}=\\sqrt{23.52}\\approx 4.85\\ \\text{m/s}$$",
+        finalAnswer: "$v \\approx 4.85\\ \\text{m/s}$",
+        takeaway:
+          "Identify the real drop (here it's the string length), and remember tension does no work — so energy conservation still applies cleanly.",
+      },
+    },
+  ],
+
+  [MATH_QUADRATIC]: [
+    {
+      problem: {
+        problemText: "Solve for x: 2x² − 10x + 12 = 0.",
+        subject: "Mathematics",
+        topic: "Quadratic equations",
+        concept: "Factor out the common constant, then factor the quadratic",
+        difficulty: "same",
+      },
+      answerKeywords: ["x = 2", "x=2", "x = 3", "x=3", "2 or 3", "2, 3", "2 and 3"],
+      wrongConceptKeywords: ["x = -2", "x=-2", "x = -3", "x=-3", "-2 and -3"],
+      solution: {
+        understanding: "Find the values of $x$ satisfying $2x^2-10x+12=0$.",
+        keyConcept:
+          "Divide out the common factor first, then factor the simpler quadratic.",
+        reasoning:
+          "All terms share a factor of 2: $x^2-5x+6=0$. Two numbers with product $+6$ and sum $-5$ are $-2$ and $-3$.",
+        solution:
+          "$$2x^2-10x+12=0 \\;\\Rightarrow\\; x^2-5x+6=0 \\;\\Rightarrow\\; (x-2)(x-3)=0$$",
+        finalAnswer: "$x=2$ or $x=3$",
+        takeaway: "Pull out the common factor before factoring — the numbers get friendlier.",
+      },
+    },
+    {
+      problem: {
+        problemText: "Solve for x: 3x² − 21x + 30 = 0.",
+        subject: "Mathematics",
+        topic: "Quadratic equations",
+        concept: "Factor out the common constant, then factor the quadratic",
+        difficulty: "slightly_harder",
+      },
+      answerKeywords: ["x = 2", "x=2", "x = 5", "x=5", "2 or 5", "2, 5", "2 and 5"],
+      wrongConceptKeywords: ["x = -2", "x=-2", "x = -5", "x=-5", "-2 and -5"],
+      solution: {
+        understanding: "Find the values of $x$ satisfying $3x^2-21x+30=0$.",
+        keyConcept:
+          "Divide out the common factor first, then factor the simpler quadratic.",
+        reasoning:
+          "All terms share a factor of 3: $x^2-7x+10=0$. Two numbers with product $+10$ and sum $-7$ are $-2$ and $-5$.",
+        solution:
+          "$$3x^2-21x+30=0 \\;\\Rightarrow\\; x^2-7x+10=0 \\;\\Rightarrow\\; (x-2)(x-5)=0$$",
+        finalAnswer: "$x=2$ or $x=5$",
+        takeaway:
+          "Common factor first, then find the pair — product $+10$, sum $-7$ gives $-2,-5$.",
+      },
+    },
+  ],
+
+  [CHEM_STOICH]: [
+    {
+      problem: {
+        problemText:
+          "How many moles of NH₃ are produced when 6.0 mol of H₂ reacts with excess N₂? (N₂ + 3H₂ → 2NH₃)",
+        subject: "Chemistry",
+        topic: "Stoichiometry (mole ratios)",
+        concept: "Mole ratio with a limiting reactant",
+        difficulty: "slightly_harder",
+      },
+      answerKeywords: ["4.0", "4 mol", "= 4"],
+      wrongConceptKeywords: ["gram", "molar mass", "mass ratio", "excess n2 means more", "more nh3 because"],
+      solution: {
+        understanding:
+          "6.0 mol H₂ reacts with excess N₂ via $\\text{N}_2 + 3\\text{H}_2 \\to 2\\text{NH}_3$; find mol NH₃.",
+        keyConcept:
+          "Use the mole ratio from the balanced equation; H₂ is limiting because N₂ is in excess.",
+        reasoning:
+          "The coefficients give H₂ : NH₃ = 3 : 2. With N₂ in excess, H₂ limits the product.",
+        solution:
+          "$$n_{\\text{NH}_3}=6.0\\ \\text{mol H}_2 \\times \\frac{2\\ \\text{mol NH}_3}{3\\ \\text{mol H}_2}=4.0\\ \\text{mol}$$",
+        finalAnswer: "$4.0$ mol NH₃",
+        takeaway:
+          "The ratio isn't 1:1 here — read the coefficients (3:2) and let the limiting reactant set the amount.",
+      },
+    },
+    {
+      problem: {
+        problemText:
+          "How many moles of CO₂ are produced when 2.0 mol of propane (C₃H₈) burns in excess O₂? (C₃H₈ + 5O₂ → 3CO₂ + 4H₂O)",
+        subject: "Chemistry",
+        topic: "Stoichiometry (mole ratios)",
+        concept: "Mole ratio with a limiting reactant",
+        difficulty: "slightly_harder",
+      },
+      answerKeywords: ["6.0", "6 mol", "= 6"],
+      wrongConceptKeywords: ["gram", "molar mass", "mass ratio", "excess o2 means more"],
+      solution: {
+        understanding:
+          "2.0 mol C₃H₈ burns in excess O₂ via $\\text{C}_3\\text{H}_8 + 5\\text{O}_2 \\to 3\\text{CO}_2 + 4\\text{H}_2\\text{O}$; find mol CO₂.",
+        keyConcept:
+          "Use the mole ratio from the balanced equation; propane is limiting because O₂ is in excess.",
+        reasoning:
+          "The coefficients give C₃H₈ : CO₂ = 1 : 3. With O₂ in excess, propane limits the product.",
+        solution:
+          "$$n_{\\text{CO}_2}=2.0\\ \\text{mol C}_3\\text{H}_8 \\times \\frac{3\\ \\text{mol CO}_2}{1\\ \\text{mol C}_3\\text{H}_8}=6.0\\ \\text{mol}$$",
+        finalAnswer: "$6.0$ mol CO₂",
+        takeaway:
+          "Balance first, then read the ratio (1:3 here) — the limiting reactant sets the amount of product.",
+      },
+    },
+  ],
+};
+
+const AXIS_ORDER: RubricResult["axis"][] = [
+  "concept_selection",
+  "reasoning",
+  "setup",
+  "execution",
+  "final_answer",
+];
+
+/** Look up a generated variant by its problem text (across all concepts). */
+function findVariant(problemText: string): PracticeVariant | undefined {
+  for (const variants of Object.values(PRACTICE_BANK)) {
+    const v = variants.find((x) => x.problem.problemText === problemText);
+    if (v) return v;
+  }
+  return undefined;
+}
+
+function rubric(
+  statuses: Record<RubricResult["axis"], RubricResult["status"]>,
+  notes: Partial<Record<RubricResult["axis"], string>>,
+): RubricResult[] {
+  return AXIS_ORDER.map((axis) => ({
+    axis,
+    status: statuses[axis],
+    note: notes[axis] ?? "",
+  }));
+}
+
+/**
+ * Evaluate an attempt against a variant. A real model reads the actual work;
+ * the mock infers an outcome from keywords in the typed attempt, then reveals
+ * the solution. Focus is always the single most important issue.
+ */
+function evaluatePracticeAttempt(
+  variant: PracticeVariant,
+  attemptText: string,
+  hasImage: boolean,
+): PracticeEvaluation {
+  const text = attemptText.toLowerCase();
+  const { concept } = variant.problem;
+  const answer = variant.solution.finalAnswer;
+
+  // Reveal-only: no attempt provided.
+  if (!text.trim() && !hasImage) {
+    return {
+      verdict: "partially_correct",
+      rubric: rubric(
+        {
+          concept_selection: "not_shown",
+          reasoning: "not_shown",
+          setup: "not_shown",
+          execution: "not_shown",
+          final_answer: "not_shown",
+        },
+        {},
+      ),
+      focus: `Compare your reasoning to the model solution. Key idea: ${variant.solution.takeaway}`,
+      summary: "Here's the worked solution — check your approach against it.",
+      solution: variant.solution,
+    };
+  }
+
+  const override = text.match(/outcome:\s*([a-z_]+)/)?.[1];
+  const wrongConcept =
+    override === "wrong_concept" ||
+    variant.wrongConceptKeywords.some((k) => text.includes(k));
+  const gotAnswer =
+    override === "correct" ||
+    variant.answerKeywords.some((k) => text.includes(k.toLowerCase()));
+
+  if (wrongConcept) {
+    return {
+      verdict: "incorrect",
+      rubric: rubric(
+        {
+          concept_selection: "incorrect",
+          reasoning: "incorrect",
+          setup: "incorrect",
+          execution: "not_shown",
+          final_answer: "incorrect",
+        },
+        {
+          concept_selection: `This problem tests ${concept.toLowerCase()} — a different principle than you applied.`,
+          reasoning: "The chain follows from the wrong starting point.",
+          setup: "The equations don't match this concept.",
+          final_answer: `Model answer: ${answer}.`,
+        },
+      ),
+      focus: `The one thing that matters here is concept selection: this is a ${concept.toLowerCase()} problem. Re-read the solution's key concept, then the rest follows.`,
+      summary: "The method doesn't fit this problem — it's a concept-selection issue, not an arithmetic one.",
+      solution: variant.solution,
+    };
+  }
+
+  if (gotAnswer) {
+    return {
+      verdict: "correct",
+      rubric: rubric(
+        {
+          concept_selection: "correct",
+          reasoning: "correct",
+          setup: "correct",
+          execution: "correct",
+          final_answer: "correct",
+        },
+        {
+          concept_selection: `Right principle: ${concept.toLowerCase()}.`,
+          reasoning: "Your reasoning holds together.",
+          setup: "Setup matches the model.",
+          execution: "Clean execution.",
+          final_answer: `Matches the model: ${answer}.`,
+        },
+      ),
+      focus: `Nailed it — concept, reasoning, and answer all line up. Transferable idea: ${variant.solution.takeaway}`,
+      summary: `Correct — ${answer}. Same concept as the original, so it's sticking.`,
+      solution: variant.solution,
+    };
+  }
+
+  // Engaged with the right idea, but the answer isn't confirmed — treat as an
+  // execution slip and keep the feedback on execution, not the concept.
+  return {
+    verdict: "partially_correct",
+    rubric: rubric(
+      {
+        concept_selection: "correct",
+        reasoning: "correct",
+        setup: "correct",
+        execution: "minor_issue",
+        final_answer: "incorrect",
+      },
+      {
+        concept_selection: `Right principle: ${concept.toLowerCase()}.`,
+        reasoning: "Your approach is sound.",
+        setup: "Setup looks right.",
+        execution: "Something slips between the setup and the number.",
+        final_answer: `Doesn't match the model (${answer}) yet.`,
+      },
+    ),
+    focus: `Your method is right — the gap is in execution. Re-run the arithmetic; the model answer is ${answer}.`,
+    summary: `Right idea, but the final number is off — this is execution, not concept. Model answer: ${answer}.`,
+    solution: variant.solution,
+  };
+}
+
 function pickSample(seed: string): SampleProblem {
   // Deterministic pick so the same image maps to the same problem, while
   // different uploads can surface different subjects.
@@ -538,6 +871,32 @@ export class MockProvider implements AIProvider {
     // problem. The mock diagnoses from the typed text (or returns a sensible
     // fallback for a photo-only attempt).
     return diagnoseAttempt(request.problem.problemText, request.attempt.text ?? "");
+  }
+
+  async generatePractice(
+    request: GeneratePracticeRequest,
+  ): Promise<PracticeProblem> {
+    await delay(650); // simulate generation
+    const variants =
+      PRACTICE_BANK[request.problem.problemText] ?? PRACTICE_BANK[PHYSICS_ENERGY];
+    // Pick a fresh variant at random so repeated presses vary.
+    const pick = variants[Math.floor(Math.random() * variants.length)];
+    return pick.problem;
+  }
+
+  async evaluatePractice(
+    request: EvaluatePracticeRequest,
+  ): Promise<PracticeEvaluation> {
+    await delay(800); // simulate reading + grading the attempt
+    const variant = findVariant(request.practice.problemText);
+    if (!variant) {
+      throw new Error("Unknown practice problem.");
+    }
+    return evaluatePracticeAttempt(
+      variant,
+      request.attempt.text ?? "",
+      !!request.attempt.imageDataUrl,
+    );
   }
 }
 
