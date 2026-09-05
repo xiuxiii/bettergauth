@@ -1,9 +1,11 @@
 import type { AIProvider } from "@/lib/ai/types";
 import type {
+  CheckWorkRequest,
   ProblemAnalysis,
   StructuredSolution,
   TutorRequest,
   TutorTurn,
+  WorkCheck,
 } from "@/lib/tutor/types";
 import { estimateUnderstanding } from "@/lib/tutor/philosophy";
 
@@ -119,6 +121,354 @@ const SAMPLES: SampleProblem[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// "Check My Work" scenario bank
+//
+// A real provider would read the student's actual attempt (text or photo) and
+// diagnose it. The mock can't parse free-form work, so it selects a realistic,
+// pre-authored diagnosis from keywords in the typed attempt — enough to exercise
+// every branch of the UI. Deterministic override: include "scenario:<id>" in the
+// attempt text to force a specific one (used by tests and the demo).
+//
+// Keyed by problemText so each diagnosis is relevant to the actual problem.
+// ---------------------------------------------------------------------------
+
+interface CheckScenario {
+  id: string;
+  /** Lowercased substrings in the attempt that select this scenario. */
+  triggers: string[];
+  check: WorkCheck;
+}
+
+interface CheckBankEntry {
+  scenarios: CheckScenario[];
+  /** Used when no trigger matches (e.g. a photo-only attempt). */
+  fallback: WorkCheck;
+}
+
+const PHYSICS_ENERGY = SAMPLES[0].analysis.problemText;
+const MATH_QUADRATIC = SAMPLES[1].analysis.problemText;
+const CHEM_STOICH = SAMPLES[2].analysis.problemText;
+
+const CHECK_BANK: Record<string, CheckBankEntry> = {
+  // --- Physics: frictionless ramp, v = √(2gh) ≈ 5.4 m/s ---
+  [PHYSICS_ENERGY]: {
+    scenarios: [
+      {
+        id: "correct",
+        triggers: ["5.4", "5.42", "√29.4", "sqrt(29.4)"],
+        check: {
+          verdict: "correct",
+          strengths:
+            "You chose energy conservation and carried it through cleanly — and you noticed the mass cancels.",
+          continueFrom:
+            "Nothing to fix. To lock in the idea: why doesn't the 2.0 kg appear in the answer?",
+          summary:
+            "Looks correct — $v=\\sqrt{2gh}\\approx 5.4\\ \\text{m/s}$, and your reasoning is sound.",
+        },
+      },
+      {
+        id: "arithmetic",
+        triggers: ["5.9", "5.8", "= 6", "6.0", "6 m/s"],
+        check: {
+          verdict: "error_found",
+          strengths:
+            "Your physics is exactly right: energy conservation, $mgh=\\tfrac12 mv^2$, and the mass correctly cancels.",
+          firstError: {
+            category: "arithmetic",
+            severity: "minor",
+            location: "the final line, evaluating $\\sqrt{2\\cdot 9.8\\cdot 1.5}$",
+            explanation:
+              "$2\\cdot 9.8\\cdot 1.5 = 29.4$ and $\\sqrt{29.4}\\approx 5.42$ — just a slip in the last square root.",
+            correction: "Re-evaluate the final step: $v=\\sqrt{29.4}\\approx 5.4\\ \\text{m/s}$.",
+            conceptCorrect: true,
+          },
+          continueFrom:
+            "Everything up to the last line stands — only the final arithmetic needs redoing.",
+          summary:
+            "The physics is spot on; only the last arithmetic is off — $\\sqrt{29.4}\\approx 5.4\\ \\text{m/s}$, not $5.9$.",
+        },
+      },
+      {
+        id: "wrong_equation",
+        triggers: [
+          "v = u + at",
+          "v=u+at",
+          "v² = u²",
+          "v^2 = u^2",
+          "suvat",
+          "kinematic",
+          "a = 9.8",
+          "a=9.8",
+          "f = ma",
+        ],
+        check: {
+          verdict: "error_found",
+          strengths: "You correctly read this as a 'speed from a drop' problem.",
+          firstError: {
+            category: "model_selection",
+            severity: "significant",
+            location: "choosing a constant-acceleration kinematics equation with $a=g$",
+            explanation:
+              "On a ramp the acceleration *along the surface* is $g\\sin\\theta$, not $g$, and straight-line kinematics would also need the incline angle and the ramp length — neither is given. The model doesn't fit the information you have.",
+            correction:
+              "Use energy conservation, which depends only on the vertical drop $h$, not the path or angle: $mgh=\\tfrac12 mv^2 \\Rightarrow v=\\sqrt{2gh}$.",
+            conceptCorrect: false,
+          },
+          continueFrom:
+            "Switch to $mgh=\\tfrac12 mv^2$ and solve for $v$ — one line gets you there.",
+          summary:
+            "The issue is the method, not the arithmetic: kinematics with $a=g$ doesn't apply on a ramp. Energy conservation is the right model here.",
+        },
+      },
+      {
+        id: "wrong_assumption",
+        triggers: [
+          "friction",
+          "energy lost",
+          "lost to heat",
+          "depends on mass",
+          "heavier",
+          "mass matters",
+          "need the mass",
+        ],
+        check: {
+          verdict: "error_found",
+          strengths: "You set up energy conservation, which is the right principle.",
+          firstError: {
+            category: "conceptual",
+            severity: "significant",
+            location: "an assumption about energy loss / the role of mass",
+            explanation:
+              "The ramp is stated to be **frictionless**, so no mechanical energy is lost to heat — there's no friction term to subtract. And because the mass cancels in $mgh=\\tfrac12 mv^2$, the final speed doesn't depend on it at all.",
+            correction:
+              "Equate all the potential energy to kinetic energy: $mgh=\\tfrac12 mv^2$. The $m$ cancels, giving $v=\\sqrt{2gh}$.",
+            conceptCorrect: false,
+          },
+          continueFrom:
+            "With no energy lost, set $mgh=\\tfrac12 mv^2$ and solve for $v$.",
+          summary:
+            "One assumption is off: on a frictionless ramp no energy is lost, and the speed is independent of mass. Then it's just $v=\\sqrt{2gh}$.",
+        },
+      },
+      {
+        id: "partial",
+        triggers: ["+ mgh", "mv^2 + mgh", "mv² + mgh", "1/2mv^2 + mgh", "potential at the bottom"],
+        check: {
+          verdict: "partially_correct",
+          strengths:
+            "Right principle (energy conservation), and you correctly identified initial potential and final kinetic energy.",
+          firstError: {
+            category: "setup",
+            severity: "significant",
+            location: "the energy equation — a leftover $mgh$ term on the right",
+            explanation:
+              "You wrote $mgh=\\tfrac12 mv^2 + mgh$, which puts potential energy at the *bottom* too. Taking the bottom as your reference, $h_{\\text{bottom}}=0$, so that term is zero.",
+            correction: "Set the bottom at $h=0$: $mgh=\\tfrac12 mv^2$, then $v=\\sqrt{2gh}$.",
+            conceptCorrect: true,
+          },
+          continueFrom:
+            "Drop the extra $mgh$ (bottom height is 0) and finish solving for $v$.",
+          summary:
+            "You're most of the way there — the setup just double-counts potential energy. With the bottom at $h=0$ it's $mgh=\\tfrac12 mv^2$.",
+        },
+      },
+    ],
+    fallback: {
+      verdict: "partially_correct",
+      strengths:
+        "The energy-conservation framing is the right place to start.",
+      firstError: {
+        category: "setup",
+        severity: "minor",
+        location: "worth double-checking your energy equation",
+        explanation:
+          "Make sure the top is all potential ($mgh$) and the bottom all kinetic ($\\tfrac12 mv^2$), with the bottom taken as $h=0$.",
+        correction:
+          "If that matches, the only step left is $v=\\sqrt{2gh}=\\sqrt{29.4}\\approx 5.4\\ \\text{m/s}$.",
+        conceptCorrect: true,
+      },
+      continueFrom:
+        "Compare your equation to $mgh=\\tfrac12 mv^2$ and re-check the final number.",
+      summary:
+        "The energy-conservation approach is right — check your equation matches $mgh=\\tfrac12 mv^2$ and that $v\\approx 5.4\\ \\text{m/s}$.",
+    },
+  },
+
+  // --- Math: 3x² − 12x + 9 = 0, roots x = 1, 3 ---
+  [MATH_QUADRATIC]: {
+    scenarios: [
+      {
+        id: "correct",
+        triggers: ["x = 1", "x=1", "x = 3", "x=3", "1 or 3", "1, 3", "roots are 1"],
+        check: {
+          verdict: "correct",
+          strengths:
+            "You factored correctly and read the roots off the factors properly.",
+          continueFrom:
+            "Nice. Quick check: the sum of the roots is $4$ — does that match $-b/a$ after dividing by 3?",
+          summary: "Correct — $x=1$ or $x=3$.",
+        },
+      },
+      {
+        id: "algebra_misconception",
+        triggers: ["x = -1", "x=-1", "x = -3", "x=-3", "-1 and -3", "-1, -3", "negative roots"],
+        check: {
+          verdict: "error_found",
+          strengths: "Your factoring is correct: $3(x-1)(x-3)=0$.",
+          firstError: {
+            category: "conceptual",
+            severity: "significant",
+            location: "reading the roots off the factors",
+            explanation:
+              "From $(x-1)(x-3)=0$ you took $x=-1$ and $x=-3$. But a root is the value that makes a factor **zero**: $x-1=0$ gives $x=+1$. The sign flips relative to the number inside the factor.",
+            correction:
+              "Set each factor to zero: $x-1=0\\Rightarrow x=1$ and $x-3=0\\Rightarrow x=3$.",
+            conceptCorrect: false,
+          },
+          continueFrom: "Flip the signs — the roots are $x=1$ and $x=3$.",
+          summary:
+            "Factoring's right, but a zero factor gives $x-1=0\\Rightarrow x=+1$: the roots are $1$ and $3$, not $-1$ and $-3$.",
+        },
+      },
+      {
+        id: "arithmetic",
+        triggers: ["(x-1)(x+3)", "x+3", "-1 and 3", "1 and -3", "product -3"],
+        check: {
+          verdict: "error_found",
+          strengths: "Right approach — divide by 3 and factor $x^2-4x+3$.",
+          firstError: {
+            category: "arithmetic",
+            severity: "minor",
+            location: "choosing the factor pair",
+            explanation:
+              "You need two numbers with product $+3$ and sum $-4$. The pair $-1$ and $+3$ multiplies to $-3$ — a sign slip. Both must be negative to sum to $-4$ with a positive product.",
+            correction: "Use $-1$ and $-3$: $(x-1)(x-3)=0$, so $x=1$ or $x=3$.",
+            conceptCorrect: true,
+          },
+          continueFrom: "Fix the pair to $-1,-3$ and read off the roots.",
+          summary:
+            "Method's right; just the factor pair — product $+3$, sum $-4$ means $-1$ and $-3$. Roots $x=1,3$.",
+        },
+      },
+    ],
+    fallback: {
+      verdict: "partially_correct",
+      strengths: "You're set up to factor, which is the efficient route here.",
+      firstError: {
+        category: "procedural",
+        severity: "minor",
+        location: "check your factor pair and the sign of each root",
+        explanation:
+          "After dividing by 3 you want two numbers with product $+3$ and sum $-4$ (that's $-1,-3$); then a zero factor gives $x=+1$ from $x-1=0$.",
+        correction: "That yields $x=1$ or $x=3$.",
+        conceptCorrect: true,
+      },
+      continueFrom:
+        "Verify the pair ($-1,-3$) and that each factor set to zero gives $x=1,3$.",
+      summary:
+        "Good route — two numbers with product $+3$, sum $-4$ are $-1,-3$; a zero factor gives $x=1$ and $x=3$.",
+    },
+  },
+
+  // --- Chemistry: 4.0 mol H₂ + excess O₂ → ? mol H₂O (answer 4.0 mol) ---
+  [CHEM_STOICH]: {
+    scenarios: [
+      {
+        id: "correct",
+        triggers: ["4.0 mol", "4 mol h", "= 4 mol", "1:1", "1 : 1"],
+        check: {
+          verdict: "correct",
+          strengths:
+            "You identified H₂ as the limiting reactant and used the correct 2:2 (i.e. 1:1) mole ratio.",
+          continueFrom:
+            "Solid. As a check: how many moles of O₂ did that consume?",
+          summary: "Correct — 4.0 mol H₂ produces 4.0 mol H₂O.",
+        },
+      },
+      {
+        id: "chem_misconception_excess",
+        triggers: ["excess", "more water", "more than 4", "8 mol", "extra o2", "increase"],
+        check: {
+          verdict: "error_found",
+          strengths:
+            "You balanced the reaction and noticed that O₂ is in excess.",
+          firstError: {
+            category: "conceptual",
+            severity: "significant",
+            location: "concluding that excess O₂ makes *more* water",
+            explanation:
+              "'Excess' only means O₂ isn't the limiting reactant — there's more than enough of it. Extra O₂ can't push production beyond what the limiting reactant, H₂, allows; it just sits unreacted.",
+            correction:
+              "Let the limiting reactant H₂ set the amount: H₂ : H₂O = 2 : 2 = 1 : 1, so 4.0 mol H₂ → 4.0 mol H₂O.",
+            conceptCorrect: false,
+          },
+          continueFrom:
+            "Use H₂ (limiting) with the 1:1 ratio to get the moles of water.",
+          summary:
+            "The misconception is about 'excess' — it doesn't increase the product. H₂ is limiting, so 4.0 mol H₂ → 4.0 mol H₂O.",
+        },
+      },
+      {
+        id: "chem_mole_vs_mass",
+        triggers: ["gram", "molar mass", "× 18", "x 18", "mass ratio", "36 g", "18 g"],
+        check: {
+          verdict: "error_found",
+          strengths:
+            "Your balanced equation and the idea of using the reaction ratio are right.",
+          firstError: {
+            category: "conceptual",
+            severity: "significant",
+            location: "using masses (grams) where the ratio needs moles",
+            explanation:
+              "The coefficients in a balanced equation are **mole** ratios, not mass ratios — multiplying by molar masses here mixes the two.",
+            correction:
+              "Stay in moles: $4.0\\ \\text{mol H}_2 \\times \\tfrac{2\\ \\text{mol H}_2\\text{O}}{2\\ \\text{mol H}_2} = 4.0\\ \\text{mol}$. Convert to grams only if the question asks for mass.",
+            conceptCorrect: false,
+          },
+          continueFrom: "Work in moles and apply the 1:1 ratio; the answer is 4.0 mol.",
+          summary:
+            "Coefficients are mole ratios, not mass ratios — keep it in moles: 4.0 mol H₂ → 4.0 mol H₂O.",
+        },
+      },
+    ],
+    fallback: {
+      verdict: "partially_correct",
+      strengths: "You're working from the balanced equation, which is the right basis.",
+      firstError: {
+        category: "setup",
+        severity: "minor",
+        location: "check the mole ratio you used",
+        explanation:
+          "Confirm you linked H₂ to H₂O by their coefficients (2:2 = 1:1) and treated H₂ as limiting, since O₂ is in excess.",
+        correction:
+          "Then $4.0\\ \\text{mol H}_2 \\times \\tfrac{2\\ \\text{mol H}_2\\text{O}}{2\\ \\text{mol H}_2} = 4.0\\ \\text{mol H}_2\\text{O}$.",
+        conceptCorrect: true,
+      },
+      continueFrom: "Re-check the H₂:H₂O ratio (1:1) and that H₂ is limiting.",
+      summary:
+        "Right basis — make sure you used the 2:2 (1:1) H₂:H₂O ratio with H₂ as the limiting reactant → 4.0 mol.",
+    },
+  },
+};
+
+/** Diagnose an attempt against the scenario bank for its problem. */
+function diagnoseAttempt(problemText: string, attemptText: string): WorkCheck {
+  const entry = CHECK_BANK[problemText] ?? CHECK_BANK[PHYSICS_ENERGY];
+  const text = attemptText.toLowerCase();
+
+  const override = text.match(/scenario:\s*([a-z_]+)/)?.[1];
+  if (override) {
+    const forced = entry.scenarios.find((s) => s.id === override);
+    if (forced) return forced.check;
+  }
+
+  const matched = entry.scenarios.find((s) =>
+    s.triggers.some((t) => text.includes(t)),
+  );
+  return matched?.check ?? entry.fallback;
+}
+
 function pickSample(seed: string): SampleProblem {
   // Deterministic pick so the same image maps to the same problem, while
   // different uploads can surface different subjects.
@@ -180,6 +530,14 @@ export class MockProvider implements AIProvider {
         return { message: respondToStudent(sample, level, studentText ?? "") };
       }
     }
+  }
+
+  async checkWork(request: CheckWorkRequest): Promise<WorkCheck> {
+    await delay(750); // simulate reading + diagnosing the attempt
+    // A real provider reads request.attempt.imageDataUrl / .text against the
+    // problem. The mock diagnoses from the typed text (or returns a sensible
+    // fallback for a photo-only attempt).
+    return diagnoseAttempt(request.problem.problemText, request.attempt.text ?? "");
   }
 }
 

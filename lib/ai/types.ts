@@ -1,7 +1,9 @@
 import type {
+  CheckWorkRequest,
   ProblemAnalysis,
   TutorRequest,
   TutorTurn,
+  WorkCheck,
 } from "@/lib/tutor/types";
 
 /**
@@ -18,4 +20,11 @@ export interface AIProvider {
 
   /** Produce the next tutor turn given the problem and conversation so far. */
   tutor(request: TutorRequest): Promise<TutorTurn>;
+
+  /**
+   * "Check My Work": diagnose a student's attempted solution. Returns the FIRST
+   * meaningful error (classified), what was done right, and how to continue —
+   * not merely whether the final answer is wrong.
+   */
+  checkWork(request: CheckWorkRequest): Promise<WorkCheck>;
 }

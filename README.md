@@ -34,6 +34,17 @@ No environment variables are required. `AI_PROVIDER` defaults to `mock`
 - **Structured solution** (`components/SolutionCard.tsx`) — Problem understanding
   → Key concept → Reasoning → Solution → Final answer → Important takeaway. Shown
   only when the student asks for it.
+- **Check My Work** (`components/AttemptComposer.tsx`, `WorkCheckCard.tsx`) — the
+  student types or photographs their attempt; the tutor finds the **first
+  meaningful error** (not just a wrong final answer), classifies it (conceptual /
+  wrong model / setup / procedural / arithmetic / units), and shows how to
+  continue. Trivial slips are styled quietly and flagged "concept is right", so a
+  correct idea with a multiplication error gets a one-line fix, not a lecture;
+  a wrong model gets a prominent explanation of *why* it doesn't apply. Diagnosis
+  runs through `AIProvider.checkWork` (`/api/check-work`); the mock covers correct,
+  concept-right-but-arithmetic, wrong-equation, wrong-assumption, chemistry- and
+  algebra-misconception, and partially-correct scenarios (see
+  `lib/ai/mockProvider.ts`; type `scenario:<id>` in an attempt to force one).
 
 ## Architecture
 

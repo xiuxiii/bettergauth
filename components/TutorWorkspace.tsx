@@ -7,19 +7,26 @@ import type {
   ChatMessage,
   ProblemAnalysis,
   StructuredSolution,
+  StudentAttempt,
   TutorAction,
   TutorTurn,
+  WorkCheck,
 } from "@/lib/tutor/types";
 import { IMAGE_KEY, uid } from "@/lib/utils";
 import ProblemCard from "@/components/ProblemCard";
 import MessageBubble from "@/components/MessageBubble";
 import ActionBar from "@/components/ActionBar";
+import AttemptComposer from "@/components/AttemptComposer";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 
-/** A chat message plus any structured payloads attached to a tutor turn. */
+/** A chat message plus any structured payloads attached to a turn. */
 type DisplayMessage = ChatMessage & {
   solution?: StructuredSolution;
   similarProblem?: string;
+  /** Attached to a tutor turn produced by "Check My Work". */
+  workCheck?: WorkCheck;
+  /** Attached to a student turn: a photo of their attempt. */
+  attemptImage?: string;
 };
 
 type Phase = "loading" | "ready" | "error" | "empty";
@@ -33,6 +40,7 @@ export default function TutorWorkspace() {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [turnBusy, setTurnBusy] = useState(false);
   const [turnError, setTurnError] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // Ensures the initial auto-analysis fires exactly once, so a double effect
@@ -149,6 +157,49 @@ export default function TutorWorkspace() {
     void requestTurn("ask", analysis, next, text);
   }
 
+  async function handleCheckWork(attempt: StudentAttempt) {
+    if (!analysis || turnBusy) return;
+    setComposerOpen(false);
+
+    // Show the student's attempt in the conversation.
+    const student: DisplayMessage = {
+      id: uid("s"),
+      role: "student",
+      content: attempt.text?.trim()
+        ? attempt.text.trim()
+        : "Here's my attempt — can you check it?",
+      createdAt: Date.now(),
+      attemptImage: attempt.imageDataUrl,
+    };
+    setMessages((prev) => [...prev, student]);
+
+    setTurnBusy(true);
+    setTurnError(null);
+    try {
+      const res = await fetch("/api/check-work", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ problem: analysis, attempt }),
+      });
+      if (!res.ok) throw new Error((await res.json())?.error ?? "Check failed.");
+      const check: WorkCheck = await res.json();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid("t"),
+          role: "tutor",
+          content: check.summary,
+          createdAt: Date.now(),
+          workCheck: check,
+        },
+      ]);
+    } catch (err) {
+      setTurnError(err instanceof Error ? err.message : "Check failed.");
+    } finally {
+      setTurnBusy(false);
+    }
+  }
+
   // ---- Render ----
 
   if (phase === "empty") {
@@ -194,6 +245,8 @@ export default function TutorWorkspace() {
             message={m}
             solution={m.solution}
             similarProblem={m.similarProblem}
+            workCheck={m.workCheck}
+            attemptImage={m.attemptImage}
           />
         ))}
 
@@ -210,7 +263,20 @@ export default function TutorWorkspace() {
       </div>
 
       {analysis && (
-        <ActionBar busy={turnBusy} onAction={handleAction} onAsk={handleAsk} />
+        <ActionBar
+          busy={turnBusy}
+          onAction={handleAction}
+          onAsk={handleAsk}
+          onCheckWork={() => setComposerOpen(true)}
+        />
+      )}
+
+      {composerOpen && (
+        <AttemptComposer
+          busy={turnBusy}
+          onSubmit={handleCheckWork}
+          onCancel={() => setComposerOpen(false)}
+        />
       )}
     </div>
   );

@@ -1,21 +1,27 @@
 "use client";
 
-import type { ChatMessage, StructuredSolution } from "@/lib/tutor/types";
+import type { ChatMessage, StructuredSolution, WorkCheck } from "@/lib/tutor/types";
 import RichText from "@/components/RichText";
 import SolutionCard from "@/components/SolutionCard";
+import WorkCheckCard from "@/components/WorkCheckCard";
 
 /**
  * A single conversation turn. Tutor turns may carry an attached structured
- * solution or a "similar problem" callout rendered beneath the text.
+ * solution, a "similar problem" callout, or a "Check My Work" diagnosis rendered
+ * beneath the text. Student turns may carry an attached photo of their attempt.
  */
 export default function MessageBubble({
   message,
   solution,
   similarProblem,
+  workCheck,
+  attemptImage,
 }: {
   message: ChatMessage;
   solution?: StructuredSolution;
   similarProblem?: string;
+  workCheck?: WorkCheck;
+  attemptImage?: string;
 }) {
   const isStudent = message.role === "student";
 
@@ -33,6 +39,23 @@ export default function MessageBubble({
         >
           <RichText text={message.content} />
         </div>
+
+        {attemptImage && (
+          <div className="mt-2 flex justify-end">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={attemptImage}
+              alt="Your attempted solution"
+              className="max-h-48 rounded-xl border border-slate-200 object-contain"
+            />
+          </div>
+        )}
+
+        {workCheck && (
+          <div className="mt-2">
+            <WorkCheckCard check={workCheck} />
+          </div>
+        )}
 
         {solution && (
           <div className="mt-2">

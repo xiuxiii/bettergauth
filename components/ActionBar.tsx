@@ -19,10 +19,12 @@ export default function ActionBar({
   busy,
   onAction,
   onAsk,
+  onCheckWork,
 }: {
   busy: boolean;
   onAction: (action: Exclude<TutorAction, "ask">) => void;
   onAsk: (text: string) => void;
+  onCheckWork: () => void;
 }) {
   const [text, setText] = useState("");
 
@@ -36,6 +38,16 @@ export default function ActionBar({
   return (
     <div className="border-t border-slate-200 bg-white/95 px-3 pb-3 pt-2 backdrop-blur">
       <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+        <button
+          disabled={busy}
+          onClick={onCheckWork}
+          className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 transition hover:border-brand-400 disabled:opacity-50"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7 7a1 1 0 01-1.4 0l-3-3a1 1 0 111.4-1.4l2.3 2.3 6.3-6.3a1 1 0 011.4 0z" clipRule="evenodd" />
+          </svg>
+          Check my work
+        </button>
         {QUICK_ACTIONS.map(({ action, label }) => (
           <button
             key={action}
