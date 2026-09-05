@@ -21,6 +21,18 @@ npm run dev        # http://localhost:3000
 No environment variables are required. `AI_PROVIDER` defaults to `mock`
 (see `.env.example`).
 
+## Evaluating the tutor
+
+```bash
+npm run eval:tutor
+```
+
+Runs 25 STEM scenarios (`test/scenarios.mjs`) against the real classifier and a
+mirror of the mock's conversational logic, and reports where the tutor diverges
+from the philosophy. It's the acceptance test for a real provider — see
+`docs/tutoring-eval.md` for the current findings (the default chat path fails
+most scenarios; the buttons, check-work, and practice pass).
+
 ## What's built
 
 - **Home** (`app/page.tsx`) — logo placeholder, "Take a photo" (camera capture
