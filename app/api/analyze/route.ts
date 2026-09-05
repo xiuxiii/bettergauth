@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const analysis = await getProvider().analyzeProblem(image);
+    const analysis = await getProvider().analyzeProblem({ imageDataUrl: image });
     return NextResponse.json(analysis);
   } catch (err) {
     console.error("analyze failed:", err);

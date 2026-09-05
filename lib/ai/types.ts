@@ -1,4 +1,5 @@
 import type {
+  AnalyzeRequest,
   CheckWorkRequest,
   EvaluatePracticeRequest,
   GeneratePracticeRequest,
@@ -11,16 +12,31 @@ import type {
 } from "@/lib/tutor/types";
 
 /**
- * The provider abstraction. Any model backend (mock now, a real LLM later)
- * implements this interface. Everything above this line is provider-agnostic;
- * everything that constructs a provider lives server-side only, so API keys
- * are never bundled to the client.
+ * The provider abstraction — the single contract every model backend implements
+ * (mock now, a real vision-capable LLM later). It is intentionally uniform: each
+ * method takes ONE typed request and returns ONE typed domain object. The
+ * frontend and API routes only ever see these domain types (in @/lib/tutor/
+ * types), never a model's raw response — a real provider is responsible for
+ * mapping the model output into them inside lib/ai/, so swapping providers never
+ * touches the UI. Everything that constructs a provider is server-only, so API
+ * keys are never bundled to the client.
+ *
+ * The methods below cover every capability the real system needs:
+ *   analyzeProblem  → image input · problem extraction · subject/topic
+ *                     classification · concept identification
+ *   tutor           → tutoring responses · follow-up questions
+ *   checkWork       → student attempt analysis (Check My Work)
+ *   generatePractice→ similar-problem generation
+ *   evaluatePractice→ practice attempt evaluation
  */
 export interface AIProvider {
   readonly name: string;
 
-  /** Analyze an uploaded problem image (data URL) into structured text. */
-  analyzeProblem(imageDataUrl: string): Promise<ProblemAnalysis>;
+  /**
+   * Analyze an uploaded problem image into structured text + classification +
+   * the identified governing concept.
+   */
+  analyzeProblem(request: AnalyzeRequest): Promise<ProblemAnalysis>;
 
   /** Produce the next tutor turn given the problem and conversation so far. */
   tutor(request: TutorRequest): Promise<TutorTurn>;

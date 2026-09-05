@@ -112,22 +112,21 @@ and **adaptive** free-text replies that branch on an understanding estimate
 
 ## Swapping in a real model later
 
-1. Implement `AIProvider` in e.g. `lib/ai/anthropicProvider.ts`, reading its key
-   from `process.env` inside the constructor (server-only).
-2. Add a `case` in `getProvider()` (`lib/ai/provider.ts`) keyed on `AI_PROVIDER`.
-3. Set `AI_PROVIDER` and the key in `.env`.
+The real provider is already stubbed and wired — see
+**`docs/ai-provider-integration.md`** for the exact request/response schema and
+the step-by-step guide. In short:
 
-No UI or route changes are required — `SYSTEM_PROMPT` in `philosophy.ts` is ready
-to pass to the model.
+1. `npm install @anthropic-ai/sdk`.
+2. Implement the `AnthropicProvider` methods in `lib/ai/anthropicProvider.ts`
+   (each has a `TODO(real-api)` block with the exact call to write). The factory
+   `getProvider()` already routes `AI_PROVIDER=anthropic` to it.
+3. Set `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` in `.env.local`
+   (optionally `ANTHROPIC_MODEL`, defaults to `claude-opus-5`).
+
+No UI or route changes are required — the frontend only consumes the domain types
+in `lib/tutor/types.ts`, and the provider maps model output into them.
 
 ## Not included (by design)
 
 No authentication, payments, database, or analytics — this is a focused
 prototype of the tutoring experience.
-
-## Next logical step
-
-Wire up a real vision-capable model behind the existing `AIProvider` interface:
-real OCR/classification in `analyzeProblem`, and streaming tutor turns driven by
-`SYSTEM_PROMPT` plus the conversation history in `tutor`. Everything else — the
-UI, the action model, the structured-solution contract — stays as-is.

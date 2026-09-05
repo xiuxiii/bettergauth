@@ -39,6 +39,16 @@ export default function ProblemCard({
             <RichText text={analysis.problemText} />
           </div>
         </div>
+        {analysis.concept && (
+          <div>
+            <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Key concept
+            </p>
+            <div className="text-sm text-slate-700">
+              <RichText text={analysis.concept} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

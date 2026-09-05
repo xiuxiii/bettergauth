@@ -8,15 +8,32 @@ export type Subject =
   | "Mathematics"
   | "Unknown";
 
-/** Result of analyzing an uploaded problem image. */
+/** Result of analyzing an uploaded problem image (problem extraction + classification). */
 export interface ProblemAnalysis {
   /** The problem text as detected from the image (OCR in a real provider). */
   problemText: string;
+  /** Subject classification. */
   subject: Subject;
   /** A finer-grained topic, e.g. "Conservation of energy". */
   topic: string;
+  /**
+   * Concept identification: the single governing concept/principle the problem
+   * hinges on (may equal or refine `topic`). This is the target of the
+   * "concept identification" capability and seeds the tutoring session.
+   */
+  concept: string;
   /** 0..1 confidence that the detection is correct. */
   confidence: number;
+}
+
+/**
+ * What the client sends to /api/analyze. The image is a data URL so it carries
+ * its own media type; a real provider splits it into base64 + media_type for
+ * the model's image content block.
+ */
+export interface AnalyzeRequest {
+  /** `data:<mediaType>;base64,<data>` URL of the problem photo/upload. */
+  imageDataUrl: string;
 }
 
 export type Role = "student" | "tutor";

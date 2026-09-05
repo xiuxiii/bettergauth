@@ -2,16 +2,17 @@ import "server-only";
 
 import type { AIProvider } from "@/lib/ai/types";
 import { MockProvider } from "@/lib/ai/mockProvider";
+import { AnthropicProvider } from "@/lib/ai/anthropicProvider";
 
 /**
- * Provider factory. This module is server-only (see the `server-only` import),
- * so any real API keys read here can never be bundled into client code.
+ * Provider factory — the single place a provider is chosen and constructed.
+ * This module is server-only (see the `server-only` import), so any real API
+ * keys read here can never be bundled into client code.
  *
- * To add a real provider later:
- *   1. Implement AIProvider in e.g. lib/ai/anthropicProvider.ts, reading its
- *      key from process.env inside the constructor.
- *   2. Add a case below keyed on AI_PROVIDER.
- * No UI or route changes are required.
+ * Selection is by the `AI_PROVIDER` env var (default "mock"). To ship the real
+ * model: implement the AnthropicProvider methods (TODOs in
+ * lib/ai/anthropicProvider.ts) and set `AI_PROVIDER=anthropic` +
+ * `ANTHROPIC_API_KEY` (see .env.example). No UI or route changes are required.
  */
 let cached: AIProvider | null = null;
 
@@ -23,9 +24,14 @@ export function getProvider(): AIProvider {
     case "mock":
       cached = new MockProvider();
       break;
-    // case "anthropic":
-    //   cached = new AnthropicProvider(process.env.ANTHROPIC_API_KEY!);
-    //   break;
+    case "anthropic":
+      // Real vision-capable provider. Its methods currently throw until
+      // implemented — selecting it before then surfaces a clear error per call.
+      cached = new AnthropicProvider({
+        apiKey: process.env.ANTHROPIC_API_KEY ?? "",
+        model: process.env.ANTHROPIC_MODEL, // optional; defaults to claude-opus-5
+      });
+      break;
     default:
       // Fail soft to the mock so the prototype always runs.
       console.warn(`Unknown AI_PROVIDER "${name}", falling back to mock.`);

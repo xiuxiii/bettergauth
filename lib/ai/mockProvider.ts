@@ -1,5 +1,6 @@
 import type { AIProvider } from "@/lib/ai/types";
 import type {
+  AnalyzeRequest,
   CheckWorkRequest,
   EvaluatePracticeRequest,
   GeneratePracticeRequest,
@@ -43,6 +44,7 @@ const SAMPLES: SampleProblem[] = [
         "A 2.0 kg block is released from rest at the top of a frictionless ramp of height 1.5 m. What is the block's speed at the bottom of the ramp? (Take g = 9.8 m/s².)",
       subject: "Physics",
       topic: "Conservation of mechanical energy",
+      concept: "Conservation of mechanical energy (no friction ⇒ PE converts fully to KE)",
       confidence: 0.93,
     },
     opener:
@@ -75,6 +77,7 @@ const SAMPLES: SampleProblem[] = [
         "Solve for x: 3x² − 12x + 9 = 0.",
       subject: "Mathematics",
       topic: "Quadratic equations",
+      concept: "Factor out the common constant, then apply the zero-product property",
       confidence: 0.9,
     },
     opener:
@@ -106,6 +109,7 @@ const SAMPLES: SampleProblem[] = [
         "How many moles of water are produced when 4.0 mol of H₂ reacts completely with excess O₂? (2H₂ + O₂ → 2H₂O)",
       subject: "Chemistry",
       topic: "Stoichiometry (mole ratios)",
+      concept: "Mole ratio from the balanced equation, set by the limiting reactant",
       confidence: 0.88,
     },
     opener:
@@ -830,9 +834,9 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export class MockProvider implements AIProvider {
   readonly name = "mock";
 
-  async analyzeProblem(imageDataUrl: string): Promise<ProblemAnalysis> {
+  async analyzeProblem(request: AnalyzeRequest): Promise<ProblemAnalysis> {
     await delay(700); // simulate OCR + classification latency
-    return pickSample(imageDataUrl).analysis;
+    return pickSample(request.imageDataUrl).analysis;
   }
 
   async tutor(request: TutorRequest): Promise<TutorTurn> {
