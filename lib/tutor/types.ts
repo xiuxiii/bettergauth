@@ -30,13 +30,18 @@ export interface ChatMessage {
 }
 
 /**
- * Explicit actions the student can trigger. Free-form questions use "ask".
- * The tutoring engine maps each to a different pedagogical intent.
+ * Explicit signals the student can send the tutor about how much help they
+ * want. These are NOT separate systems — every one is just an input to the same
+ * tutor engine (the mock's `tutor()`, a real model later), alongside free-form
+ * "ask". They form a rough ladder of assistance:
+ *   hint (least) → explain → go_deeper → show_solution (most), plus
+ *   similar_problem (a lateral "test my understanding" move).
  */
 export type TutorAction =
   | "ask"
   | "hint"
   | "explain"
+  | "go_deeper"
   | "show_solution"
   | "similar_problem";
 

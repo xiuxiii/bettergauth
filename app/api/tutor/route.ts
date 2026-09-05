@@ -8,6 +8,7 @@ const ACTIONS: TutorAction[] = [
   "ask",
   "hint",
   "explain",
+  "go_deeper",
   "show_solution",
   "similar_problem",
 ];

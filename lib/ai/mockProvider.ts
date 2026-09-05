@@ -31,6 +31,8 @@ interface SampleProblem {
   opener: string;
   hint: string;
   explain: string;
+  /** One level below `explain`: builds from a more fundamental idea + a check. */
+  deeper: string;
   similar: string;
 }
 
@@ -49,6 +51,8 @@ const SAMPLES: SampleProblem[] = [
       "The block starts at rest, so all its energy at the top is gravitational potential energy, $E = mgh$. At the bottom the height is zero, so it's all kinetic, $E = \\tfrac12 mv^2$. Conservation means those two are equal — notice the mass will cancel.",
     explain:
       "The key idea is the **work–energy** picture. Energy isn't created or destroyed; it changes *form*. On a frictionless ramp the only force doing work is gravity, which is *conservative* — the energy it stores as height ($mgh$) is fully returned as motion ($\\tfrac12 mv^2$).\n\nIf friction were present, some energy would leak away as heat, so $\\tfrac12 mv^2 < mgh$ and you couldn't equate them directly. That's why 'frictionless' is the assumption that unlocks the clean equation.",
+    deeper:
+      "One level down. *Work* is force along the motion, $W=\\int \\vec F\\cdot d\\vec s$. Gravity is special: the work it does depends only on the change in height, not the path — that path-independence is exactly what makes it a **conservative** force, and it's why a potential energy $U=mgh$ can be defined at all.\n\nThe **work–energy theorem** says net work equals the change in kinetic energy, $W_\\text{net}=\\Delta KE$. On the frictionless ramp the only work is gravity's, $W=mgh$, so $mgh=\\tfrac12 mv^2$. So 'conservation of energy' isn't a separate law here — it *is* the work–energy theorem once every force doing work is conservative.\n\nCheck: if the ramp were *curved* but still frictionless, would the speed at the bottom change? (No — same height, same work, same speed.)",
     solution: {
       understanding:
         "A 2.0 kg block slides from rest down a frictionless ramp of height 1.5 m. We want its speed at the bottom.",
@@ -79,6 +83,8 @@ const SAMPLES: SampleProblem[] = [
       "Divide the whole equation by 3 first: $x^2 - 4x + 3 = 0$. Now look for two numbers that multiply to $+3$ and add to $-4$.",
     explain:
       "A quadratic $ax^2+bx+c=0$ is asking where a parabola crosses zero. Factoring rewrites it as $(x-r_1)(x-r_2)=0$, and the **zero-product property** says a product is zero only when a factor is zero — so the roots are $r_1$ and $r_2$. Simplifying by the common factor of 3 first doesn't change the roots (dividing both sides by a nonzero constant), it just makes the numbers friendlier.",
+    deeper:
+      "Deeper: *why* does factoring find the roots at all? Because the real numbers have no zero divisors — if a product $AB=0$, at least one factor must be $0$. That's the whole engine behind the zero-product property, and it's why $(x-1)(x-3)=0$ splits cleanly into $x=1$ or $x=3$.\n\nFactoring is just expansion run backwards: any quadratic with roots $r_1,r_2$ can be written $a(x-r_1)(x-r_2)$. Expanding that shows the sum of the roots is $-b/a$ and the product is $c/a$ (**Vieta's formulas**). When a quadratic won't factor nicely, *completing the square* is the universal method underneath — it's exactly where the quadratic formula comes from.\n\nCheck: without factoring, what should the two roots of $x^2-4x+3$ sum to — and does $1+3$ agree?",
     solution: {
       understanding: "We need the values of $x$ that satisfy $3x^2 - 12x + 9 = 0$.",
       keyConcept:
@@ -108,6 +114,8 @@ const SAMPLES: SampleProblem[] = [
       "Look only at the coefficients linking H₂ and H₂O: they're $2:2$, i.e. $1:1$. 'Excess O₂' means oxygen never runs out, so H₂ is the limiting reactant.",
     explain:
       "A balanced equation conserves atoms, and its coefficients are **ratios of moles**, not masses. Here 2 mol H₂ makes 2 mol H₂O, a 1-to-1 relationship. Saying O₂ is in *excess* tells you it isn't the bottleneck — the amount of product is set entirely by the limiting reactant, H₂. That's the conceptual step; the multiplication afterward is trivial.",
+    deeper:
+      "Deeper: *why* are the coefficients mole ratios and not mass ratios? A balanced equation is a statement about **numbers of particles** — atoms are conserved, so $2\\text{H}_2+\\text{O}_2\\to2\\text{H}_2\\text{O}$ literally means 2 molecules of H₂ per 1 of O₂. The mole is just a counting unit ($6.02\\times10^{23}$ particles), so the same integer ratio carries straight over to moles.\n\nMass can't be used in that ratio directly because different molecules weigh different amounts — that's the whole reason you convert to moles first. And 'limiting reactant' simply means: which one runs out of *particles* first.\n\nCheck: in $\\text{N}_2+3\\text{H}_2\\to2\\text{NH}_3$, how many moles of N₂ are needed to fully react 3 mol of H₂?",
     solution: {
       understanding:
         "4.0 mol H₂ reacts fully with excess O₂ via $2\\text{H}_2 + \\text{O}_2 \\to 2\\text{H}_2\\text{O}$; find moles of H₂O.",
@@ -838,6 +846,11 @@ export class MockProvider implements AIProvider {
 
       case "explain":
         return { message: sample.explain };
+
+      case "go_deeper":
+        // The student is asking to raise the depth on the current concept —
+        // a signal the same engine acts on (here: one level below `explain`).
+        return { message: sample.deeper };
 
       case "show_solution":
         return {

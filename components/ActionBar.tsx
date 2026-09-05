@@ -4,16 +4,28 @@ import { useState } from "react";
 import type { TutorAction } from "@/lib/tutor/types";
 import { Spinner } from "@/components/States";
 
-const QUICK_ACTIONS: { action: Exclude<TutorAction, "ask">; label: string }[] = [
+/**
+ * The level-of-assistance ladder. Every item is just a signal to the same tutor
+ * engine (see TutorAction) — from the lightest nudge to the full solution, plus
+ * a lateral "test my understanding" move. Free-form questions (the default) go
+ * through the text input below, so these never replace normal conversation.
+ */
+const ASSIST: { action: Exclude<TutorAction, "ask">; label: string }[] = [
   { action: "hint", label: "Hint" },
-  { action: "explain", label: "Explain this" },
+  { action: "explain", label: "Explain why" },
+  { action: "go_deeper", label: "Go deeper" },
   { action: "show_solution", label: "Show solution" },
   { action: "similar_problem", label: "Try similar" },
 ];
 
+const chipCls =
+  "whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700 disabled:opacity-50";
+
 /**
- * The tutor controls: quick pedagogical buttons plus a free-text input for
- * follow-up questions. Disabled while a turn is in flight.
+ * The tutor controls: the assistance ladder, the two richer modes (check work /
+ * practice), and a free-text input for follow-up questions. Deliberately flat
+ * and uniform — no colors or icons competing for attention. Disabled while a
+ * turn is in flight.
  */
 export default function ActionBar({
   busy,
@@ -39,37 +51,27 @@ export default function ActionBar({
 
   return (
     <div className="border-t border-slate-200 bg-white/95 px-3 pb-3 pt-2 backdrop-blur">
-      <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
-        <button
-          disabled={busy}
-          onClick={onCheckWork}
-          className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 transition hover:border-brand-400 disabled:opacity-50"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7 7a1 1 0 01-1.4 0l-3-3a1 1 0 111.4-1.4l2.3 2.3 6.3-6.3a1 1 0 011.4 0z" clipRule="evenodd" />
-          </svg>
-          Check my work
-        </button>
-        <button
-          disabled={busy}
-          onClick={onPractice}
-          className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 transition hover:border-indigo-400 disabled:opacity-50"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path d="M10 1l1.8 5.2L17 8l-5.2 1.8L10 15l-1.8-5.2L3 8l5.2-1.8L10 1z" />
-          </svg>
-          I&apos;m ready
-        </button>
-        {QUICK_ACTIONS.map(({ action, label }) => (
+      <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
+        {/* Assistance ladder — signals to the tutor engine. */}
+        {ASSIST.map(({ action, label }) => (
           <button
             key={action}
             disabled={busy}
             onClick={() => onAction(action)}
-            className="whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700 disabled:opacity-50"
+            className={chipCls}
           >
             {label}
           </button>
         ))}
+
+        {/* Divider, then the two richer modes. */}
+        <span className="mx-0.5 h-5 w-px flex-shrink-0 self-center bg-slate-200" />
+        <button disabled={busy} onClick={onCheckWork} className={chipCls}>
+          Check my work
+        </button>
+        <button disabled={busy} onClick={onPractice} className={chipCls}>
+          Practice
+        </button>
       </div>
 
       <div className="flex items-end gap-2">

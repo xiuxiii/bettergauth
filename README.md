@@ -29,8 +29,12 @@ No environment variables are required. `AI_PROVIDER` defaults to `mock`
   detected problem, and the detected subject/topic, then runs the tutoring
   session. Includes loading, error (with retry), and empty states.
 - **Tutor interface** — chat between student and tutor, LaTeX math via KaTeX,
-  free-text follow-ups, and buttons for **Hint**, **Explain this**,
-  **Show solution**, and **Try a similar problem**.
+  free-text follow-ups (always available — the default), and a lightweight
+  **level-of-assistance ladder**: **Hint → Explain why → Go deeper → Show
+  solution**, plus **Try a similar problem**. These aren't separate systems —
+  each is just a `TutorAction` signal to the one `tutor()` engine (`go_deeper`
+  raises the depth on the current concept), so they map straight onto a real
+  provider later.
 - **Structured solution** (`components/SolutionCard.tsx`) — Problem understanding
   → Key concept → Reasoning → Solution → Final answer → Important takeaway. Shown
   only when the student asks for it.
