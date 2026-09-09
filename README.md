@@ -6,9 +6,10 @@ step-by-step hand-holding. It adapts its depth to what the student demonstrates,
 explains directly when that's faster than asking questions, and gives a full
 worked solution on request.
 
-> This prototype runs entirely on a **mock AI service** — no API key, no network
-> model calls. The whole UI and interaction flow are exercisable today, and a
-> real model can be dropped in behind a single interface later.
+> Set `ANTHROPIC_API_KEY` and it runs on the **real Claude vision model**; with
+> no key it falls back to an offline **mock** so the whole UI is still
+> exercisable. Both sit behind one provider interface — see
+> [Using the real Claude vision model](#using-the-real-claude-vision-model).
 
 ## Quick start
 
@@ -110,21 +111,21 @@ opener, brief hints, direct explanations, a full structured solution on request,
 and **adaptive** free-text replies that branch on an understanding estimate
 (`lib/tutor/philosophy.ts`).
 
-## Swapping in a real model later
+## Using the real Claude vision model
 
-The real provider is already stubbed and wired — see
-**`docs/ai-provider-integration.md`** for the exact request/response schema and
-the step-by-step guide. In short:
+The real provider is **implemented** (`lib/ai/anthropicProvider.ts`, using the
+Anthropic SDK + Zod-validated structured outputs). To go live, add one env var:
 
-1. `npm install @anthropic-ai/sdk`.
-2. Implement the `AnthropicProvider` methods in `lib/ai/anthropicProvider.ts`
-   (each has a `TODO(real-api)` block with the exact call to write). The factory
-   `getProvider()` already routes `AI_PROVIDER=anthropic` to it.
-3. Set `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` in `.env.local`
-   (optionally `ANTHROPIC_MODEL`, defaults to `claude-opus-5`).
+```bash
+# .env.local
+ANTHROPIC_API_KEY=sk-ant-...     # that's it — the provider auto-detects
+# ANTHROPIC_MODEL=claude-opus-5  # optional, this is the default
+```
 
-No UI or route changes are required — the frontend only consumes the domain types
-in `lib/tutor/types.ts`, and the provider maps model output into them.
+With no key set it falls back to the offline mock. No UI or route changes are
+involved — the frontend only consumes the domain types in `lib/tutor/types.ts`,
+and the provider maps the model output into them. Full schema and tuning notes:
+**`docs/ai-provider-integration.md`**.
 
 ## Not included (by design)
 

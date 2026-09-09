@@ -9,17 +9,20 @@ import { AnthropicProvider } from "@/lib/ai/anthropicProvider";
  * This module is server-only (see the `server-only` import), so any real API
  * keys read here can never be bundled into client code.
  *
- * Selection is by the `AI_PROVIDER` env var (default "mock"). To ship the real
- * model: implement the AnthropicProvider methods (TODOs in
- * lib/ai/anthropicProvider.ts) and set `AI_PROVIDER=anthropic` +
- * `ANTHROPIC_API_KEY` (see .env.example). No UI or route changes are required.
+ * Selection is by the `AI_PROVIDER` env var. If it's unset, we use the real
+ * Anthropic provider when `ANTHROPIC_API_KEY` is present, otherwise the mock —
+ * so dropping in a key is all it takes to go live. No UI or route changes are
+ * required (see .env.example and docs/ai-provider-integration.md).
  */
 let cached: AIProvider | null = null;
 
 export function getProvider(): AIProvider {
   if (cached) return cached;
 
-  const name = (process.env.AI_PROVIDER ?? "mock").toLowerCase();
+  const name = (
+    process.env.AI_PROVIDER ??
+    (process.env.ANTHROPIC_API_KEY ? "anthropic" : "mock")
+  ).toLowerCase();
   switch (name) {
     case "mock":
       cached = new MockProvider();

@@ -144,32 +144,41 @@ Recommended model: **`claude-opus-5`** (vision-capable). Pattern for every metho
 Notes: use streaming (`.stream()` + `.finalMessage()`) if you raise `max_tokens`
 high; keep `SYSTEM_INSTRUCTIONS` stable to benefit from prompt caching.
 
-## Where to implement it
+## Status: implemented
 
-Everything is stubbed and wired:
+The real provider is **implemented and wired**, not a stub:
 
 - **`lib/ai/anthropicProvider.ts`** — the `AnthropicProvider` class. Every method
-  has a `TODO(real-api)` block with the exact call to write; each currently
-  throws a clear not-implemented error. The SDK import is commented so the app
-  builds without the dependency.
-- **`lib/ai/provider.ts`** — already routes `AI_PROVIDER=anthropic` to it.
-- **`.env.example`** — the env contract.
+  makes a real Claude call and validates the response against a Zod schema
+  mirroring the domain type (`client.messages.parse` + `zodOutputFormat`), so
+  only validated domain objects leave this module. `analyzeProblem`, `checkWork`,
+  and `evaluatePractice` send the image as a base64 vision block.
+- **`lib/ai/provider.ts`** — auto-selects this provider when `ANTHROPIC_API_KEY`
+  is set (or `AI_PROVIDER=anthropic`); falls back to the mock otherwise.
+- Dependencies: `@anthropic-ai/sdk` and `zod` (already installed).
 
-Steps to go live:
-1. `npm install @anthropic-ai/sdk`
-2. Uncomment the SDK import in `anthropicProvider.ts` and implement each method
-   per its TODO (construct the client in the constructor; map raw → domain type).
-3. Set `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` in `.env.local`.
-4. `npm run eval:tutor` to check tutoring behavior against the scenario suite
-   (`docs/tutoring-eval.md`).
+Verified: `tsc` + build clean; with a key set, a request calls
+`api.anthropic.com` (a bad key returns a real 401). It has not yet been run
+against a live valid key in this environment.
 
-## What you must provide when we connect the real API
+## What you must provide to run it live
 
-- **`ANTHROPIC_API_KEY`** — your Anthropic API key (`sk-ant-...`). Required.
-  Server-side only; never sent to the client.
-- **`AI_PROVIDER=anthropic`** — to switch off the mock.
+- **`ANTHROPIC_API_KEY`** — your Anthropic API key (`sk-ant-...`). **Required.**
+  Server-side only; never sent to the client. Setting it is all it takes — the
+  provider auto-detects.
 - **`ANTHROPIC_MODEL`** *(optional)* — defaults to `claude-opus-5`. Override only
   to pin a different vision-capable model.
+- **`AI_PROVIDER`** *(optional)* — `anthropic` or `mock` to force the choice;
+  leave unset to auto-detect from the key.
 
 That's the entire configuration surface. No authentication, database, payment, or
-other infrastructure is required or added.
+other infrastructure is required or added. After adding the key, run
+`npm run eval:tutor` (or just use the app) to sanity-check tutoring behavior.
+
+## Tuning notes (optional)
+
+- Latency/cost: calls default to Opus 5 with high effort + adaptive thinking. If
+  responses feel slow, add `output_config: { effort: "medium", format: ... }` to
+  the calls, or set `ANTHROPIC_MODEL=claude-sonnet-5` for a cheaper/faster model.
+- All prompts live at the top of `anthropicProvider.ts` (task system prompts) and
+  in `lib/tutor/engine.ts` (`SYSTEM_INSTRUCTIONS`, used for tutoring).
