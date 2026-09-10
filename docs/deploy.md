@@ -27,16 +27,21 @@ A public URL with your key means **every visitor spends your Anthropic credits**
 each analyze / tutor / check / practice call is a real API request. For a handful
 of friends that's fine and cheap. If the link leaks or gets scraped, it isn't.
 
-Before sharing beyond people you trust, consider:
+Cost controls that are already in place:
 
-- **Watch spend** in the Anthropic console; set a billing limit there.
-- **A lightweight access gate** (optional, not built yet): add an `ACCESS_CODE`
-  env var, a one-field unlock page that POSTs the code to a route which compares
-  it to `process.env.ACCESS_CODE` and sets a cookie; middleware blocks the AI
-  routes without that cookie. No database — just a shared code you give friends.
-  Say the word and I'll add it.
-- **Cheaper model** for wider testing: set `ANTHROPIC_MODEL=claude-sonnet-5`
-  (lower per-token cost) if quality holds for your use.
+- **Cheaper model by default:** `claude-sonnet-5` (~2.5× cheaper than Opus).
+  Override with `ANTHROPIC_MODEL=claude-opus-5` if you want more headroom.
+- **Prompt caching** on the big tutoring system prompt, short output caps, and
+  reduced reasoning effort — so each turn costs a fraction of what it did.
+
+Before sharing beyond people you trust:
+
+- **Turn on the access gate.** Set an `ACCESS_CODE` env var (Vercel → Settings →
+  Environment Variables, from your phone is fine) and redeploy. Visitors then hit
+  a one-field unlock page and must enter the code before anything calls the API.
+  Leave it unset and the gate is off. It's a shared code, no accounts/database —
+  give friends the code, rotate it by changing the env var.
+- **Watch spend** in the Anthropic console and set a billing limit there.
 
 ## Local vs. hosted
 

@@ -21,7 +21,7 @@ export async function GET() {
     provider,
     keyDetected,
     aiProviderEnv,
-    model: process.env.ANTHROPIC_MODEL?.trim() || "claude-opus-5",
+    model: process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-5",
     ok: keyDetected,
   });
 }

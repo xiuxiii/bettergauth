@@ -9,7 +9,7 @@ import { AnthropicProvider } from "@/lib/ai/anthropicProvider";
  * read here can never be bundled into client code.
  *
  * The app runs on a real vision-capable model. `ANTHROPIC_API_KEY` is required;
- * `ANTHROPIC_MODEL` optionally pins the model (defaults to claude-opus-5). The
+ * `ANTHROPIC_MODEL` optionally pins the model (defaults to claude-sonnet-5). The
  * `AIProvider` interface and this factory stay provider-agnostic, so a
  * different backend can be added later as another `case`.
  */
@@ -34,7 +34,7 @@ export function getProvider(): AIProvider {
     );
   }
 
-  console.log(`[ai] provider=anthropic; model=${model ?? "claude-opus-5"}`);
+  console.log(`[ai] provider=anthropic; model=${model ?? "claude-sonnet-5"}`);
   cached = new AnthropicProvider({ apiKey, model });
   return cached;
 }

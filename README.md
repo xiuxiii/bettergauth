@@ -83,7 +83,10 @@ The real provider is implemented in `lib/ai/anthropicProvider.ts` (Anthropic SDK
 + Zod structured outputs). Config is env-only:
 
 - `ANTHROPIC_API_KEY` — required, server-side only.
-- `ANTHROPIC_MODEL` — optional, defaults to `claude-opus-5`.
+- `ANTHROPIC_MODEL` — optional, defaults to `claude-sonnet-5` (cheaper; set
+  `claude-opus-5` for more headroom).
+- `ACCESS_CODE` — optional shared code that gates the app (protects your API
+  credits on a public URL). Unset = no gate. See `docs/deploy.md`.
 
 Full schema and tuning notes: **`docs/ai-provider-integration.md`**. Deploying so
 others can test it: **`docs/deploy.md`**.

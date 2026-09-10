@@ -152,13 +152,15 @@ export class AnthropicProvider implements AIProvider {
       );
     }
     this.client = new Anthropic({ apiKey: config.apiKey });
-    this.model = config.model ?? "claude-opus-5";
+    // Sonnet 5 is ~2.5x cheaper than Opus 5 and plenty for this workload.
+    // Override with ANTHROPIC_MODEL if you want more headroom (e.g. claude-opus-5).
+    this.model = config.model ?? "claude-sonnet-5";
   }
 
   async analyzeProblem(request: AnalyzeRequest): Promise<ProblemAnalysis> {
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 2000,
+      max_tokens: 1200,
       system: ANALYZE_SYSTEM,
       messages: [
         {
@@ -169,20 +171,32 @@ export class AnthropicProvider implements AIProvider {
           ],
         },
       ],
-      output_config: { format: zodOutputFormat(ProblemAnalysisSchema) },
+      // Extraction is not reasoning-heavy → low effort trims thinking tokens.
+      output_config: { effort: "low", format: zodOutputFormat(ProblemAnalysisSchema) },
     });
     return required(res.parsed_output, "problem analysis");
   }
 
   async tutor(request: TutorRequest): Promise<TutorTurn> {
-    const system = `${SYSTEM_INSTRUCTIONS}
+    // Split the system prompt so the big, frozen instructions are cached across
+    // every turn/problem/user (prompt caching, ~90% cheaper on the cached
+    // prefix), while the small per-problem block stays uncached.
+    const system: Anthropic.TextBlockParam[] = [
+      {
+        type: "text",
+        text: SYSTEM_INSTRUCTIONS,
+        cache_control: { type: "ephemeral" },
+      },
+      {
+        type: "text",
+        text: `# Current problem\n${request.problem.problemText}\nSubject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing concept: ${request.problem.concept}.${preferencesBlock(request.preferences)}`,
+      },
+    ];
 
-# Current problem
-${request.problem.problemText}
-Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing concept: ${request.problem.concept}.${preferencesBlock(request.preferences)}`;
-
+    // The problem already lives in the (cached) system block, so messages[0] is
+    // just a tiny anchor — no need to resend the full problem text every turn.
     const messages: Anthropic.MessageParam[] = [
-      { role: "user", content: `Here is the problem I'm working on:\n${request.problem.problemText}` },
+      { role: "user", content: "Let's work on this problem." },
       ...request.history.map(
         (m): Anthropic.MessageParam => ({
           role: m.role === "student" ? "user" : "assistant",
@@ -195,10 +209,10 @@ Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing 
     if (request.action === "show_solution") {
       const res = await this.client.messages.parse({
         model: this.model,
-        max_tokens: 4000,
+        max_tokens: 1500,
         system,
         messages,
-        output_config: { format: zodOutputFormat(TutorSolutionSchema) },
+        output_config: { effort: "medium", format: zodOutputFormat(TutorSolutionSchema) },
       });
       const out = required(res.parsed_output, "solution");
       return { message: out.message, solution: out.solution };
@@ -207,23 +221,23 @@ Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing 
     if (request.action === "similar_problem") {
       const res = await this.client.messages.parse({
         model: this.model,
-        max_tokens: 2000,
+        max_tokens: 800,
         system,
         messages,
-        output_config: { format: zodOutputFormat(TutorSimilarSchema) },
+        output_config: { effort: "medium", format: zodOutputFormat(TutorSimilarSchema) },
       });
       const out = required(res.parsed_output, "similar problem");
       return { message: out.message, similarProblem: out.similarProblem };
     }
 
     // Conceptual moves (ask / continue / hint / explain / go_deeper): one small
-    // piece + hasMore, so the UI can offer "Continue".
+    // piece + hasMore, so the UI can offer "Continue". Kept short on purpose.
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 1500,
+      max_tokens: 500,
       system,
       messages,
-      output_config: { format: zodOutputFormat(TutorChunkSchema) },
+      output_config: { effort: "medium", format: zodOutputFormat(TutorChunkSchema) },
     });
     const out = required(res.parsed_output, "tutor reply");
     return { message: out.message, hasMore: out.hasMore };
@@ -232,7 +246,7 @@ Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing 
   async checkWork(request: CheckWorkRequest): Promise<WorkCheck> {
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 2500,
+      max_tokens: 1200,
       system: CHECKWORK_SYSTEM,
       messages: [
         {
@@ -243,7 +257,7 @@ Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing 
           ),
         },
       ],
-      output_config: { format: zodOutputFormat(WorkCheckSchema) },
+      output_config: { effort: "medium", format: zodOutputFormat(WorkCheckSchema) },
     });
     const out = required(res.parsed_output, "work check");
     return { ...out, firstError: out.firstError ?? undefined };
@@ -254,7 +268,7 @@ Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing 
   ): Promise<PracticeProblem> {
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 1500,
+      max_tokens: 800,
       system: GENERATE_SYSTEM,
       messages: [
         {
@@ -262,7 +276,7 @@ Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing 
           content: `Original problem:\n${request.problem.problemText}\nSubject: ${request.problem.subject}. Concept: ${request.problem.concept}.\n\nGenerate one similar practice problem.`,
         },
       ],
-      output_config: { format: zodOutputFormat(PracticeProblemSchema) },
+      output_config: { effort: "low", format: zodOutputFormat(PracticeProblemSchema) },
     });
     return required(res.parsed_output, "practice problem");
   }
@@ -273,7 +287,7 @@ Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing 
     const hasAttempt = !!(request.attempt.text?.trim() || request.attempt.imageDataUrl);
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 4000,
+      max_tokens: 1800,
       system: EVALUATE_SYSTEM,
       messages: [
         {
@@ -288,7 +302,7 @@ Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing 
           ),
         },
       ],
-      output_config: { format: zodOutputFormat(PracticeEvaluationSchema) },
+      output_config: { effort: "medium", format: zodOutputFormat(PracticeEvaluationSchema) },
     });
     return required(res.parsed_output, "practice evaluation");
   }

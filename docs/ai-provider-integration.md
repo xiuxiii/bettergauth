@@ -124,7 +124,7 @@ PracticeEvaluation {
 
 ## How each maps to a Claude call
 
-Recommended model: **`claude-opus-5`** (vision-capable). Pattern for every method
+Default model: **`claude-sonnet-5`** (vision-capable; cheaper than Opus). Pattern for every method
 (see the per-method TODOs in `lib/ai/anthropicProvider.ts`):
 
 1. **System prompt** — `SYSTEM_INSTRUCTIONS` (`lib/tutor/engine.ts`) for
@@ -161,8 +161,8 @@ The real provider is **implemented and wired**, not a stub:
 
 - **`ANTHROPIC_API_KEY`** — your Anthropic API key (`sk-ant-...`). **Required.**
   Server-side only; never sent to the client. Without it every AI call errors.
-- **`ANTHROPIC_MODEL`** *(optional)* — defaults to `claude-opus-5`. Override only
-  to pin a different vision-capable model.
+- **`ANTHROPIC_MODEL`** *(optional)* — defaults to `claude-sonnet-5`. Override to
+  pin a different vision-capable model (e.g. `claude-opus-5`).
 
 That's the entire configuration surface. No authentication, database, payment, or
 other infrastructure is required or added. Confirm it's live at `/api/health`.
