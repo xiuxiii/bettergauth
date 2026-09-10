@@ -6,10 +6,9 @@ This document specifies the decision system that governs how the tutor behaves.
 It is written to be implemented directly as the system/developer instructions for
 an AI model. The machine-facing encoding lives in code:
 
-- `lib/tutor/engine.ts` — the move set, the decision ladder, the depth dial, and
-  the assembled `SYSTEM_INSTRUCTIONS` string.
+- `lib/tutor/engine.ts` — the `TUTORING_PRINCIPLES`, the move set, the decision
+  ladder, the depth dial, and the assembled `SYSTEM_INSTRUCTIONS` string.
 - `lib/tutor/state.ts` — the structured state object (`TutorState`).
-- `lib/tutor/philosophy.ts` — the short principle list (shared with the mock).
 
 Keep this doc and those files in sync: the doc explains *why*, the code encodes
 *what to do*.
@@ -417,12 +416,10 @@ demonstrated, and the trivial algebra was never interrogated.
 
 ## 13. Implementation path
 
-1. `lib/tutor/state.ts` and `lib/tutor/engine.ts` already encode this design.
-2. In the real provider (a new `AIProvider` per the audit), pass
-   `SYSTEM_INSTRUCTIONS` as the system/developer message and the serialized
-   `TutorState` with each turn; parse the updated state from the response.
-3. Extend `TutorRequest`/`TutorTurn` with the optional `state` (+ `move`,
-   `depth`) fields described in §10.
-4. Keep `philosophy.ts`'s heuristic for the mock; the mock can also set a coarse
-   `next.move` so the UI can be exercised against the real contract before the
-   model is wired in.
+1. `lib/tutor/state.ts` and `lib/tutor/engine.ts` encode this design;
+   `SYSTEM_INSTRUCTIONS` is the live system prompt used by `AnthropicProvider`.
+2. To use the full `TutorState` loop, pass the serialized state with each turn
+   and parse the updated state from the response (extend `TutorRequest` /
+   `TutorTurn` with an optional `state` field per §10). Today the provider drives
+   the philosophy from `SYSTEM_INSTRUCTIONS` + conversation history without
+   round-tripping the state object.

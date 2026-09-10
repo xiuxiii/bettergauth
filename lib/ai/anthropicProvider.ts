@@ -13,6 +13,7 @@ import type {
   PracticeEvaluation,
   PracticeProblem,
   ProblemAnalysis,
+  TutorPreferences,
   TutorTurn,
   TutorRequest,
   WorkCheck,
@@ -56,7 +57,11 @@ const StructuredSolutionSchema = z.object({
   takeaway: z.string(),
 });
 
-const TutorMessageSchema = z.object({ message: z.string() });
+/** Conceptual moves: one small piece + whether a next piece remains. */
+const TutorChunkSchema = z.object({
+  message: z.string(),
+  hasMore: z.boolean(),
+});
 const TutorSolutionSchema = z.object({
   message: z.string(),
   solution: StructuredSolutionSchema,
@@ -174,7 +179,7 @@ export class AnthropicProvider implements AIProvider {
 
 # Current problem
 ${request.problem.problemText}
-Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing concept: ${request.problem.concept}.`;
+Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing concept: ${request.problem.concept}.${preferencesBlock(request.preferences)}`;
 
     const messages: Anthropic.MessageParam[] = [
       { role: "user", content: `Here is the problem I'm working on:\n${request.problem.problemText}` },
@@ -211,14 +216,17 @@ Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing 
       return { message: out.message, similarProblem: out.similarProblem };
     }
 
+    // Conceptual moves (ask / continue / hint / explain / go_deeper): one small
+    // piece + hasMore, so the UI can offer "Continue".
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 2000,
+      max_tokens: 1500,
       system,
       messages,
-      output_config: { format: zodOutputFormat(TutorMessageSchema) },
+      output_config: { format: zodOutputFormat(TutorChunkSchema) },
     });
-    return { message: required(res.parsed_output, "tutor reply").message };
+    const out = required(res.parsed_output, "tutor reply");
+    return { message: out.message, hasMore: out.hasMore };
   }
 
   async checkWork(request: CheckWorkRequest): Promise<WorkCheck> {
@@ -291,12 +299,14 @@ Subject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing 
 /** Turn a button/free-form action into the user turn that drives the tutor. */
 function actionPrompt(request: TutorRequest): string {
   switch (request.action) {
+    case "continue":
+      return "Continue: give the next single small piece that builds on what you just said, then stop.";
     case "hint":
       return "Give me just a hint — the smallest possible nudge toward the next step. Don't give the full method.";
     case "explain":
-      return "Explain the key idea and the reasoning behind this problem, directly and concisely.";
+      return "Explain the key idea behind this problem — but one small piece at a time, then stop.";
     case "go_deeper":
-      return "Go one level deeper: build the explanation from a more fundamental concept, then end with a quick check question.";
+      return "Go one level deeper, starting from a more fundamental concept — one small piece, then stop.";
     case "show_solution":
       return "Show me the complete worked solution, concept first.";
     case "similar_problem":
@@ -306,9 +316,29 @@ function actionPrompt(request: TutorRequest): string {
       const text = request.studentText?.trim();
       return text
         ? text
-        : "Start the session: give a brief, concept-first opener for this problem, per your instructions.";
+        : "Start the session: give a brief, concept-first opener for this problem — one small piece, then stop.";
     }
   }
+}
+
+/** A short personalization block appended to the tutor's system prompt. */
+function preferencesBlock(prefs?: TutorPreferences): string {
+  if (!prefs) return "";
+  const grade =
+    prefs.grade && prefs.grade !== "other"
+      ? `Student is in grade ${prefs.grade}. Use it ONLY to calibrate vocabulary and assumed baseline — do NOT assume any specific courses, topics, or techniques from it.`
+      : "";
+  const style =
+    prefs.assistanceStyle === "direct"
+      ? "Default lean: explain directly rather than making them guess, while still leaving the final connection to them."
+      : "Default lean: hints first — make the student do the thinking; only explain outright when a hint won't unblock them.";
+  const goal =
+    prefs.goal === "exam"
+      ? "Emphasis: exam readiness — highlight the exam-relevant reasoning and the traps, while still building real understanding."
+      : prefs.goal === "understand"
+        ? "Emphasis: deep understanding — prioritize the why and the connections; keep exam-relevance in view."
+        : "Emphasis: both exam readiness and deep understanding — exam-relevant reasoning grounded in the underlying why.";
+  return `\n\n# This student\n${[grade, style, goal].filter(Boolean).join("\n")}`;
 }
 
 /** User content that carries a text block plus an optional work image. */

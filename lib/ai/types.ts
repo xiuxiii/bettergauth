@@ -13,7 +13,8 @@ import type {
 
 /**
  * The provider abstraction — the single contract every model backend implements
- * (mock now, a real vision-capable LLM later). It is intentionally uniform: each
+ * (the real vision-capable provider today; another backend could be added
+ * later). It is intentionally uniform: each
  * method takes ONE typed request and returns ONE typed domain object. The
  * frontend and API routes only ever see these domain types (in @/lib/tutor/
  * types), never a model's raw response — a real provider is responsible for

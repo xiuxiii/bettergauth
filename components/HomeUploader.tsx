@@ -1,14 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fileToDataUrl, IMAGE_KEY } from "@/lib/utils";
+import { hasPreferences } from "@/lib/preferences";
 import { ErrorState, Spinner } from "@/components/States";
 
 /**
  * Home entry point: "Take a photo" (camera capture on mobile) and
  * "Upload problem". Both read the image to a data URL, stash it in
  * sessionStorage, and route to the workspace where analysis begins.
+ * On first run (no saved preferences) it redirects to /setup.
  */
 export default function HomeUploader() {
   const router = useRouter();
@@ -16,6 +18,11 @@ export default function HomeUploader() {
   const uploadRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // First-run gate: send new visitors through setup once.
+  useEffect(() => {
+    if (!hasPreferences()) router.replace("/setup");
+  }, [router]);
 
   async function handleFile(file: File | undefined) {
     if (!file) return;

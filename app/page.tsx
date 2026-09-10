@@ -36,7 +36,10 @@ export default function HomePage() {
       </section>
 
       <footer className="mt-10 text-center text-xs text-slate-400">
-        Physics · Chemistry · Biology · Math — high-school level
+        <p>Physics · Chemistry · Biology · Math — high-school level</p>
+        <a href="/setup" className="mt-2 inline-block text-brand-600 hover:underline">
+          Edit preferences
+        </a>
       </footer>
     </main>
   );

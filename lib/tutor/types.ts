@@ -49,18 +49,37 @@ export interface ChatMessage {
 /**
  * Explicit signals the student can send the tutor about how much help they
  * want. These are NOT separate systems — every one is just an input to the same
- * tutor engine (the mock's `tutor()`, a real model later), alongside free-form
- * "ask". They form a rough ladder of assistance:
+ * tutor engine, alongside free-form "ask". They form a rough ladder of
+ * assistance:
  *   hint (least) → explain → go_deeper → show_solution (most), plus
  *   similar_problem (a lateral "test my understanding" move).
+ * "continue" asks for the next small piece after a chunked turn.
  */
 export type TutorAction =
   | "ask"
+  | "continue"
   | "hint"
   | "explain"
   | "go_deeper"
   | "show_solution"
   | "similar_problem";
+
+/**
+ * Student preferences captured at setup and toggleable in-session. Stored
+ * client-side (localStorage) and threaded into the tutor's system prompt.
+ */
+export interface TutorPreferences {
+  /**
+   * Grade for LOOSE calibration of vocabulary/assumed baseline only — never a
+   * basis to assume specific courses or topics.
+   */
+  grade?: "9" | "10" | "11" | "12" | "other" | null;
+  /** Default lean: make me work first, or explain directly. Toggleable. */
+  assistanceStyle: "hint_first" | "direct";
+  /** What the student is here for. Baseline always keeps exam-relevance +
+   * conceptual depth; this only shifts emphasis. Toggleable. */
+  goal: "understand" | "exam" | "both";
+}
 
 /**
  * A structured solution. The tutor only fills this in when the student
@@ -82,6 +101,12 @@ export interface TutorTurn {
   solution?: StructuredSolution;
   /** Present only for the "try a similar problem" action. */
   similarProblem?: string;
+  /**
+   * True when the tutor deliberately stopped after one small piece and a natural
+   * next piece remains — drives the "Continue" affordance. Only set for the
+   * conceptual moves (ask / continue / hint / explain / go_deeper).
+   */
+  hasMore?: boolean;
 }
 
 /** What the client sends to /api/tutor. */
@@ -91,6 +116,8 @@ export interface TutorRequest {
   action: TutorAction;
   /** The student's typed text, for the "ask" action. */
   studentText?: string;
+  /** Student preferences, folded into the system prompt when present. */
+  preferences?: TutorPreferences;
 }
 
 // ---------------------------------------------------------------------------

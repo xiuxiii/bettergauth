@@ -29,7 +29,7 @@ export default function SolutionCard({
       </div>
       <div className="divide-y divide-slate-100">
         {SECTIONS.map(({ key, label, emphasis }) => (
-          <section key={key} className="px-4 py-3">
+          <section key={key} className="px-4 py-4">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
               {label}
             </p>

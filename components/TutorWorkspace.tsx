@@ -9,15 +9,22 @@ import type {
   StructuredSolution,
   StudentAttempt,
   TutorAction,
+  TutorPreferences,
   TutorTurn,
   WorkCheck,
 } from "@/lib/tutor/types";
 import { IMAGE_KEY, uid } from "@/lib/utils";
+import {
+  DEFAULT_PREFERENCES,
+  loadPreferences,
+  savePreferences,
+} from "@/lib/preferences";
 import ProblemCard from "@/components/ProblemCard";
 import MessageBubble from "@/components/MessageBubble";
 import ActionBar from "@/components/ActionBar";
 import AttemptComposer from "@/components/AttemptComposer";
 import PracticeCard from "@/components/PracticeCard";
+import SessionToggles from "@/components/SessionToggles";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 
 /** A chat message plus any structured payloads attached to a turn. */
@@ -28,6 +35,8 @@ type DisplayMessage = ChatMessage & {
   workCheck?: WorkCheck;
   /** Attached to a student turn: a photo of their attempt. */
   attemptImage?: string;
+  /** The tutor stopped after one piece and more remains → offer "Continue". */
+  hasMore?: boolean;
   /**
    * When set, this entry renders a self-contained practice widget (generate →
    * solve → evaluate) seeded from the given source problem, instead of a bubble.
@@ -47,6 +56,17 @@ export default function TutorWorkspace() {
   const [turnBusy, setTurnBusy] = useState(false);
   const [turnError, setTurnError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [prefs, setPrefs] = useState<TutorPreferences>(DEFAULT_PREFERENCES);
+
+  // Load saved preferences (client-only) so tutor turns can carry them.
+  useEffect(() => {
+    setPrefs(loadPreferences() ?? DEFAULT_PREFERENCES);
+  }, []);
+
+  function updatePrefs(next: TutorPreferences) {
+    setPrefs(next);
+    savePreferences(next);
+  }
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // Ensures the initial auto-analysis fires exactly once, so a double effect
@@ -123,6 +143,7 @@ export default function TutorWorkspace() {
           history: toHistory(history),
           action,
           studentText,
+          preferences: prefs,
         }),
       });
       if (!res.ok) throw new Error((await res.json())?.error ?? "Tutor failed.");
@@ -136,6 +157,7 @@ export default function TutorWorkspace() {
           createdAt: Date.now(),
           solution: turn.solution,
           similarProblem: turn.similarProblem,
+          hasMore: turn.hasMore,
         },
       ]);
     } catch (err) {
@@ -148,6 +170,11 @@ export default function TutorWorkspace() {
   function handleAction(action: Exclude<TutorAction, "ask">) {
     if (!analysis || turnBusy) return;
     void requestTurn(action, analysis, messages);
+  }
+
+  function handleContinue() {
+    if (!analysis || turnBusy) return;
+    void requestTurn("continue", analysis, messages);
   }
 
   function handleAsk(text: string) {
@@ -241,11 +268,16 @@ export default function TutorWorkspace() {
     );
   }
 
+  // Offer "Continue" when the last turn was a tutor chunk with more to give.
+  const last = messages[messages.length - 1];
+  const canContinue =
+    !!last && last.role === "tutor" && !!last.hasMore && !last.practiceFor;
+
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-slate-50">
       <TopBar onBack={() => router.push("/")} topic={analysis?.topic} />
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
         {phase === "loading" && !analysis && (
           <LoadingState label="Reading your problem…" />
         )}
@@ -278,6 +310,20 @@ export default function TutorWorkspace() {
 
         {turnBusy && <LoadingState label="Tutor is thinking…" />}
 
+        {canContinue && !turnBusy && (
+          <div className="flex justify-start">
+            <button
+              onClick={handleContinue}
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-500 hover:bg-brand-50"
+            >
+              Continue
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </button>
+          </div>
+        )}
+
         {turnError && (
           <ErrorState
             message={turnError}
@@ -287,6 +333,10 @@ export default function TutorWorkspace() {
           />
         )}
       </div>
+
+      {analysis && (
+        <SessionToggles prefs={prefs} onChange={updatePrefs} disabled={turnBusy} />
+      )}
 
       {analysis && (
         <ActionBar

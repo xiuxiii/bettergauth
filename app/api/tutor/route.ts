@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 const ACTIONS: TutorAction[] = [
   "ask",
+  "continue",
   "hint",
   "explain",
   "go_deeper",
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
       history: Array.isArray(body.history) ? body.history : [],
       action: body.action,
       studentText: body.studentText,
+      preferences: body.preferences,
     });
 
     return NextResponse.json(turn);

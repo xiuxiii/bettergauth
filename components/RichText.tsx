@@ -16,7 +16,7 @@ export default function RichText({ text }: { text: string }) {
   const paragraphs = useMemo(() => text.split(/\n{2,}/), [text]);
 
   return (
-    <div className="space-y-2 leading-relaxed">
+    <div className="space-y-3 leading-relaxed">
       {paragraphs.map((para, i) => (
         <p key={i} className="whitespace-pre-wrap break-words">
           {renderSegments(para)}

@@ -1,13 +1,12 @@
 # Connecting a real vision-capable AI model
 
-The app is built so that swapping the mock for a real model is **one file plus
-two env vars** — no UI or route changes. This document is the exact schema and
-the integration checklist.
+The app runs on a real vision-capable model behind one provider interface. This
+document is the exact request/response schema and the integration/config notes.
 
 ## The boundary (why the frontend is safe)
 
 ```
-React components ──► /api/* routes ──► AIProvider ──► (mock | real model)
+React components ──► /api/* routes ──► AIProvider ──► AnthropicProvider
   domain types only    domain types       the ONLY place that
                                            touches a model/keys
 ```
@@ -153,27 +152,20 @@ The real provider is **implemented and wired**, not a stub:
   mirroring the domain type (`client.messages.parse` + `zodOutputFormat`), so
   only validated domain objects leave this module. `analyzeProblem`, `checkWork`,
   and `evaluatePractice` send the image as a base64 vision block.
-- **`lib/ai/provider.ts`** — auto-selects this provider when `ANTHROPIC_API_KEY`
-  is set (or `AI_PROVIDER=anthropic`); falls back to the mock otherwise.
-- Dependencies: `@anthropic-ai/sdk` and `zod` (already installed).
+- **`lib/ai/provider.ts`** — constructs this provider from env. It is the only
+  provider; the `AIProvider` interface stays generic so another backend could be
+  added as another `case`.
+- Dependencies: `@anthropic-ai/sdk` and `zod`.
 
-Verified: `tsc` + build clean; with a key set, a request calls
-`api.anthropic.com` (a bad key returns a real 401). It has not yet been run
-against a live valid key in this environment.
-
-## What you must provide to run it live
+## What you must provide to run it
 
 - **`ANTHROPIC_API_KEY`** — your Anthropic API key (`sk-ant-...`). **Required.**
-  Server-side only; never sent to the client. Setting it is all it takes — the
-  provider auto-detects.
+  Server-side only; never sent to the client. Without it every AI call errors.
 - **`ANTHROPIC_MODEL`** *(optional)* — defaults to `claude-opus-5`. Override only
   to pin a different vision-capable model.
-- **`AI_PROVIDER`** *(optional)* — `anthropic` or `mock` to force the choice;
-  leave unset to auto-detect from the key.
 
 That's the entire configuration surface. No authentication, database, payment, or
-other infrastructure is required or added. After adding the key, run
-`npm run eval:tutor` (or just use the app) to sanity-check tutoring behavior.
+other infrastructure is required or added. Confirm it's live at `/api/health`.
 
 ## Tuning notes (optional)
 
