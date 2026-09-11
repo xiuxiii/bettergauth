@@ -43,6 +43,18 @@ Before sharing beyond people you trust:
   give friends the code, rotate it by changing the env var.
 - **Watch spend** in the Anthropic console and set a billing limit there.
 
+## Debugging from your phone
+
+If something errors, set these env vars in Vercel (Settings → Environment
+Variables), redeploy, and reproduce — then turn them off again:
+
+- `DEBUG_ERRORS=1` — API error responses include the real underlying cause
+  (message + status), so you see it in the browser instead of the generic
+  message. (Exposes error internals — leave off normally.)
+- `DEBUG_TOKENS=1` — logs per-call token usage and cache hits to the Vercel
+  function logs (confirms prompt caching is working: `cache_read` > 0 on repeat
+  turns of the same problem).
+
 ## Local vs. hosted
 
 - Local (`npm run dev` / `start`) reads `.env.local` — good for solo testing.

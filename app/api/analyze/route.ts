@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
+import { errorResponse } from "@/lib/apiError";
 
 export const runtime = "nodejs";
 
@@ -26,10 +27,6 @@ export async function POST(req: Request) {
     const analysis = await getProvider().analyzeProblem({ imageDataUrl: image });
     return NextResponse.json(analysis);
   } catch (err) {
-    console.error("analyze failed:", err);
-    return NextResponse.json(
-      { error: "Could not analyze the problem. Please try again." },
-      { status: 500 },
-    );
+    return errorResponse(err, "Could not analyze the problem. Please try again.");
   }
 }

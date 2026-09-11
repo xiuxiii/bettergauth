@@ -160,7 +160,8 @@ export class AnthropicProvider implements AIProvider {
   async analyzeProblem(request: AnalyzeRequest): Promise<ProblemAnalysis> {
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 1200,
+      max_tokens: 1500,
+      thinking: { type: "disabled" },
       system: ANALYZE_SYSTEM,
       messages: [
         {
@@ -171,9 +172,9 @@ export class AnthropicProvider implements AIProvider {
           ],
         },
       ],
-      // Extraction is not reasoning-heavy → low effort trims thinking tokens.
-      output_config: { effort: "low", format: zodOutputFormat(ProblemAnalysisSchema) },
+      output_config: { format: zodOutputFormat(ProblemAnalysisSchema) },
     });
+    logUsage("analyze", res);
     return required(res.parsed_output, "problem analysis");
   }
 
@@ -210,10 +211,12 @@ export class AnthropicProvider implements AIProvider {
       const res = await this.client.messages.parse({
         model: this.model,
         max_tokens: 1500,
+        thinking: { type: "disabled" },
         system,
         messages,
-        output_config: { effort: "medium", format: zodOutputFormat(TutorSolutionSchema) },
+        output_config: { format: zodOutputFormat(TutorSolutionSchema) },
       });
+      logUsage("tutor:solution", res);
       const out = required(res.parsed_output, "solution");
       return { message: out.message, solution: out.solution };
     }
@@ -222,10 +225,12 @@ export class AnthropicProvider implements AIProvider {
       const res = await this.client.messages.parse({
         model: this.model,
         max_tokens: 800,
+        thinking: { type: "disabled" },
         system,
         messages,
-        output_config: { effort: "medium", format: zodOutputFormat(TutorSimilarSchema) },
+        output_config: { format: zodOutputFormat(TutorSimilarSchema) },
       });
+      logUsage("tutor:similar", res);
       const out = required(res.parsed_output, "similar problem");
       return { message: out.message, similarProblem: out.similarProblem };
     }
@@ -234,11 +239,13 @@ export class AnthropicProvider implements AIProvider {
     // piece + hasMore, so the UI can offer "Continue". Kept short on purpose.
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 500,
+      max_tokens: 600,
+      thinking: { type: "disabled" },
       system,
       messages,
-      output_config: { effort: "medium", format: zodOutputFormat(TutorChunkSchema) },
+      output_config: { format: zodOutputFormat(TutorChunkSchema) },
     });
+    logUsage("tutor:chunk", res);
     const out = required(res.parsed_output, "tutor reply");
     return { message: out.message, hasMore: out.hasMore };
   }
@@ -247,6 +254,7 @@ export class AnthropicProvider implements AIProvider {
     const res = await this.client.messages.parse({
       model: this.model,
       max_tokens: 1200,
+      thinking: { type: "disabled" },
       system: CHECKWORK_SYSTEM,
       messages: [
         {
@@ -257,8 +265,9 @@ export class AnthropicProvider implements AIProvider {
           ),
         },
       ],
-      output_config: { effort: "medium", format: zodOutputFormat(WorkCheckSchema) },
+      output_config: { format: zodOutputFormat(WorkCheckSchema) },
     });
+    logUsage("checkWork", res);
     const out = required(res.parsed_output, "work check");
     return { ...out, firstError: out.firstError ?? undefined };
   }
@@ -269,6 +278,7 @@ export class AnthropicProvider implements AIProvider {
     const res = await this.client.messages.parse({
       model: this.model,
       max_tokens: 800,
+      thinking: { type: "disabled" },
       system: GENERATE_SYSTEM,
       messages: [
         {
@@ -276,8 +286,9 @@ export class AnthropicProvider implements AIProvider {
           content: `Original problem:\n${request.problem.problemText}\nSubject: ${request.problem.subject}. Concept: ${request.problem.concept}.\n\nGenerate one similar practice problem.`,
         },
       ],
-      output_config: { effort: "low", format: zodOutputFormat(PracticeProblemSchema) },
+      output_config: { format: zodOutputFormat(PracticeProblemSchema) },
     });
+    logUsage("generatePractice", res);
     return required(res.parsed_output, "practice problem");
   }
 
@@ -288,6 +299,7 @@ export class AnthropicProvider implements AIProvider {
     const res = await this.client.messages.parse({
       model: this.model,
       max_tokens: 1800,
+      thinking: { type: "disabled" },
       system: EVALUATE_SYSTEM,
       messages: [
         {
@@ -302,8 +314,9 @@ export class AnthropicProvider implements AIProvider {
           ),
         },
       ],
-      output_config: { effort: "medium", format: zodOutputFormat(PracticeEvaluationSchema) },
+      output_config: { format: zodOutputFormat(PracticeEvaluationSchema) },
     });
+    logUsage("evaluatePractice", res);
     return required(res.parsed_output, "practice evaluation");
   }
 }
@@ -353,6 +366,22 @@ function preferencesBlock(prefs?: TutorPreferences): string {
         ? "Emphasis: deep understanding — prioritize the why and the connections; keep exam-relevance in view."
         : "Emphasis: both exam readiness and deep understanding — exam-relevant reasoning grounded in the underlying why.";
   return `\n\n# This student\n${[grade, style, goal].filter(Boolean).join("\n")}`;
+}
+
+/**
+ * Log token usage for one call when DEBUG_TOKENS is set. Shows whether prompt
+ * caching is hitting (cache_read > 0 on repeat turns) and the real token counts.
+ * Off by default.
+ */
+function logUsage(label: string, res: { usage?: unknown }): void {
+  if (!process.env.DEBUG_TOKENS) return;
+  const u = (res.usage ?? {}) as Record<string, unknown>;
+  console.log(
+    `[tokens] ${label} in=${u.input_tokens ?? "?"} ` +
+      `cache_read=${u.cache_read_input_tokens ?? 0} ` +
+      `cache_write=${u.cache_creation_input_tokens ?? 0} ` +
+      `out=${u.output_tokens ?? "?"}`,
+  );
 }
 
 /** User content that carries a text block plus an optional work image. */

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
+import { errorResponse } from "@/lib/apiError";
 import type { GeneratePracticeRequest } from "@/lib/tutor/types";
 
 export const runtime = "nodejs";
@@ -27,10 +28,6 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(practice);
   } catch (err) {
-    console.error("practice/generate failed:", err);
-    return NextResponse.json(
-      { error: "Could not generate a practice problem. Please try again." },
-      { status: 500 },
-    );
+    return errorResponse(err, "Could not generate a practice problem. Please try again.");
   }
 }

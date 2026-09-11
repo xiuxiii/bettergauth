@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
+import { errorResponse } from "@/lib/apiError";
 import type { EvaluatePracticeRequest } from "@/lib/tutor/types";
 
 export const runtime = "nodejs";
@@ -33,10 +34,6 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(evaluation);
   } catch (err) {
-    console.error("practice/evaluate failed:", err);
-    return NextResponse.json(
-      { error: "Could not evaluate the attempt. Please try again." },
-      { status: 500 },
-    );
+    return errorResponse(err, "Could not evaluate the attempt. Please try again.");
   }
 }

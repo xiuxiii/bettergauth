@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
+import { errorResponse } from "@/lib/apiError";
 import type { TutorAction, TutorRequest } from "@/lib/tutor/types";
 
 export const runtime = "nodejs";
@@ -40,10 +41,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(turn);
   } catch (err) {
-    console.error("tutor failed:", err);
-    return NextResponse.json(
-      { error: "The tutor could not respond. Please try again." },
-      { status: 500 },
-    );
+    return errorResponse(err, "The tutor could not respond. Please try again.");
   }
 }
