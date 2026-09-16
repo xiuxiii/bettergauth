@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #1E4B4A; } a:hover { color: #163938; }
+  </style>
+</helmet>
+<div style="width: 760px; height: 300px; box-sizing: border-box; background: #F7F3EC; color: #201B14; font-family: 'Hanken Grotesk', system-ui, sans-serif; padding: 40px 60px; display: flex; flex-direction: column; gap: 22px;">
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between;">
+    <div style="font-family: 'Newsreader', Georgia, serif; font-size: 24px; color: #201B14;">Accent — pick one</div>
+    <div style="font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: #8A8070;">Direction</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;">
+    <!-- Petrol (lead) -->
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="height: 74px; border-radius: 12px; background: #1E4B4A; display: flex; align-items: flex-end; padding: 12px;">
+        <span style="font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #F7F3EC; opacity: 0.85;">Lead</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-family: 'Newsreader', Georgia, serif; font-size: 18px; color: #1E4B4A;">Aria</span>
+        <span style="font-size: 13px; font-weight: 600;">Petrol</span>
+      </div>
+      <div style="font-size: 12px; color: #8A8070;">#1E4B4A · calm, academic</div>
+    </div>
+    <!-- Clay -->
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="height: 74px; border-radius: 12px; background: #9A4A2C;"></div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-family: 'Newsreader', Georgia, serif; font-size: 18px; color: #9A4A2C;">Aria</span>
+        <span style="font-size: 13px; font-weight: 600;">Clay</span>
+      </div>
+      <div style="font-size: 12px; color: #8A8070;">#9A4A2C · warm, editorial</div>
+    </div>
+    <!-- Bordeaux -->
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="height: 74px; border-radius: 12px; background: #6E2A39;"></div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-family: 'Newsreader', Georgia, serif; font-size: 18px; color: #6E2A39;">Aria</span>
+        <span style="font-size: 13px; font-weight: 600;">Bordeaux</span>
+      </div>
+      <div style="font-size: 12px; color: #8A8070;">#6E2A39 · rich, formal</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

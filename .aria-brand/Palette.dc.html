@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #1E4B4A; } a:hover { color: #163938; }
+  </style>
+</helmet>
+<div style="width: 760px; height: 560px; box-sizing: border-box; background: #F7F3EC; color: #201B14; font-family: 'Hanken Grotesk', system-ui, sans-serif; padding: 56px 60px; display: flex; flex-direction: column; gap: 28px;">
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between;">
+    <div style="font-family: 'Newsreader', Georgia, serif; font-size: 30px; color: #201B14;">Palette</div>
+    <div style="font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: #8A8070;">02 / Color</div>
+  </div>
+
+  <!-- neutrals row -->
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="height: 92px; border-radius: 10px; background: #F7F3EC; border: 1px solid #E7E0D3;"></div>
+      <div style="font-size: 13px; font-weight: 600; color: #201B14;">Paper</div>
+      <div style="font-size: 12px; color: #8A8070;">#F7F3EC · ground</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="height: 92px; border-radius: 10px; background: #FCFAF5; border: 1px solid #E7E0D3;"></div>
+      <div style="font-size: 13px; font-weight: 600; color: #201B14;">Surface</div>
+      <div style="font-size: 12px; color: #8A8070;">#FCFAF5 · cards</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="height: 92px; border-radius: 10px; background: #E7E0D3;"></div>
+      <div style="font-size: 13px; font-weight: 600; color: #201B14;">Hairline</div>
+      <div style="font-size: 12px; color: #8A8070;">#E7E0D3 · borders</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="height: 92px; border-radius: 10px; background: #8A8070;"></div>
+      <div style="font-size: 13px; font-weight: 600; color: #201B14;">Muted</div>
+      <div style="font-size: 12px; color: #8A8070;">#8A8070 · labels</div>
+    </div>
+  </div>
+
+  <!-- ink + accent row -->
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="height: 92px; border-radius: 10px; background: #201B14;"></div>
+      <div style="font-size: 13px; font-weight: 600; color: #201B14;">Ink</div>
+      <div style="font-size: 12px; color: #8A8070;">#201B14 · text</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="height: 92px; border-radius: 10px; background: #1E4B4A;"></div>
+      <div style="font-size: 13px; font-weight: 600; color: #201B14;">Petrol</div>
+      <div style="font-size: 12px; color: #8A8070;">#1E4B4A · accent</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="height: 92px; border-radius: 10px; background: #163938;"></div>
+      <div style="font-size: 13px; font-weight: 600; color: #201B14;">Petrol Deep</div>
+      <div style="font-size: 12px; color: #8A8070;">#163938 · press</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="height: 92px; border-radius: 10px; background: #E9F0ED; border: 1px solid #D5E4DF;"></div>
+      <div style="font-size: 13px; font-weight: 600; color: #201B14;">Petrol Tint</div>
+      <div style="font-size: 12px; color: #8A8070;">#E9F0ED · fills</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

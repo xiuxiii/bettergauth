@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #1E4B4A; } a:hover { color: #163938; }
+  </style>
+</helmet>
+<div style="width: 760px; height: 820px; box-sizing: border-box; background: #F7F3EC; color: #201B14; font-family: 'Hanken Grotesk', system-ui, sans-serif; padding: 56px 60px; display: flex; flex-direction: column; gap: 30px;">
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between;">
+    <div style="font-family: 'Newsreader', Georgia, serif; font-size: 30px; color: #201B14;">Typography</div>
+    <div style="font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: #8A8070;">03 / Type</div>
+  </div>
+
+  <!-- display face -->
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #8A8070;">Display — Newsreader</div>
+    <div style="font-family: 'Newsreader', Georgia, serif; font-weight: 400; font-size: 56px; line-height: 1.02; letter-spacing: -0.01em; color: #201B14;">Independence of motion</div>
+    <div style="font-family: 'Newsreader', Georgia, serif; font-style: italic; font-weight: 400; font-size: 22px; color: #3B342A;">A concept, gently unfolded — one step at a time.</div>
+  </div>
+
+  <div style="height: 1px; background: #E7E0D3;"></div>
+
+  <!-- UI face -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div style="font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #8A8070;">Interface — Hanken Grotesk</div>
+    <div style="font-size: 17px; line-height: 1.6; color: #3B342A; max-width: 560px; text-wrap: pretty;">Vertical motion under gravity sets the time of flight, while horizontal motion sets the range. Because the two are independent, you can solve each on its own — then bring them together.</div>
+    <div style="display: flex; gap: 40px; margin-top: 4px;">
+      <div style="display: flex; flex-direction: column; gap: 3px;">
+        <div style="font-size: 13px; font-weight: 600;">Regular · Medium · Semibold</div>
+        <div style="font-size: 12px; color: #8A8070;">Body, labels, controls</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 3px;">
+        <div style="font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: 0.01em;">0 1 2 3 4 5 6 7 8 9</div>
+        <div style="font-size: 12px; color: #8A8070;">Tabular figures for working</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 1px; background: #E7E0D3;"></div>
+
+  <!-- scale -->
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div style="font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #8A8070;">Scale</div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; font-size: 13px; color: #3B342A;">
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #E7E0D3; padding-bottom: 8px;"><span>Display</span><span style="color:#8A8070;">Newsreader 56</span></div>
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #E7E0D3; padding-bottom: 8px;"><span>Heading</span><span style="color:#8A8070;">Newsreader 24</span></div>
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #E7E0D3; padding-bottom: 8px;"><span>Body</span><span style="color:#8A8070;">Hanken 17</span></div>
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #E7E0D3; padding-bottom: 8px;"><span>Control</span><span style="color:#8A8070;">Hanken 15</span></div>
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #E7E0D3; padding-bottom: 8px;"><span>Label</span><span style="color:#8A8070;">Hanken 12 · caps</span></div>
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #E7E0D3; padding-bottom: 8px;"><span>Caption</span><span style="color:#8A8070;">Hanken 12</span></div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
