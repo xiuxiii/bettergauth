@@ -17,17 +17,52 @@ body {
   @apply overflow-x-auto overflow-y-hidden py-1;
 }
 
-/* Subtle entrance for newly added chat messages. */
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* --------------------------------------------------------------------------
+ * Motion system — subtle, premium. Soft ease-out, 150–250ms, one reveal per
+ * step. Everything below is suppressed under prefers-reduced-motion.
+ * ------------------------------------------------------------------------ */
+:root {
+  --ease-soft: cubic-bezier(0.22, 0.7, 0.2, 1);
 }
-.animate-rise {
-  animation: rise 0.18s ease-out;
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes flash {
+  from { opacity: 0.7; }
+  to { opacity: 0; }
+}
+@keyframes dot-pulse {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+
+.animate-rise { animation: rise 0.22s var(--ease-soft) both; }
+.animate-fade-in { animation: fade-in 0.2s var(--ease-soft) both; }
+.animate-pop-in { animation: pop-in 0.2s var(--ease-soft) both; }
+.animate-flash { animation: flash 0.15s ease-out forwards; }
+.typing-dot { animation: dot-pulse 1.2s var(--ease-soft) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-fade-in,
+  .animate-pop-in,
+  .animate-flash,
+  .typing-dot {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }

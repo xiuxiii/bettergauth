@@ -68,7 +68,7 @@ function Segment({
               disabled={disabled}
               onClick={() => onChange(o.value)}
               className={
-                "whitespace-nowrap rounded-full px-2.5 py-1 font-medium transition disabled:opacity-50 " +
+                "whitespace-nowrap rounded-full px-2.5 py-1 font-medium transition-colors duration-200 active:scale-95 disabled:opacity-50 " +
                 (active
                   ? "bg-brand-600 text-white shadow-sm"
                   : "text-slate-600 hover:text-brand-700")

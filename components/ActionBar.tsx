@@ -19,7 +19,7 @@ const ASSIST: { action: Exclude<TutorAction, "ask">; label: string }[] = [
 ];
 
 const chipCls =
-  "whitespace-nowrap rounded-full border border-slate-300 bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700 disabled:opacity-50";
+  "whitespace-nowrap rounded-full border border-slate-300 bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700 active:scale-[0.97] disabled:opacity-50";
 
 /**
  * The tutor controls: the assistance ladder, the two richer modes (check work /
@@ -92,7 +92,7 @@ export default function ActionBar({
           onClick={submit}
           disabled={busy || !text.trim()}
           aria-label="Send"
-          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-brand-700 disabled:opacity-40"
+          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-brand-700 active:scale-95 disabled:opacity-40"
         >
           {busy ? (
             <Spinner className="h-5 w-5" />

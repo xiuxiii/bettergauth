@@ -29,8 +29,18 @@ export function Spinner({ className = "" }: { className?: string }) {
 
 export function LoadingState({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-surface px-4 py-3 text-slate-600 shadow-sm">
-      <Spinner className="h-5 w-5 text-brand-600" />
+    <div className="flex animate-fade-in items-center gap-3 rounded-xl border border-slate-200 bg-surface px-4 py-3 text-slate-600 shadow-sm">
+      <span className="flex items-center gap-1" aria-hidden="true">
+        <span className="typing-dot h-1.5 w-1.5 rounded-full bg-brand-600" />
+        <span
+          className="typing-dot h-1.5 w-1.5 rounded-full bg-brand-600"
+          style={{ animationDelay: "0.15s" }}
+        />
+        <span
+          className="typing-dot h-1.5 w-1.5 rounded-full bg-brand-600"
+          style={{ animationDelay: "0.3s" }}
+        />
+      </span>
       <span className="text-sm">{label}</span>
     </div>
   );

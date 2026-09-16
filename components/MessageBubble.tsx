@@ -41,7 +41,7 @@ export default function MessageBubble({
         </div>
 
         {attemptImage && (
-          <div className="mt-2 flex justify-end">
+          <div className="mt-2 flex animate-pop-in justify-end">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={attemptImage}
@@ -52,19 +52,19 @@ export default function MessageBubble({
         )}
 
         {workCheck && (
-          <div className="mt-2">
+          <div className="mt-2 animate-pop-in">
             <WorkCheckCard check={workCheck} />
           </div>
         )}
 
         {solution && (
-          <div className="mt-2">
+          <div className="mt-2 animate-pop-in">
             <SolutionCard solution={solution} />
           </div>
         )}
 
         {similarProblem && (
-          <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="mt-2 animate-pop-in rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-700">
               Try a similar problem
             </p>

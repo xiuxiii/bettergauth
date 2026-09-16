@@ -54,11 +54,11 @@ export default function AttemptComposer({
       <button
         aria-label="Close"
         onClick={onCancel}
-        className="absolute inset-0 bg-slate-900/40"
+        className="absolute inset-0 animate-fade-in bg-slate-900/40"
       />
 
       {/* Sheet */}
-      <div className="relative mx-auto w-full max-w-md rounded-t-3xl bg-surface p-4 shadow-2xl">
+      <div className="relative mx-auto w-full max-w-md animate-rise rounded-t-3xl bg-surface p-4 shadow-2xl">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
         <div className="mb-1 flex items-center justify-between">
           <h2 className="font-serif text-lg font-normal text-ink">Check my work</h2>

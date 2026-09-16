@@ -25,6 +25,7 @@ export default function CameraScanner({
     "starting",
   );
   const [busy, setBusy] = useState(false);
+  const [flashing, setFlashing] = useState(false);
 
   function stopCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -74,8 +75,12 @@ export default function CameraScanner({
     setBusy(true);
     try {
       const url = videoFrameToJpeg(v);
-      stopCamera();
-      onCapture(url);
+      // Brief shutter flash before handing the frame up.
+      setFlashing(true);
+      window.setTimeout(() => {
+        stopCamera();
+        onCapture(url);
+      }, 140);
     } catch {
       setBusy(false);
     }
@@ -103,6 +108,10 @@ export default function CameraScanner({
         autoPlay
         className="absolute inset-0 h-full w-full object-cover"
       />
+
+      {flashing && (
+        <div className="animate-flash pointer-events-none absolute inset-0 z-30 bg-white" />
+      )}
 
       {/* dim + framing overlay */}
       <div className="pointer-events-none absolute inset-0 flex flex-col">
