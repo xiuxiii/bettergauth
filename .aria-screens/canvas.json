@@ -1,0 +1,13 @@
+{
+  "artboards": [
+    { "file": "Capture.dc.html", "x": 0, "y": 0, "w": 390, "h": 844 },
+    { "file": "Scan.dc.html", "x": 490, "y": 0, "w": 390, "h": 844 },
+    { "file": "Recognized.dc.html", "x": 980, "y": 0, "w": 390, "h": 844 },
+    { "file": "Tutoring.dc.html", "x": 1470, "y": 0, "w": 390, "h": 844 },
+    { "file": "Results.dc.html", "x": 1960, "y": 0, "w": 390, "h": 844 }
+  ],
+  "annotations": [
+    { "id": "flow-note", "x": 0, "y": -150, "w": 520, "text": "Core flow — scan a problem, confirm the concept, get tutored one step at a time, then check your work. Bordeaux + ivory, Newsreader × Hanken, carried from the identity." }
+  ],
+  "launch": { "view": "canvas" }
+}

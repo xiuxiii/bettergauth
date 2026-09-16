@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #6E2A39; } a:hover { color: #551F2B; }
+  </style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F7F3EC; color: #201B14; font-family: 'Hanken Grotesk', system-ui, sans-serif; padding: 54px 0 0; display: flex; flex-direction: column;">
+
+  <!-- header -->
+  <div style="padding: 0 22px 16px; border-bottom: 1px solid #E7E0D3; display: flex; align-items: center; gap: 12px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#201B14" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <div style="font-size: 16px; font-weight: 600;">Tutoring session</div>
+      <div style="font-size: 12px; color: #8A8070;">Projectile Motion · 2D Kinematics</div>
+    </div>
+  </div>
+
+  <!-- chat area -->
+  <div style="flex-grow: 1; overflow: hidden; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px;">
+
+    <!-- concept card -->
+    <div style="background: #FCFAF5; border: 1px solid #E7E0D3; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 11px; box-shadow: 0 1px 2px rgba(32,27,20,0.04), 0 10px 26px rgba(32,27,20,0.05);">
+      <div style="display: inline-flex; align-items: center; gap: 9px;">
+        <span style="width: 16px; height: 1px; background: #6E2A39;"></span>
+        <span style="font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #6E2A39; font-weight: 600;">Key Concept</span>
+      </div>
+      <div style="font-family: 'Newsreader', Georgia, serif; font-size: 20px; line-height: 1.22;">Independence of perpendicular motion</div>
+      <div style="font-size: 15px; line-height: 1.55; color: #3B342A; text-wrap: pretty;">Vertical motion under gravity sets the time; horizontal motion sets the distance. They don't interfere.</div>
+    </div>
+
+    <!-- tutor chunk -->
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 15.5px; line-height: 1.6; color: #201B14; text-wrap: pretty;">The key move: even though the horizontal push is unusual, the vertical and horizontal motions are still independent. Gravity alone sets the fall time.</div>
+      <div style="font-size: 15.5px; line-height: 1.6; color: #201B14; text-wrap: pretty;">So start with part (a) only — which equation links the 80&nbsp;m drop to the time in the air?</div>
+      <div style="display: inline-flex; align-self: flex-start; align-items: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: 12px; background: #6E2A39; color: #F7F3EC; font-size: 15px; font-weight: 500;">
+        Continue
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F7F3EC" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 6l6 6-6 6"/></svg>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- composer -->
+  <div style="border-top: 1px solid #E7E0D3; background: #F7F3EC; padding: 14px 22px 26px; display: flex; flex-direction: column; gap: 12px;">
+
+    <!-- toggles -->
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #8A8070; width: 38px;">Help</span>
+        <div style="display: inline-flex; padding: 3px; border-radius: 999px; background: #ECE6DA; gap: 2px;">
+          <span style="height: 28px; padding: 0 15px; display: inline-flex; align-items: center; border-radius: 999px; background: #6E2A39; color: #F7F3EC; font-size: 13px; font-weight: 500;">Hints</span>
+          <span style="height: 28px; padding: 0 15px; display: inline-flex; align-items: center; border-radius: 999px; color: #6B6459; font-size: 13px; font-weight: 500;">Direct</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #8A8070; width: 38px;">Goal</span>
+        <div style="display: inline-flex; padding: 3px; border-radius: 999px; background: #ECE6DA; gap: 2px;">
+          <span style="height: 28px; padding: 0 14px; display: inline-flex; align-items: center; border-radius: 999px; background: #6E2A39; color: #F7F3EC; font-size: 13px; font-weight: 500;">Both</span>
+          <span style="height: 28px; padding: 0 14px; display: inline-flex; align-items: center; border-radius: 999px; color: #6B6459; font-size: 13px; font-weight: 500;">Understand</span>
+          <span style="height: 28px; padding: 0 14px; display: inline-flex; align-items: center; border-radius: 999px; color: #6B6459; font-size: 13px; font-weight: 500;">Exam</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- assist chips -->
+    <div style="display: flex; gap: 8px; overflow: hidden;">
+      <span style="flex: none; display: inline-flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 999px; background: #FCFAF5; border: 1px solid #E7E0D3; color: #3B342A; font-size: 13.5px; font-weight: 500;">Hint</span>
+      <span style="flex: none; display: inline-flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 999px; background: #FCFAF5; border: 1px solid #E7E0D3; color: #3B342A; font-size: 13.5px; font-weight: 500;">Explain why</span>
+      <span style="flex: none; display: inline-flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 999px; background: #FCFAF5; border: 1px solid #E7E0D3; color: #3B342A; font-size: 13.5px; font-weight: 500;">Go deeper</span>
+      <span style="flex: none; display: inline-flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 999px; background: #FCFAF5; border: 1px solid #E7E0D3; color: #3B342A; font-size: 13.5px; font-weight: 500;">Show sol…</span>
+    </div>
+
+    <!-- input -->
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="flex-grow: 1; height: 50px; border-radius: 14px; background: #FCFAF5; border: 1px solid #E7E0D3; display: flex; align-items: center; padding: 0 16px; color: #A79E8E; font-size: 15px;">Ask a follow-up, or share your thinking…</div>
+      <div style="flex: none; width: 50px; height: 50px; border-radius: 14px; background: #6E2A39; display: flex; align-items: center; justify-content: center;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F7F3EC" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 6l6 6-6 6"/></svg>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

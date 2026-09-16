@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #6E2A39; } a:hover { color: #551F2B; }
+  </style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F7F3EC; color: #201B14; font-family: 'Hanken Grotesk', system-ui, sans-serif; padding: 54px 22px 26px; display: flex; flex-direction: column;">
+
+  <!-- header -->
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#201B14" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    <div style="font-size: 16px; font-weight: 600;">New problem</div>
+  </div>
+
+  <!-- captured image (stylized as scanned paper) -->
+  <div style="margin-top: 24px; border-radius: 16px; overflow: hidden; border: 1px solid #E7E0D3; box-shadow: 0 1px 2px rgba(32,27,20,0.04), 0 12px 30px rgba(32,27,20,0.06);">
+    <div style="background: #FBF7F0; padding: 22px 20px; position: relative;">
+      <div style="position: absolute; top: 12px; right: 14px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #B4A896;">Captured</div>
+      <div style="font-family: 'Newsreader', Georgia, serif; font-size: 15px; line-height: 1.5; color: #2B2620;">A cargo plane flying horizontally at 60 m/s releases a package. The package also experiences a steady horizontal push of 2 m/s² from the wind as it falls 80 m to the ground.</div>
+      <div style="margin-top: 12px; font-family: 'Newsreader', Georgia, serif; font-size: 15px; line-height: 1.5; color: #2B2620;"><span style="font-weight: 500;">(a)</span> How long is it in the air?  <span style="font-weight: 500;">(b)</span> What horizontal distance does it travel?</div>
+    </div>
+  </div>
+
+  <!-- detection -->
+  <div style="margin-top: 26px; display: flex; flex-direction: column; gap: 14px;">
+    <div style="display: inline-flex; align-items: center; gap: 9px;">
+      <span style="width: 16px; height: 1px; background: #6E2A39;"></span>
+      <span style="font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #6E2A39; font-weight: 600;">Here's what I see</span>
+    </div>
+    <div style="font-family: 'Newsreader', Georgia, serif; font-size: 24px; line-height: 1.2;">Projectile motion with a horizontal force</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+      <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 13px; border-radius: 999px; background: #F0E7E8; color: #6E2A39; font-size: 13px; font-weight: 500;">Physics</span>
+      <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 13px; border-radius: 999px; background: #FCFAF5; border: 1px solid #E7E0D3; color: #3B342A; font-size: 13px; font-weight: 500;">2D Kinematics</span>
+      <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 13px; border-radius: 999px; background: #FCFAF5; border: 1px solid #E7E0D3; color: #3B342A; font-size: 13px; font-weight: 500;">2 parts</span>
+    </div>
+    <div style="font-size: 15px; line-height: 1.55; color: #6B6459; text-wrap: pretty;">The twist here is the non-standard horizontal acceleration. We'll use it to build the idea of independent motion.</div>
+  </div>
+
+  <div style="flex-grow: 1;"></div>
+
+  <!-- actions -->
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="height: 52px; border-radius: 13px; background: #6E2A39; color: #F7F3EC; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 500;">Start tutoring</div>
+    <div style="height: 48px; display: flex; align-items: center; justify-content: center; color: #6B6459; font-size: 15px; font-weight: 500;">Not quite — retake</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

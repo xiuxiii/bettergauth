@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #16120D; }
+    a { color: #E7B7C0; } a:hover { color: #F0E7E8; }
+  </style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #16120D; color: #F7F3EC; font-family: 'Hanken Grotesk', system-ui, sans-serif; display: flex; flex-direction: column; position: relative;">
+
+  <!-- top controls -->
+  <div style="padding: 60px 22px 0; display: flex; align-items: center; justify-content: space-between;">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F7F3EC" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    <div style="display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 13px; border-radius: 999px; background: rgba(247,243,236,0.12); font-size: 12.5px; font-weight: 500; color: #F7F3EC;">
+      <span style="width: 6px; height: 6px; border-radius: 999px; background: #E7B7C0;"></span>
+      Auto-crop on
+    </div>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F7F3EC" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3L4 14h7l-1 7 9-11h-7z"/></svg>
+  </div>
+
+  <!-- viewfinder -->
+  <div style="flex-grow: 1; position: relative; margin: 26px 0; display: flex; align-items: center; justify-content: center;">
+
+    <!-- detected page preview -->
+    <div style="width: 300px; height: 384px; border-radius: 6px; background: #E9E3D7; box-shadow: 0 24px 60px rgba(0,0,0,0.5); padding: 26px 22px; box-sizing: border-box; transform: rotate(-1.2deg);">
+      <div style="font-family: 'Newsreader', Georgia, serif; font-size: 13px; line-height: 1.55; color: #4A443B;">A cargo plane flying horizontally at 60 m/s releases a package. A steady horizontal push of 2 m/s² acts on it as it falls 80 m to the ground.</div>
+      <div style="margin-top: 12px; font-family: 'Newsreader', Georgia, serif; font-size: 13px; line-height: 1.55; color: #4A443B;">(a) How long is it in the air?</div>
+      <div style="margin-top: 6px; font-family: 'Newsreader', Georgia, serif; font-size: 13px; line-height: 1.55; color: #4A443B;">(b) What horizontal distance does it cover?</div>
+    </div>
+
+    <!-- corner brackets (auto-detected frame) -->
+    <div style="position: absolute; width: 328px; height: 420px; pointer-events: none;">
+      <div style="position: absolute; top: 0; left: 0; width: 34px; height: 34px; border-top: 3px solid #E7B7C0; border-left: 3px solid #E7B7C0; border-top-left-radius: 8px;"></div>
+      <div style="position: absolute; top: 0; right: 0; width: 34px; height: 34px; border-top: 3px solid #E7B7C0; border-right: 3px solid #E7B7C0; border-top-right-radius: 8px;"></div>
+      <div style="position: absolute; bottom: 0; left: 0; width: 34px; height: 34px; border-bottom: 3px solid #E7B7C0; border-left: 3px solid #E7B7C0; border-bottom-left-radius: 8px;"></div>
+      <div style="position: absolute; bottom: 0; right: 0; width: 34px; height: 34px; border-bottom: 3px solid #E7B7C0; border-right: 3px solid #E7B7C0; border-bottom-right-radius: 8px;"></div>
+    </div>
+
+    <!-- hint -->
+    <div style="position: absolute; bottom: -6px; left: 0; right: 0; text-align: center; font-size: 14px; color: rgba(247,243,236,0.82);">Fit the whole question in the frame</div>
+  </div>
+
+  <!-- shutter bar -->
+  <div style="padding: 0 34px 40px; display: flex; align-items: center; justify-content: space-between;">
+    <!-- library thumb -->
+    <div style="width: 46px; height: 46px; border-radius: 10px; background: rgba(247,243,236,0.14); border: 1px solid rgba(247,243,236,0.2);"></div>
+    <!-- shutter -->
+    <div style="width: 74px; height: 74px; border-radius: 999px; border: 3px solid #F7F3EC; display: flex; align-items: center; justify-content: center;">
+      <div style="width: 58px; height: 58px; border-radius: 999px; background: #F7F3EC;"></div>
+    </div>
+    <!-- spacer to balance -->
+    <div style="width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F7F3EC" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A1.5 1.5 0 0 1 4.5 7H7l1.2-1.8A1 1 0 0 1 9 4.8h6a1 1 0 0 1 .8.4L17 7h2.5A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><path d="M15 13a3 3 0 1 1-6 0"/></svg>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
