@@ -2,27 +2,35 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { fileToDataUrl, IMAGE_KEY } from "@/lib/utils";
+import { IMAGE_KEY } from "@/lib/utils";
+import { fileToNormalizedJpeg } from "@/lib/image";
 import { hasPreferences } from "@/lib/preferences";
 import { ErrorState, Spinner } from "@/components/States";
+import CameraScanner from "@/components/CameraScanner";
 
 /**
- * Home entry point: "Take a photo" (camera capture on mobile) and
- * "Upload problem". Both read the image to a data URL, stash it in
+ * Home entry point: "Take a photo" opens the in-app camera scanner (a live
+ * viewfinder with framing, not the OS camera), and "Upload problem" picks from
+ * the library. Both normalize to a right-sized, upright JPEG, stash it in
  * sessionStorage, and route to the workspace where analysis begins.
  * On first run (no saved preferences) it redirects to /setup.
  */
 export default function HomeUploader() {
   const router = useRouter();
-  const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // First-run gate: send new visitors through setup once.
   useEffect(() => {
     if (!hasPreferences()) router.replace("/setup");
   }, [router]);
+
+  function go(dataUrl: string) {
+    sessionStorage.setItem(IMAGE_KEY, dataUrl);
+    router.push("/workspace");
+  }
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -33,9 +41,7 @@ export default function HomeUploader() {
     setError(null);
     setBusy(true);
     try {
-      const dataUrl = await fileToDataUrl(file);
-      sessionStorage.setItem(IMAGE_KEY, dataUrl);
-      router.push("/workspace");
+      go(await fileToNormalizedJpeg(file));
     } catch {
       setError("Could not read that image. Please try another photo.");
       setBusy(false);
@@ -44,14 +50,6 @@ export default function HomeUploader() {
 
   return (
     <div className="w-full space-y-4">
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => handleFile(e.target.files?.[0])}
-      />
       <input
         ref={uploadRef}
         type="file"
@@ -62,7 +60,10 @@ export default function HomeUploader() {
 
       <button
         disabled={busy}
-        onClick={() => cameraRef.current?.click()}
+        onClick={() => {
+          setError(null);
+          setScanning(true);
+        }}
         className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-brand-700 active:scale-[0.99] disabled:opacity-60"
       >
         {busy ? <Spinner className="h-5 w-5" /> : <CameraIcon />}
@@ -79,6 +80,17 @@ export default function HomeUploader() {
       </button>
 
       {error && <ErrorState message={error} />}
+
+      {scanning && (
+        <CameraScanner
+          onClose={() => setScanning(false)}
+          onCapture={(dataUrl) => {
+            setScanning(false);
+            setBusy(true);
+            go(dataUrl);
+          }}
+        />
+      )}
     </div>
   );
 }
