@@ -23,7 +23,7 @@ export default function SolutionCard({
   solution: StructuredSolution;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-brand-100 bg-surface shadow-sm">
       <div className="border-b border-brand-100 bg-brand-50 px-4 py-2.5">
         <p className="text-sm font-semibold text-brand-800">Worked solution</p>
       </div>

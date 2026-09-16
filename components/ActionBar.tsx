@@ -19,7 +19,7 @@ const ASSIST: { action: Exclude<TutorAction, "ask">; label: string }[] = [
 ];
 
 const chipCls =
-  "whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700 disabled:opacity-50";
+  "whitespace-nowrap rounded-full border border-slate-300 bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700 disabled:opacity-50";
 
 /**
  * The tutor controls: the assistance ladder, the two richer modes (check work /
@@ -50,7 +50,7 @@ export default function ActionBar({
   }
 
   return (
-    <div className="border-t border-slate-200 bg-white/95 px-3 pb-3 pt-2 backdrop-blur">
+    <div className="border-t border-slate-200 bg-surface/95 px-3 pb-3 pt-2 backdrop-blur">
       <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
         {/* Assistance ladder — signals to the tutor engine. */}
         {ASSIST.map(({ action, label }) => (

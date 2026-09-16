@@ -12,7 +12,7 @@ export default function ProblemCard({
   analysis: ProblemAnalysis;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-surface shadow-sm">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={image}
@@ -32,7 +32,7 @@ export default function ProblemCard({
           </span>
         </div>
         <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
             Detected problem
           </p>
           <div className="text-sm text-slate-800">
@@ -41,10 +41,13 @@ export default function ProblemCard({
         </div>
         {analysis.concept && (
           <div>
-            <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Key concept
-            </p>
-            <div className="text-sm text-slate-700">
+            <div className="mb-1 flex items-center gap-2">
+              <span className="h-px w-4 bg-brand-600" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-700">
+                Key concept
+              </span>
+            </div>
+            <div className="font-serif text-[17px] leading-snug text-ink">
               <RichText text={analysis.concept} />
             </div>
           </div>

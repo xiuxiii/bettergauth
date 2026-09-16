@@ -76,14 +76,14 @@ export default function PracticeCard({ source }: { source: ProblemAnalysis }) {
   }
 
   return (
-    <div className="animate-rise overflow-hidden rounded-2xl border border-indigo-200 bg-white shadow-sm">
-      <div className="flex items-center gap-2 border-b border-indigo-100 bg-indigo-50 px-4 py-2.5">
+    <div className="animate-rise overflow-hidden rounded-2xl border border-brand-200 bg-surface shadow-sm">
+      <div className="flex items-center gap-2 border-b border-brand-100 bg-brand-50 px-4 py-2.5">
         <SparkIcon />
-        <span className="text-sm font-semibold text-indigo-800">
+        <span className="text-sm font-semibold text-brand-800">
           Practice — one like this
         </span>
         {problem && (
-          <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-xs font-medium text-indigo-700">
+          <span className="ml-auto rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-brand-700">
             {problem.difficulty === "slightly_harder" ? "a notch harder" : "same level"}
           </span>
         )}
@@ -173,11 +173,11 @@ function SolveArea({
         onChange={(e) => setText(e.target.value)}
         rows={3}
         placeholder="Show your working and final answer…"
-        className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+        className="w-full resize-none rounded-xl border border-slate-300 bg-surface px-3 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
       />
 
       {image ? (
-        <div className="mt-2 flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-2">
+        <div className="mt-2 flex items-center gap-3 rounded-lg border border-slate-200 bg-surface p-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={image} alt="Your work" className="h-12 w-12 rounded object-cover" />
           <span className="flex-1 text-sm text-slate-600">Photo attached</span>
@@ -247,7 +247,7 @@ function Evaluated({
   return (
     <div className="space-y-3">
       {attempt && (attempt.text || attempt.imageDataUrl) && (
-        <div className="rounded-xl border border-slate-200 bg-white p-3">
+        <div className="rounded-xl border border-slate-200 bg-surface p-3">
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Your answer
           </p>
@@ -341,7 +341,7 @@ function StatusDot({ status }: { status: RubricResult["status"] }) {
 
 function SparkIcon() {
   return (
-    <svg className="h-4 w-4 text-indigo-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <svg className="h-4 w-4 text-brand-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
       <path d="M10 1l1.8 5.2L17 8l-5.2 1.8L10 15l-1.8-5.2L3 8l5.2-1.8L10 1z" />
     </svg>
   );

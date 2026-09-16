@@ -73,7 +73,7 @@ export default function HomeUploader() {
       <button
         disabled={busy}
         onClick={() => uploadRef.current?.click()}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-4 text-base font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 active:scale-[0.99] disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-surface px-5 py-4 text-base font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 active:scale-[0.99] disabled:opacity-60"
       >
         <UploadIcon />
         Upload problem

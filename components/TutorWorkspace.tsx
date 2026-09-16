@@ -314,7 +314,7 @@ export default function TutorWorkspace() {
           <div className="flex justify-start">
             <button
               onClick={handleContinue}
-              className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-500 hover:bg-brand-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-surface px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-500 hover:bg-brand-50"
             >
               Continue
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -367,7 +367,7 @@ function TopBar({
   topic?: string;
 }) {
   return (
-    <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3">
+    <header className="flex items-center gap-3 border-b border-slate-200 bg-surface px-3 py-3">
       <button
         onClick={onBack}
         aria-label="Back"

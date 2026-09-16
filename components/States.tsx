@@ -29,7 +29,7 @@ export function Spinner({ className = "" }: { className?: string }) {
 
 export function LoadingState({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-600 shadow-sm">
+    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-surface px-4 py-3 text-slate-600 shadow-sm">
       <Spinner className="h-5 w-5 text-brand-600" />
       <span className="text-sm">{label}</span>
     </div>
@@ -67,7 +67,7 @@ export function EmptyState({
   hint?: string;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 px-4 py-8 text-center">
+    <div className="rounded-xl border border-dashed border-slate-300 bg-surface/60 px-4 py-8 text-center">
       <p className="text-sm font-medium text-slate-700">{title}</p>
       {hint && <p className="mt-1 text-sm text-slate-500">{hint}</p>}
     </div>

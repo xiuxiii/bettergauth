@@ -5,14 +5,11 @@
 /* KaTeX styles, imported locally so math renders offline without a CDN. */
 @import "katex/dist/katex.min.css";
 
-:root {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif;
-}
+/* --font-sans / --font-serif are provided by next/font (see app/layout.tsx). */
 
 html,
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-paper text-ink antialiased;
 }
 
 /* Keep long equations from breaking the mobile layout. */

@@ -58,10 +58,10 @@ export default function AttemptComposer({
       />
 
       {/* Sheet */}
-      <div className="relative mx-auto w-full max-w-md rounded-t-3xl bg-white p-4 shadow-2xl">
+      <div className="relative mx-auto w-full max-w-md rounded-t-3xl bg-surface p-4 shadow-2xl">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">Check my work</h2>
+          <h2 className="font-serif text-lg font-normal text-ink">Check my work</h2>
           <button
             onClick={onCancel}
             className="rounded-full px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"

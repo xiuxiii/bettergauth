@@ -28,7 +28,7 @@ export default function SetupForm() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-10 pt-12">
       <header className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className="font-serif text-3xl font-normal tracking-tight text-ink">
           Set up your tutor
         </h1>
         <p className="mt-2 text-sm text-slate-600">
@@ -136,7 +136,7 @@ function Options({
               "rounded-2xl border px-4 py-2.5 text-left text-sm transition " +
               (active
                 ? "border-brand-500 bg-brand-50 text-brand-800"
-                : "border-slate-300 bg-white text-slate-700 hover:border-brand-400")
+                : "border-slate-300 bg-surface text-slate-700 hover:border-brand-400")
             }
           >
             <span className="block font-medium">{o.label}</span>

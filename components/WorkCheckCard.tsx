@@ -31,7 +31,7 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
         : "border-amber-200";
 
   return (
-    <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${accent}`}>
+    <div className={`overflow-hidden rounded-2xl border bg-surface shadow-sm ${accent}`}>
       <Header verdict={verdict} />
 
       <div className="space-y-3 p-4">

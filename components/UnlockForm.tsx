@@ -37,7 +37,7 @@ export default function UnlockForm() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center px-6">
       <div className="w-full">
-        <h1 className="text-xl font-bold text-slate-900">Enter access code</h1>
+        <h1 className="font-serif text-2xl font-normal text-ink">Enter access code</h1>
         <p className="mt-1 text-sm text-slate-600">
           This tutor is private. Enter the code you were given.
         </p>

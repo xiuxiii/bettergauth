@@ -17,7 +17,7 @@ export default function SessionToggles({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 overflow-x-auto border-t border-slate-200 bg-white/95 px-3 py-2 text-xs backdrop-blur">
+    <div className="flex items-center gap-3 overflow-x-auto border-t border-slate-200 bg-surface/95 px-3 py-2 text-xs backdrop-blur">
       <Segment
         label="Help"
         disabled={disabled}

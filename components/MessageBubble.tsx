@@ -34,7 +34,7 @@ export default function MessageBubble({
           className={
             isStudent
               ? "rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-sm text-white shadow-sm"
-              : "rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm"
+              : "rounded-2xl rounded-bl-md border border-slate-200 bg-surface px-4 py-2.5 text-sm text-slate-800 shadow-sm"
           }
         >
           <RichText text={message.content} />
