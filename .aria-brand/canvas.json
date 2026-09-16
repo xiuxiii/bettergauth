@@ -1,13 +1,9 @@
 {
   "artboards": [
     { "file": "Main.dc.html", "x": 0, "y": 0, "w": 760, "h": 960 },
-    { "file": "Accents.dc.html", "x": 0, "y": 1080, "w": 760, "h": 300 },
     { "file": "Type.dc.html", "x": 860, "y": 0, "w": 760, "h": 820 },
     { "file": "Components.dc.html", "x": 860, "y": 940, "w": 760, "h": 900 },
     { "file": "Palette.dc.html", "x": 1720, "y": 0, "w": 760, "h": 560 }
-  ],
-  "annotations": [
-    { "id": "accent-pick", "x": 0, "y": 1420, "w": 300, "text": "Pick the accent here — the whole system carries it into the app screens next. Petrol is the lead." }
   ],
   "launch": { "view": "canvas" }
 }
