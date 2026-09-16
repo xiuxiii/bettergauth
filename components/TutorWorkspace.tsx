@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type {
   ChatMessage,
+  PracticeFocus,
   ProblemAnalysis,
   RecurringGap,
   SessionMemory,
@@ -19,6 +20,8 @@ import {
   applyWorkCheckToMemory,
   detectRecurring,
   emptySessionMemory,
+  recordConceptError,
+  resolveMisconception,
 } from "@/lib/tutor/types";
 import { IMAGE_KEY, uid } from "@/lib/utils";
 import {
@@ -50,6 +53,8 @@ type DisplayMessage = ChatMessage & {
    * solve → evaluate) seeded from the given source problem, instead of a bubble.
    */
   practiceFor?: ProblemAnalysis;
+  /** When set, the practice widget is a targeted retry of this misconception. */
+  practiceFocus?: PracticeFocus;
 };
 
 type Phase = "loading" | "ready" | "error" | "empty";
@@ -287,10 +292,10 @@ export default function TutorWorkspace() {
     }
   }
 
-  function handlePractice() {
+  function handlePractice(focus?: PracticeFocus) {
     if (!analysis || turnBusy) return;
     // Append a self-contained practice widget; it generates and evaluates on
-    // its own via /api/practice/*.
+    // its own via /api/practice/*. A focus makes it a targeted retry.
     setMessages((prev) => [
       ...prev,
       {
@@ -299,8 +304,18 @@ export default function TutorWorkspace() {
         content: "",
         createdAt: Date.now(),
         practiceFor: analysis,
+        practiceFocus: focus,
       },
     ]);
+  }
+
+  // Retry→verify: a targeted retry reports back whether the misconception is
+  // cleared. Clear it from memory (→ banner disappears) or record the miss.
+  function handlePracticeResolved(concept: string, resolved: boolean) {
+    memoryRef.current = resolved
+      ? resolveMisconception(memoryRef.current, concept)
+      : recordConceptError(memoryRef.current, concept);
+    setRecurring(detectRecurring(memoryRef.current));
   }
 
   // ---- Render ----
@@ -352,7 +367,11 @@ export default function TutorWorkspace() {
         {messages.map((m) =>
           m.practiceFor ? (
             <div key={m.id} className="animate-rise">
-              <PracticeCard source={m.practiceFor} />
+              <PracticeCard
+                source={m.practiceFor}
+                focus={m.practiceFocus}
+                onResolved={handlePracticeResolved}
+              />
             </div>
           ) : (
             <MessageBubble
@@ -395,7 +414,13 @@ export default function TutorWorkspace() {
       {analysis && showRecurring && recurring && (
         <RecurringBanner
           gap={recurring}
-          onPractice={handlePractice}
+          onPractice={() =>
+            handlePractice({
+              concept: recurring.concept,
+              studentBelief: recurring.studentBelief,
+              correctModel: recurring.correctModel,
+            })
+          }
           onDismiss={() =>
             setDismissed({ concept: recurring.concept, count: recurring.count })
           }
@@ -413,7 +438,7 @@ export default function TutorWorkspace() {
           onAsk={handleAsk}
           onWhyWrong={() => openComposer("why")}
           onCheckWork={() => openComposer("check")}
-          onPractice={handlePractice}
+          onPractice={() => handlePractice()}
         />
       )}
 

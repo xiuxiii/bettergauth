@@ -152,10 +152,16 @@ export function detectRecurring(
 ): RecurringGap | null {
   if (!memory) return null;
 
+  // A concept the student has since demonstrated is resolved — never nag on it.
+  const demonstrated = new Set(
+    memory.demonstrated.map((d) => d.trim().toLowerCase()),
+  );
   const counts = new Map<string, number>();
   for (const e of memory.errors) {
     const key = e.concept.trim();
-    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (key && !demonstrated.has(key.toLowerCase())) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
   }
 
   let top: { concept: string; count: number } | null = null;
@@ -251,6 +257,64 @@ export function applyWorkCheckToMemory(
   }
 
   return next;
+}
+
+/**
+ * Mark a concept resolved after a successful targeted retry: add it to
+ * `demonstrated` (so `detectRecurring` stops flagging it) and resolve any open
+ * misconception on it.
+ */
+export function resolveMisconception(
+  memory: SessionMemory,
+  concept: string,
+): SessionMemory {
+  const c = concept.trim();
+  const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const next: SessionMemory = {
+    demonstrated: memory.demonstrated.some((d) => eq(d, c))
+      ? [...memory.demonstrated]
+      : [...memory.demonstrated, c],
+    misconceptions: memory.misconceptions.map((m) =>
+      eq(m.concept, c) && m.status !== "resolved"
+        ? { ...m, status: "resolved" as const }
+        : { ...m },
+    ),
+    errors: [...memory.errors],
+    bottleneck: memory.bottleneck,
+  };
+  return next;
+}
+
+/** Record another failed attempt at a concept (a targeted retry that missed). */
+export function recordConceptError(
+  memory: SessionMemory,
+  concept: string,
+): SessionMemory {
+  const c = concept.trim();
+  if (!c) return memory;
+  return {
+    ...memory,
+    errors: [...memory.errors, { type: "conceptual", concept: c }],
+  };
+}
+
+/**
+ * Did a practice attempt resolve the targeted misconception? True when the
+ * concept-selection and reasoning axes are sound (execution/arithmetic slips are
+ * allowed — the misconception is about the idea, not the algebra). A submission
+ * with no shown work ("show solution") never counts as resolved.
+ */
+export function practiceResolved(evaluation: PracticeEvaluation): boolean {
+  const status = (axis: PracticeAxis): RubricStatus | undefined =>
+    evaluation.rubric.find((r) => r.axis === axis)?.status;
+  const concept = status("concept_selection");
+  if (!concept || concept === "not_shown") return false;
+  if (evaluation.verdict === "correct") return true;
+  const reasoning = status("reasoning");
+  return (
+    concept === "correct" &&
+    (reasoning === "correct" || reasoning === "minor_issue")
+  );
 }
 
 /**
@@ -419,9 +483,22 @@ export interface PracticeEvaluation {
   solution: StructuredSolution;
 }
 
+/**
+ * A specific misconception to target when generating practice — used by the
+ * retry→verify loop so the problem is engineered to expose THIS gap, not just
+ * the source problem's concept in general.
+ */
+export interface PracticeFocus {
+  concept: string;
+  studentBelief?: string;
+  correctModel?: string;
+}
+
 /** What the client sends to /api/practice/generate. */
 export interface GeneratePracticeRequest {
   problem: ProblemAnalysis;
+  /** When present, engineer the problem to probe this exact misconception. */
+  focus?: PracticeFocus;
 }
 
 /** What the client sends to /api/practice/evaluate. */

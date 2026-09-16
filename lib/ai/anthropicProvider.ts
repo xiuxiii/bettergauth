@@ -327,7 +327,11 @@ Maintain it honestly from evidence:
       messages: [
         {
           role: "user",
-          content: `Original problem:\n${request.problem.problemText}\nSubject: ${request.problem.subject}. Concept: ${request.problem.concept}.\n\nGenerate one similar practice problem.`,
+          content: `Original problem:\n${request.problem.problemText}\nSubject: ${request.problem.subject}. Concept: ${request.problem.concept}.\n\n${
+            request.focus
+              ? `The student has a RECURRING misconception on "${request.focus.concept}": ${request.focus.studentBelief ?? "they keep applying it incorrectly"}.${request.focus.correctModel ? ` The correct model: ${request.focus.correctModel}.` : ""}\nEngineer ONE problem that specifically probes this: it must be solvable correctly ONLY by applying the correct model, so that this exact misconception would lead to a wrong answer. Keep it at matching difficulty and do NOT hint at the misconception in the problem text.`
+              : "Generate one similar practice problem."
+          }`,
         },
       ],
       output_config: { format: zodOutputFormat(PracticeProblemSchema) },

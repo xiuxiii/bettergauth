@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   PracticeAxis,
   PracticeEvaluation,
+  PracticeFocus,
   PracticeProblem,
   ProblemAnalysis,
   RubricResult,
   StudentAttempt,
 } from "@/lib/tutor/types";
+import { practiceResolved } from "@/lib/tutor/types";
 import { fileToDataUrl } from "@/lib/utils";
 import RichText from "@/components/RichText";
 import SolutionCard from "@/components/SolutionCard";
@@ -23,11 +25,22 @@ type Phase = "generating" | "gen_error" | "solving" | "evaluating" | "done";
  * reveals the worked solution. AI work stays behind /api/practice/* → the
  * provider interface.
  */
-export default function PracticeCard({ source }: { source: ProblemAnalysis }) {
+export default function PracticeCard({
+  source,
+  focus,
+  onResolved,
+}: {
+  source: ProblemAnalysis;
+  /** When set, this is a targeted retry of a recurring misconception. */
+  focus?: PracticeFocus;
+  /** Called after a genuine attempt to a targeted retry, with the outcome. */
+  onResolved?: (concept: string, resolved: boolean) => void;
+}) {
   const [phase, setPhase] = useState<Phase>("generating");
   const [problem, setProblem] = useState<PracticeProblem | null>(null);
   const [evaluation, setEvaluation] = useState<PracticeEvaluation | null>(null);
   const [submitted, setSubmitted] = useState<StudentAttempt | null>(null);
+  const [resolved, setResolved] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
 
@@ -38,7 +51,7 @@ export default function PracticeCard({ source }: { source: ProblemAnalysis }) {
       const res = await fetch("/api/practice/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problem: source }),
+        body: JSON.stringify({ problem: source, focus }),
       });
       if (!res.ok) throw new Error((await res.json())?.error ?? "Generation failed.");
       setProblem(await res.json());
@@ -47,7 +60,7 @@ export default function PracticeCard({ source }: { source: ProblemAnalysis }) {
       setError(err instanceof Error ? err.message : "Generation failed.");
       setPhase("gen_error");
     }
-  }, [source]);
+  }, [source, focus]);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -67,8 +80,15 @@ export default function PracticeCard({ source }: { source: ProblemAnalysis }) {
         body: JSON.stringify({ practice: problem, attempt }),
       });
       if (!res.ok) throw new Error((await res.json())?.error ?? "Evaluation failed.");
-      setEvaluation(await res.json());
+      const evaluation: PracticeEvaluation = await res.json();
+      setEvaluation(evaluation);
       setPhase("done");
+      // Retry→verify: only a genuine attempt on a targeted retry reports back.
+      if (focus && (attempt.text || attempt.imageDataUrl)) {
+        const ok = practiceResolved(evaluation);
+        setResolved(ok);
+        onResolved?.(focus.concept, ok);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Evaluation failed.");
       setPhase("solving"); // let them retry the submission
@@ -80,7 +100,7 @@ export default function PracticeCard({ source }: { source: ProblemAnalysis }) {
       <div className="flex items-center gap-2 border-b border-brand-100 bg-brand-50 px-4 py-2.5">
         <SparkIcon />
         <span className="text-sm font-semibold text-brand-800">
-          Practice — one like this
+          {focus ? "Retry — clear the gap" : "Practice — one like this"}
         </span>
         {problem && (
           <span className="ml-auto rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-brand-700">
@@ -115,6 +135,20 @@ export default function PracticeCard({ source }: { source: ProblemAnalysis }) {
 
         {phase === "evaluating" && (
           <LoadingState label="Checking your work across the five axes…" />
+        )}
+
+        {phase === "done" && focus && resolved !== null && (
+          <div
+            className={
+              resolved
+                ? "rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800"
+                : "rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800"
+            }
+          >
+            {resolved
+              ? "Nice — that concept looks locked in now. Cleared it from your recurring gaps."
+              : "Still shaky on this one — worth another pass before moving on."}
+          </div>
         )}
 
         {phase === "done" && evaluation && (

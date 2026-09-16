@@ -25,6 +25,7 @@ export async function POST(req: Request) {
 
     const practice = await getProvider().generatePractice({
       problem: body.problem,
+      focus: body.focus,
     });
     return NextResponse.json(practice);
   } catch (err) {
