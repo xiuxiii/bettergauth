@@ -131,6 +131,54 @@ export function emptySessionMemory(): SessionMemory {
   return { demonstrated: [], misconceptions: [], errors: [], bottleneck: "" };
 }
 
+/** A concept that has tripped the student up more than once this session. */
+export interface RecurringGap {
+  concept: string;
+  /** How many classified errors touched this concept. */
+  count: number;
+  /** The tracked wrong model, if one was named for this concept. */
+  studentBelief?: string;
+  /** The correct model — the one-line refresher. */
+  correctModel?: string;
+}
+
+/**
+ * Find the single most-recurring conceptual gap: a concept with ≥2 classified
+ * errors and not already resolved. Deterministic and client-side — the model
+ * just maintains the memory; the UI decides when a pattern is worth surfacing.
+ */
+export function detectRecurring(
+  memory: SessionMemory | undefined,
+): RecurringGap | null {
+  if (!memory) return null;
+
+  const counts = new Map<string, number>();
+  for (const e of memory.errors) {
+    const key = e.concept.trim();
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  let top: { concept: string; count: number } | null = null;
+  for (const [concept, count] of counts) {
+    if (count >= 2 && (!top || count > top.count)) top = { concept, count };
+  }
+  if (!top) return null;
+
+  const related = memory.misconceptions.filter(
+    (m) => m.concept.trim().toLowerCase() === top!.concept.toLowerCase(),
+  );
+  const unresolved = related.find((m) => m.status !== "resolved");
+  // All named misconceptions for this concept are resolved → don't nag.
+  if (related.length > 0 && !unresolved) return null;
+
+  return {
+    concept: top.concept,
+    count: top.count,
+    studentBelief: unresolved?.studentBelief,
+    correctModel: unresolved?.correctModel,
+  };
+}
+
 /**
  * A structured solution. The tutor only fills this in when the student
  * explicitly asks to see the full solution.

@@ -6,6 +6,7 @@ import Link from "next/link";
 import type {
   ChatMessage,
   ProblemAnalysis,
+  RecurringGap,
   SessionMemory,
   StructuredSolution,
   StudentAttempt,
@@ -14,7 +15,7 @@ import type {
   TutorTurn,
   WorkCheck,
 } from "@/lib/tutor/types";
-import { emptySessionMemory } from "@/lib/tutor/types";
+import { detectRecurring, emptySessionMemory } from "@/lib/tutor/types";
 import { IMAGE_KEY, uid } from "@/lib/utils";
 import {
   DEFAULT_PREFERENCES,
@@ -27,6 +28,7 @@ import ActionBar from "@/components/ActionBar";
 import AttemptComposer from "@/components/AttemptComposer";
 import PracticeCard from "@/components/PracticeCard";
 import SessionToggles from "@/components/SessionToggles";
+import RecurringBanner from "@/components/RecurringBanner";
 import { EmptyState, ErrorState, LoadingState } from "@/components/States";
 
 /** A chat message plus any structured payloads attached to a turn. */
@@ -79,6 +81,19 @@ export default function TutorWorkspace() {
   // The tutor's cross-turn memory: round-tripped through /api/tutor so the
   // tutor adapts, avoids re-teaching, and catches recurring misconceptions.
   const memoryRef = useRef<SessionMemory>(emptySessionMemory());
+  // A recurring conceptual gap to surface, and the last one dismissed (by
+  // concept + count, so it re-surfaces if the same gap keeps growing).
+  const [recurring, setRecurring] = useState<RecurringGap | null>(null);
+  const [dismissed, setDismissed] = useState<{
+    concept: string;
+    count: number;
+  } | null>(null);
+
+  const showRecurring =
+    recurring !== null &&
+    (dismissed === null ||
+      dismissed.concept !== recurring.concept ||
+      recurring.count > dismissed.count);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // Ensures the initial auto-analysis fires exactly once, so a double effect
@@ -171,7 +186,10 @@ export default function TutorWorkspace() {
       });
       if (!res.ok) throw new Error((await res.json())?.error ?? "Tutor failed.");
       const turn: TutorTurn = await res.json();
-      if (turn.memory) memoryRef.current = turn.memory;
+      if (turn.memory) {
+        memoryRef.current = turn.memory;
+        setRecurring(detectRecurring(turn.memory));
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -361,6 +379,16 @@ export default function TutorWorkspace() {
           />
         )}
       </div>
+
+      {analysis && showRecurring && recurring && (
+        <RecurringBanner
+          gap={recurring}
+          onPractice={handlePractice}
+          onDismiss={() =>
+            setDismissed({ concept: recurring.concept, count: recurring.count })
+          }
+        />
+      )}
 
       {analysis && (
         <SessionToggles prefs={prefs} onChange={updatePrefs} disabled={turnBusy} />
