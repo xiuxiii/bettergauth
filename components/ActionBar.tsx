@@ -31,12 +31,14 @@ export default function ActionBar({
   busy,
   onAction,
   onAsk,
+  onWhyWrong,
   onCheckWork,
   onPractice,
 }: {
   busy: boolean;
   onAction: (action: Exclude<TutorAction, "ask">) => void;
   onAsk: (text: string) => void;
+  onWhyWrong: () => void;
   onCheckWork: () => void;
   onPractice: () => void;
 }) {
@@ -52,6 +54,20 @@ export default function ActionBar({
   return (
     <div className="border-t border-slate-200 bg-surface/95 px-3 pb-3 pt-2 backdrop-blur">
       <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
+        {/* The headline diagnostic action — analyze THEIR reasoning. */}
+        <button
+          disabled={busy}
+          onClick={onWhyWrong}
+          className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-brand-300 bg-brand-50 px-3.5 py-1.5 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 active:scale-[0.97] disabled:opacity-50"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+            <circle cx="12" cy="12" r="9" strokeLinecap="round" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 9.5a2.5 2.5 0 1 1 3.2 2.4c-.6.2-.7.5-.7 1.1M12 16.5v.01" />
+          </svg>
+          Why am I wrong?
+        </button>
+        <span className="mx-0.5 h-5 w-px flex-shrink-0 self-center bg-slate-200" />
+
         {/* Assistance ladder — signals to the tutor engine. */}
         {ASSIST.map(({ action, label }) => (
           <button

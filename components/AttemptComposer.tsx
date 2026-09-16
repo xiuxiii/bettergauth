@@ -14,11 +14,26 @@ export default function AttemptComposer({
   busy,
   onSubmit,
   onCancel,
+  mode = "check",
 }: {
   busy: boolean;
   onSubmit: (attempt: StudentAttempt) => void;
   onCancel: () => void;
+  /** "why" reframes the sheet toward diagnosing the student's reasoning. */
+  mode?: "check" | "why";
 }) {
+  const copy =
+    mode === "why"
+      ? {
+          title: "Why am I wrong?",
+          hint: "Show me your working and your answer — I'll trace your reasoning and find the exact step where it goes wrong.",
+          submit: "Find the gap",
+        }
+      : {
+          title: "Check my work",
+          hint: "Type your solution or attach a photo — I'll find the first thing worth fixing.",
+          submit: "Check it",
+        };
   const fileRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [image, setImage] = useState<string | null>(null);
@@ -61,7 +76,7 @@ export default function AttemptComposer({
       <div className="relative mx-auto w-full max-w-md animate-rise rounded-t-3xl bg-surface p-4 shadow-2xl">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-serif text-lg font-normal text-ink">Check my work</h2>
+          <h2 className="font-serif text-lg font-normal text-ink">{copy.title}</h2>
           <button
             onClick={onCancel}
             className="rounded-full px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
@@ -69,10 +84,7 @@ export default function AttemptComposer({
             Cancel
           </button>
         </div>
-        <p className="mb-3 text-sm text-slate-500">
-          Type your solution or attach a photo — I&apos;ll find the first thing
-          worth fixing.
-        </p>
+        <p className="mb-3 text-sm text-slate-500">{copy.hint}</p>
 
         <input
           ref={fileRef}
@@ -125,7 +137,7 @@ export default function AttemptComposer({
           className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-brand-700 active:scale-[0.99] disabled:opacity-50"
         >
           {busy ? <Spinner className="h-5 w-5" /> : null}
-          Check it
+          {copy.submit}
         </button>
       </div>
     </div>

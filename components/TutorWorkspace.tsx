@@ -58,7 +58,13 @@ export default function TutorWorkspace() {
   const [turnBusy, setTurnBusy] = useState(false);
   const [turnError, setTurnError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composerMode, setComposerMode] = useState<"check" | "why">("why");
   const [prefs, setPrefs] = useState<TutorPreferences>(DEFAULT_PREFERENCES);
+
+  function openComposer(mode: "check" | "why") {
+    setComposerMode(mode);
+    setComposerOpen(true);
+  }
 
   // Load saved preferences (client-only) so tutor turns can carry them.
   useEffect(() => {
@@ -102,7 +108,7 @@ export default function TutorWorkspace() {
           id: uid("t"),
           role: "tutor",
           content:
-            "Give it a try and show me your working — I'll pinpoint the exact step where the reasoning breaks. Want a nudge first? Tap Hint. Just want it worked out? Show solution.",
+            "Give it a try first. When you've got an answer, tap “Why am I wrong?” and show me your working — I'll trace your reasoning to the exact step where it breaks. Want a nudge to start? Tap Hint. Just want it worked out? Show solution.",
           createdAt: Date.now(),
         },
       ]);
@@ -365,7 +371,8 @@ export default function TutorWorkspace() {
           busy={turnBusy}
           onAction={handleAction}
           onAsk={handleAsk}
-          onCheckWork={() => setComposerOpen(true)}
+          onWhyWrong={() => openComposer("why")}
+          onCheckWork={() => openComposer("check")}
           onPractice={handlePractice}
         />
       )}
@@ -373,6 +380,7 @@ export default function TutorWorkspace() {
       {composerOpen && (
         <AttemptComposer
           busy={turnBusy}
+          mode={composerMode}
           onSubmit={handleCheckWork}
           onCancel={() => setComposerOpen(false)}
         />
