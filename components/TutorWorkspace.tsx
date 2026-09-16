@@ -15,7 +15,11 @@ import type {
   TutorTurn,
   WorkCheck,
 } from "@/lib/tutor/types";
-import { detectRecurring, emptySessionMemory } from "@/lib/tutor/types";
+import {
+  applyWorkCheckToMemory,
+  detectRecurring,
+  emptySessionMemory,
+} from "@/lib/tutor/types";
 import { IMAGE_KEY, uid } from "@/lib/utils";
 import {
   DEFAULT_PREFERENCES,
@@ -258,6 +262,14 @@ export default function TutorWorkspace() {
       });
       if (!res.ok) throw new Error((await res.json())?.error ?? "Check failed.");
       const check: WorkCheck = await res.json();
+      // Fold the diagnosis into memory so it counts toward recurrence /
+      // resolution, then refresh the recurring-gap banner.
+      memoryRef.current = applyWorkCheckToMemory(
+        memoryRef.current,
+        check,
+        analysis.concept,
+      );
+      setRecurring(detectRecurring(memoryRef.current));
       setMessages((prev) => [
         ...prev,
         {

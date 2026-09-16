@@ -179,6 +179,80 @@ export function detectRecurring(
   };
 }
 
+function mapCategory(cat: ErrorCategory): RememberedError["type"] {
+  switch (cat) {
+    case "conceptual":
+      return "conceptual";
+    case "model_selection":
+      return "strategic";
+    case "setup":
+    case "procedural":
+      return "procedural";
+    case "arithmetic":
+      return "arithmetic";
+    case "units_notation":
+      return "notation";
+  }
+}
+
+/**
+ * Fold a Check-My-Work diagnosis into the session memory so it counts toward
+ * recurrence, don't-re-teach, and resolution — the check-work path runs through
+ * a separate endpoint that doesn't round-trip memory, so we merge its already
+ * structured result in on the client (no extra model tokens):
+ *  - log the classified error against the problem's concept;
+ *  - on a significant conceptual/strategic error, record/confirm a misconception;
+ *  - when the attempt's concept is sound, mark it demonstrated and RESOLVE any
+ *    open misconception on it (this clears a recurring flag — a retry that stuck).
+ */
+export function applyWorkCheckToMemory(
+  memory: SessionMemory,
+  check: WorkCheck,
+  concept: string,
+): SessionMemory {
+  const c = concept.trim();
+  const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const next: SessionMemory = {
+    demonstrated: [...memory.demonstrated],
+    misconceptions: memory.misconceptions.map((m) => ({ ...m })),
+    errors: [...memory.errors],
+    bottleneck: check.continueFrom || memory.bottleneck,
+  };
+
+  const err = check.firstError;
+  const conceptSound = check.verdict === "correct" || (!!err && err.conceptCorrect);
+
+  if (err && c) {
+    next.errors.push({ type: mapCategory(err.category), concept: c });
+    if (
+      err.severity === "significant" &&
+      !err.conceptCorrect &&
+      (err.category === "conceptual" || err.category === "model_selection")
+    ) {
+      const open = next.misconceptions.find(
+        (m) => eq(m.concept, c) && m.status !== "resolved",
+      );
+      if (open) open.status = "confirmed";
+      else
+        next.misconceptions.push({
+          concept: c,
+          studentBelief: err.explanation,
+          correctModel: err.correction,
+          status: "confirmed",
+        });
+    }
+  }
+
+  if (conceptSound && c) {
+    if (!next.demonstrated.some((d) => eq(d, c))) next.demonstrated.push(c);
+    for (const m of next.misconceptions) {
+      if (eq(m.concept, c) && m.status !== "resolved") m.status = "resolved";
+    }
+  }
+
+  return next;
+}
+
 /**
  * A structured solution. The tutor only fills this in when the student
  * explicitly asks to see the full solution.
