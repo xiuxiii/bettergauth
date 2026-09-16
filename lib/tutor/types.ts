@@ -81,6 +81,56 @@ export interface TutorPreferences {
   goal: "understand" | "exam" | "both";
 }
 
+// ---------------------------------------------------------------------------
+// Session memory — the tutor's cross-turn working memory
+// ---------------------------------------------------------------------------
+
+/** A wrong mental model the tutor is tracking, with resolution status. */
+export interface RememberedMisconception {
+  concept: string;
+  /** The student's wrong model, in plain terms. */
+  studentBelief: string;
+  /** The correct model. */
+  correctModel: string;
+  status: "suspected" | "confirmed" | "resolving" | "resolved";
+}
+
+/** A classified mistake, kept so repetition on one concept reads as a gap. */
+export interface RememberedError {
+  type:
+    | "careless"
+    | "arithmetic"
+    | "algebraic"
+    | "notation"
+    | "procedural"
+    | "conceptual"
+    | "strategic";
+  concept: string;
+}
+
+/**
+ * Compact, mutable memory the tutor maintains and round-trips through
+ * /api/tutor every turn — the working subset of the full TutorState
+ * (lib/tutor/state.ts). This is what gives the tutor cross-turn memory:
+ * adapting depth, not re-teaching mastered concepts, and spotting a RECURRING
+ * misconception (the same concept failing more than once).
+ */
+export interface SessionMemory {
+  /** Concepts the student has proven they know — never re-explain these. */
+  demonstrated: string[];
+  /** Misconceptions seen this session. */
+  misconceptions: RememberedMisconception[];
+  /** Classified errors, in order. */
+  errors: RememberedError[];
+  /** The single current blocker in one line ("" if none). */
+  bottleneck: string;
+}
+
+/** A fresh, empty session memory. */
+export function emptySessionMemory(): SessionMemory {
+  return { demonstrated: [], misconceptions: [], errors: [], bottleneck: "" };
+}
+
 /**
  * A structured solution. The tutor only fills this in when the student
  * explicitly asks to see the full solution.
@@ -107,6 +157,12 @@ export interface TutorTurn {
    * conceptual moves (ask / continue / hint / explain / go_deeper).
    */
   hasMore?: boolean;
+  /**
+   * The tutor's updated cross-turn memory. The conceptual moves return a freshly
+   * updated one; other moves pass the incoming memory back unchanged. The client
+   * stores it and sends it back on the next turn.
+   */
+  memory?: SessionMemory;
 }
 
 /** What the client sends to /api/tutor. */
@@ -118,6 +174,8 @@ export interface TutorRequest {
   studentText?: string;
   /** Student preferences, folded into the system prompt when present. */
   preferences?: TutorPreferences;
+  /** The tutor's memory from the previous turn, round-tripped for continuity. */
+  memory?: SessionMemory;
 }
 
 // ---------------------------------------------------------------------------

@@ -37,6 +37,7 @@ export async function POST(req: Request) {
       action: body.action,
       studentText: body.studentText,
       preferences: body.preferences,
+      memory: body.memory,
     });
 
     return NextResponse.json(turn);

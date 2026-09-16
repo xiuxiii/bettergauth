@@ -18,6 +18,7 @@ import type {
   TutorRequest,
   WorkCheck,
 } from "@/lib/tutor/types";
+import { emptySessionMemory } from "@/lib/tutor/types";
 import { SYSTEM_INSTRUCTIONS } from "@/lib/tutor/engine";
 
 /**
@@ -57,10 +58,39 @@ const StructuredSolutionSchema = z.object({
   takeaway: z.string(),
 });
 
-/** Conceptual moves: one small piece + whether a next piece remains. */
+/** The tutor's compact cross-turn memory (mirrors SessionMemory). */
+const SessionMemorySchema = z.object({
+  demonstrated: z.array(z.string()),
+  misconceptions: z.array(
+    z.object({
+      concept: z.string(),
+      studentBelief: z.string(),
+      correctModel: z.string(),
+      status: z.enum(["suspected", "confirmed", "resolving", "resolved"]),
+    }),
+  ),
+  errors: z.array(
+    z.object({
+      type: z.enum([
+        "careless",
+        "arithmetic",
+        "algebraic",
+        "notation",
+        "procedural",
+        "conceptual",
+        "strategic",
+      ]),
+      concept: z.string(),
+    }),
+  ),
+  bottleneck: z.string(),
+});
+
+/** Conceptual moves: one small piece, whether more remains, updated memory. */
 const TutorChunkSchema = z.object({
   message: z.string(),
   hasMore: z.boolean(),
+  memory: SessionMemorySchema,
 });
 const TutorSolutionSchema = z.object({
   message: z.string(),
@@ -182,6 +212,7 @@ export class AnthropicProvider implements AIProvider {
     // Split the system prompt so the big, frozen instructions are cached across
     // every turn/problem/user (prompt caching, ~90% cheaper on the cached
     // prefix), while the small per-problem block stays uncached.
+    const memory = request.memory ?? emptySessionMemory();
     const system: Anthropic.TextBlockParam[] = [
       {
         type: "text",
@@ -191,6 +222,19 @@ export class AnthropicProvider implements AIProvider {
       {
         type: "text",
         text: `# Current problem\n${request.problem.problemText}\nSubject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing concept: ${request.problem.concept}.${preferencesBlock(request.preferences)}`,
+      },
+      {
+        type: "text",
+        text: `# Running student model (your cross-turn memory)
+Use this, and RETURN it updated as \`memory\` this turn:
+${JSON.stringify(memory)}
+
+Maintain it honestly from evidence:
+- Add a concept to \`demonstrated\` once the student has PROVEN they know it — never re-explain those.
+- Log each classified mistake in \`errors\` with the concept it belongs to.
+- Record a wrong mental model in \`misconceptions\`; advance status suspected → confirmed → resolving → resolved as you address it and re-verify it stuck.
+- Set \`bottleneck\` to the single thing blocking progress right now ("" if none).
+- If one concept shows up in \`errors\`/\`misconceptions\` more than once, treat it as a RECURRING gap: name it plainly, raise depth, and have the student retry it rather than moving on.`,
       },
     ];
 
@@ -218,7 +262,7 @@ export class AnthropicProvider implements AIProvider {
       });
       logUsage("tutor:solution", res);
       const out = required(res.parsed_output, "solution");
-      return { message: out.message, solution: out.solution };
+      return { message: out.message, solution: out.solution, memory };
     }
 
     if (request.action === "similar_problem") {
@@ -232,14 +276,14 @@ export class AnthropicProvider implements AIProvider {
       });
       logUsage("tutor:similar", res);
       const out = required(res.parsed_output, "similar problem");
-      return { message: out.message, similarProblem: out.similarProblem };
+      return { message: out.message, similarProblem: out.similarProblem, memory };
     }
 
     // Conceptual moves (ask / continue / hint / explain / go_deeper): one small
     // piece + hasMore, so the UI can offer "Continue". Kept short on purpose.
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 600,
+      max_tokens: 900,
       thinking: { type: "disabled" },
       system,
       messages,
@@ -247,7 +291,7 @@ export class AnthropicProvider implements AIProvider {
     });
     logUsage("tutor:chunk", res);
     const out = required(res.parsed_output, "tutor reply");
-    return { message: out.message, hasMore: out.hasMore };
+    return { message: out.message, hasMore: out.hasMore, memory: out.memory };
   }
 
   async checkWork(request: CheckWorkRequest): Promise<WorkCheck> {

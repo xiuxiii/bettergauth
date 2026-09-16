@@ -6,6 +6,7 @@ import Link from "next/link";
 import type {
   ChatMessage,
   ProblemAnalysis,
+  SessionMemory,
   StructuredSolution,
   StudentAttempt,
   TutorAction,
@@ -13,6 +14,7 @@ import type {
   TutorTurn,
   WorkCheck,
 } from "@/lib/tutor/types";
+import { emptySessionMemory } from "@/lib/tutor/types";
 import { IMAGE_KEY, uid } from "@/lib/utils";
 import {
   DEFAULT_PREFERENCES,
@@ -68,6 +70,10 @@ export default function TutorWorkspace() {
     savePreferences(next);
   }
 
+  // The tutor's cross-turn memory: round-tripped through /api/tutor so the
+  // tutor adapts, avoids re-teaching, and catches recurring misconceptions.
+  const memoryRef = useRef<SessionMemory>(emptySessionMemory());
+
   const scrollRef = useRef<HTMLDivElement>(null);
   // Ensures the initial auto-analysis fires exactly once, so a double effect
   // invocation (StrictMode / Fast Refresh) can never append a duplicate opener.
@@ -88,8 +94,18 @@ export default function TutorWorkspace() {
       const data: ProblemAnalysis = await res.json();
       setAnalysis(data);
       setPhase("ready");
-      // Seed the session with a concept-level opener.
-      void requestTurn("ask", data, []);
+      // Diagnosis-first opener: invite the student's own work instead of
+      // opening with a concept lecture — their reasoning is what we diagnose.
+      // Static (no API call), so it's instant, free, and reliably on-message.
+      setMessages([
+        {
+          id: uid("t"),
+          role: "tutor",
+          content:
+            "Give it a try and show me your working — I'll pinpoint the exact step where the reasoning breaks. Want a nudge first? Tap Hint. Just want it worked out? Show solution.",
+          createdAt: Date.now(),
+        },
+      ]);
     } catch (err) {
       setAnalyzeError(err instanceof Error ? err.message : "Analysis failed.");
       setPhase("error");
@@ -144,10 +160,12 @@ export default function TutorWorkspace() {
           action,
           studentText,
           preferences: prefs,
+          memory: memoryRef.current,
         }),
       });
       if (!res.ok) throw new Error((await res.json())?.error ?? "Tutor failed.");
       const turn: TutorTurn = await res.json();
+      if (turn.memory) memoryRef.current = turn.memory;
       setMessages((prev) => [
         ...prev,
         {
