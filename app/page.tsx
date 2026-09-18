@@ -9,7 +9,7 @@ const prefsLinkCls =
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md animate-rise flex-col px-5 pb-10 pt-14 md:max-w-3xl md:px-8 md:pt-10">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md animate-rise flex-col px-5 pb-10 pt-[max(3.5rem,calc(env(safe-area-inset-top,0px)+2rem))] md:max-w-3xl md:px-8 md:pt-10">
       {/* Header area (md+): preferences link top-right. */}
       <div className="mb-8 hidden md:flex md:justify-end">
         <a href="/setup" className={prefsLinkCls}>
@@ -19,7 +19,7 @@ export default function HomePage() {
 
       <div className="flex-1 md:grid md:grid-cols-2 md:items-start md:gap-12">
         <div>
-          <header className="mb-10 text-center md:mb-8 md:text-left">
+          <header className="mb-8 text-center md:text-left">
             <MindGapMark className="mx-auto mb-4 h-12 w-12 md:mx-0" />
             <Wordmark className="text-4xl" />
             <p className="mx-auto mt-3 max-w-xs text-[15px] leading-relaxed text-slate-600 md:mx-0">

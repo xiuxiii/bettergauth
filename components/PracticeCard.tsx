@@ -216,7 +216,7 @@ function SolveArea({
           <span className="flex-1 text-sm text-slate-600">Photo attached</span>
           <button
             onClick={() => setImage(null)}
-            className="h-9 rounded-md px-3 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-ink"
+            className="h-10 rounded-md px-3 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-ink"
           >
             Remove
           </button>
@@ -243,7 +243,7 @@ function SolveArea({
         </button>
         <button
           onClick={() => onSubmit({})}
-          className="h-11 rounded-md px-3 text-sm font-medium text-slate-500 transition hover:bg-slate-200 hover:text-ink"
+          className="h-10 rounded-md px-3 text-sm font-medium text-slate-500 transition hover:bg-slate-200 hover:text-ink"
         >
           Show solution
         </button>

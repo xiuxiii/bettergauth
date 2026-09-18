@@ -21,7 +21,7 @@ export default function ProblemCard({
       <img
         src={image}
         alt="Uploaded problem"
-        className="max-h-56 w-full bg-slate-100 object-contain"
+        className="max-h-56 w-full bg-slate-100 object-contain max-md:max-h-48"
       />
       <div className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -32,10 +32,12 @@ export default function ProblemCard({
             {analysis.topic}
           </span>
           {lowConfidence && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-warn-50 px-2.5 py-1 text-xs font-medium text-warn-700">
-              <CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />
-              Low confidence — check the text below
-            </span>
+            <div className="max-md:basis-full max-md:ml-0">
+              <span className="inline-flex items-center gap-1 rounded-full bg-warn-50 px-2.5 py-1 text-xs font-medium text-warn-700">
+                <CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />
+                Low confidence — check the text below
+              </span>
+            </div>
           )}
         </div>
         <div>

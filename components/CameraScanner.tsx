@@ -133,10 +133,10 @@ export default function CameraScanner({
         {/* corner brackets */}
         <div className="relative flex flex-1 items-center justify-center px-6">
           <div className="relative aspect-[3/4] w-full max-w-sm">
-            <Corner className="left-0 top-0 rounded-tl-sm border-l-[3px] border-t-[3px]" />
-            <Corner className="right-0 top-0 rounded-tr-sm border-r-[3px] border-t-[3px]" />
-            <Corner className="bottom-0 left-0 rounded-bl-sm border-b-[3px] border-l-[3px]" />
-            <Corner className="bottom-0 right-0 rounded-br-sm border-b-[3px] border-r-[3px]" />
+            <Corner className="left-0 top-0 rounded-tl-sm border-l-2 border-t-2" />
+            <Corner className="right-0 top-0 rounded-tr-sm border-r-2 border-t-2" />
+            <Corner className="bottom-0 left-0 rounded-bl-sm border-b-2 border-l-2" />
+            <Corner className="bottom-0 right-0 rounded-br-sm border-b-2 border-r-2" />
           </div>
         </div>
       </div>
@@ -183,7 +183,7 @@ export default function CameraScanner({
           <button
             onClick={capture}
             disabled={busy}
-            className="flex h-[74px] w-[74px] items-center justify-center rounded-full border-[3px] border-white disabled:opacity-60"
+            className="flex h-[74px] w-[74px] items-center justify-center rounded-full border-[3px] border-white transition-transform active:scale-95 disabled:opacity-60"
             aria-label="Capture problem"
           >
             {busy ? (
@@ -211,7 +211,7 @@ export default function CameraScanner({
 function Corner({ className }: { className: string }) {
   return (
     <span
-      className={`absolute h-8 w-8 border-white/90 ${className}`}
+      className={`absolute h-6 w-6 border-white/90 ${className}`}
       aria-hidden
     />
   );

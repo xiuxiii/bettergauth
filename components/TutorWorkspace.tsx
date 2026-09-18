@@ -171,6 +171,20 @@ export default function TutorWorkspace() {
     });
   }, [messages, turnBusy]);
 
+  // Keyboard follow (visual only): when the composer gains focus, and again
+  // once the on-screen keyboard has finished resizing the visual viewport,
+  // pin the newest message above the input so it is never hidden.
+  const scrollToBottom = useCallback(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, []);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    vv.addEventListener("resize", scrollToBottom);
+    return () => vv.removeEventListener("resize", scrollToBottom);
+  }, [scrollToBottom]);
+
   const toHistory = (msgs: DisplayMessage[]): ChatMessage[] =>
     msgs.map(({ id, role, content, createdAt }) => ({
       id,
@@ -383,7 +397,7 @@ export default function TutorWorkspace() {
       />
 
       {/* Sticky reference pane (md+) */}
-      <aside className="hidden md:sticky md:top-0 md:block md:h-[calc(100dvh-57px)] md:overflow-y-auto md:border-r md:border-hairline md:p-5">
+      <aside className="hidden md:block md:min-h-0 md:overflow-y-auto md:border-r md:border-hairline md:p-5">
         {reference}
       </aside>
 
@@ -392,7 +406,7 @@ export default function TutorWorkspace() {
         <div
           ref={scrollRef}
           aria-live="polite"
-          className="flex-1 overflow-y-auto px-4 py-4 md:px-6"
+          className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6"
         >
           <div className="mx-auto w-full space-y-6 md:max-w-2xl">
             <div className="md:hidden">{reference}</div>
@@ -473,6 +487,7 @@ export default function TutorWorkspace() {
             busy={turnBusy}
             onAction={handleAction}
             onAsk={handleAsk}
+            onFocus={scrollToBottom}
             onWhyWrong={() => openComposer("why")}
             onCheckWork={() => openComposer("check")}
             onPractice={() => handlePractice()}
@@ -538,7 +553,7 @@ function TopBar({
   }, [open]);
 
   return (
-    <header className="relative z-10 flex h-14 items-center gap-2 border-b border-hairline bg-surface px-2 md:col-span-2 md:px-4">
+    <header className="relative z-10 flex min-h-14 items-center gap-2 border-b border-hairline bg-surface px-2 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top,0px))] md:col-span-2 md:px-4">
       <button
         onClick={onBack}
         aria-label="Back"
@@ -549,7 +564,7 @@ function TopBar({
       <div className="min-w-0 flex-1">
         <Wordmark className="block text-base leading-5" />
         {topic && (
-          <p className="truncate text-xs leading-4 text-slate-500">{topic}</p>
+          <p className="truncate text-xs leading-4 text-slate-500 [@media(max-height:560px)]:hidden">{topic}</p>
         )}
       </div>
 
@@ -559,7 +574,7 @@ function TopBar({
             onClick={() => setOpen((v) => !v)}
             aria-haspopup="dialog"
             aria-expanded={open}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-slate-300 bg-surface px-3 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700"
+            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-slate-300 bg-surface px-3 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700 md:h-9"
           >
             <Settings2 size={16} strokeWidth={1.75} aria-hidden="true" />
             <span className="hidden sm:inline">
@@ -578,7 +593,7 @@ function TopBar({
             <div
               role="dialog"
               aria-label="Session preferences"
-              className="absolute right-0 top-full mt-2 w-72 animate-pop-in rounded-lg border border-hairline bg-surface p-3 shadow-raised"
+              className="absolute right-0 top-full z-30 mt-2 w-72 animate-pop-in rounded-lg border border-hairline bg-surface p-3 shadow-raised"
             >
               <SessionToggles
                 prefs={prefs}

@@ -55,6 +55,25 @@
 
 html {
   color-scheme: light dark;
+  /* iOS native feel: no grey tap flash, no text inflation in landscape, no
+     rubber-banding of the whole document behind the app's own scroll areas. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+button,
+[role="button"],
+a,
+summary {
+  touch-action: manipulation; /* no 300ms delay, no double-tap zoom */
+  user-select: none;
+  -webkit-touch-callout: none; /* no long-press text callout */
+}
+input,
+textarea {
+  touch-action: auto;
+  user-select: text;
 }
 
 html,
@@ -109,6 +128,18 @@ p {
 }
 .scroll-fade::-webkit-scrollbar {
   display: none;
+}
+
+/* Phones: display maths slightly smaller, allowed to wrap, and edge-faded when
+   it still has to scroll, so a long equation never clips silently. */
+@media (max-width: 639px) {
+  .katex-display {
+    @apply scroll-fade;
+    font-size: 0.92em;
+  }
+  .katex-display > .katex {
+    white-space: normal;
+  }
 }
 
 /* --------------------------------------------------------------------------

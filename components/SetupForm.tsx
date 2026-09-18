@@ -27,7 +27,7 @@ export default function SetupForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-10 pt-12 md:max-w-lg md:justify-center md:px-0 md:py-12">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-[max(3rem,calc(env(safe-area-inset-top,0px)+2rem))] md:max-w-lg md:justify-center md:px-0 md:py-12">
       <div className="flex flex-1 animate-rise flex-col md:flex-none md:rounded-lg md:border md:border-hairline md:bg-surface md:p-10 md:shadow-card">
         <header className="mb-8">
           <MindGapMark className="mb-4 h-8 w-8" />
@@ -50,14 +50,14 @@ export default function SetupForm() {
               onChange={(v) =>
                 setPrefs({ ...prefs, grade: v === "skip" ? null : (v as TutorPreferences["grade"]) })
               }
-              className="sm:grid sm:grid-cols-6"
+              className="grid grid-cols-3 sm:grid-cols-6"
               options={[
                 { value: "9", label: "9", className: "sm:px-2 sm:text-center" },
                 { value: "10", label: "10", className: "sm:px-2 sm:text-center" },
                 { value: "11", label: "11", className: "sm:px-2 sm:text-center" },
                 { value: "12", label: "12", className: "sm:px-2 sm:text-center" },
                 { value: "other", label: "Other", className: "sm:px-2 sm:text-center" },
-                { value: "skip", label: "Prefer not to say", className: "sm:col-span-2 sm:px-2 sm:text-center" },
+                { value: "skip", label: "Prefer not to say", className: "col-span-3 sm:col-span-2 sm:px-2 sm:text-center" },
               ]}
             />
           </Field>
@@ -71,6 +71,7 @@ export default function SetupForm() {
               onChange={(v) =>
                 setPrefs({ ...prefs, assistanceStyle: v as TutorPreferences["assistanceStyle"] })
               }
+              className="grid grid-cols-2"
               options={[
                 { value: "hint_first", label: "Hints first", sub: "Make me work" },
                 { value: "direct", label: "Direct", sub: "Explain it to me" },
@@ -82,6 +83,7 @@ export default function SetupForm() {
             <Options
               value={prefs.goal}
               onChange={(v) => setPrefs({ ...prefs, goal: v as TutorPreferences["goal"] })}
+              className="grid grid-cols-3"
               options={[
                 { value: "both", label: "Both", sub: "Exam-ready + deep" },
                 { value: "understand", label: "Understand", sub: "The why" },
@@ -91,12 +93,16 @@ export default function SetupForm() {
           </Field>
         </div>
 
-        <button
-          onClick={save}
-          className="mt-8 h-14 w-full rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700"
-        >
-          Start tutoring
-        </button>
+        {/* On phones the CTA sits in a sticky footer so it is reachable on a
+            667px screen without scrolling; the gradient lets content pass under. */}
+        <div className="mt-8 max-md:sticky max-md:bottom-0 max-md:-mx-5 max-md:bg-gradient-to-t max-md:from-paper max-md:via-paper max-md:to-transparent max-md:px-5 max-md:pb-[calc(env(safe-area-inset-bottom,0px)+16px)] max-md:pt-6">
+          <button
+            onClick={save}
+            className="h-14 w-full rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700"
+          >
+            Start tutoring
+          </button>
+        </div>
       </div>
     </main>
   );
@@ -133,7 +139,7 @@ function Options({
   className?: string;
 }) {
   return (
-    <div role="radiogroup" className={`flex flex-wrap gap-2 ${className}`}>
+    <div role="radiogroup" className={`gap-2 ${className || "flex flex-wrap"}`}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -143,7 +149,7 @@ function Options({
             aria-checked={active}
             onClick={() => onChange(o.value)}
             className={
-              "min-h-[44px] rounded-md border px-4 py-2 text-left text-sm transition " +
+              "min-h-[44px] rounded-md border px-3 py-2 text-left text-sm transition sm:px-4 " +
               (active
                 ? "border-brand-500 bg-brand-50 text-brand-800"
                 : "border-slate-300 bg-surface text-slate-700 hover:border-brand-400") +

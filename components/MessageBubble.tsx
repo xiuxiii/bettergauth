@@ -34,7 +34,7 @@ export default function MessageBubble({
     return (
       <div className="flex animate-rise flex-col items-end">
         <span className="mb-1 text-xs font-medium text-slate-500">You</span>
-        <div className="max-w-[85%] rounded-lg rounded-br-sm bg-brand-600 px-4 py-2.5 text-[15px] leading-relaxed text-white">
+        <div className="max-w-[85%] rounded-lg rounded-br-sm bg-brand-600 px-4 py-2.5 text-[15px] leading-relaxed text-white [overflow-wrap:anywhere]">
           <RichText text={message.content} />
         </div>
 
@@ -55,7 +55,7 @@ export default function MessageBubble({
   return (
     <div className="animate-rise">
       <TutorLabel />
-      <div className="mt-2 max-w-none text-[15px] leading-relaxed text-ink">
+      <div className="mt-2 max-w-none text-[15px] leading-relaxed text-ink [overflow-wrap:anywhere]">
         <RichText text={message.content} />
       </div>
 
