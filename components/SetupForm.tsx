@@ -27,7 +27,7 @@ export default function SetupForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-10 pt-12 md:justify-center md:py-12">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-10 pt-12 md:max-w-lg md:justify-center md:px-0 md:py-12">
       <div className="flex flex-1 animate-rise flex-col md:flex-none md:rounded-lg md:border md:border-hairline md:bg-surface md:p-10 md:shadow-card">
         <header className="mb-8">
           <MindGapMark className="mb-4 h-8 w-8" />
@@ -52,12 +52,12 @@ export default function SetupForm() {
               }
               className="sm:grid sm:grid-cols-6"
               options={[
-                { value: "9", label: "9", className: "sm:text-center" },
-                { value: "10", label: "10", className: "sm:text-center" },
-                { value: "11", label: "11", className: "sm:text-center" },
-                { value: "12", label: "12", className: "sm:text-center" },
-                { value: "other", label: "Other", className: "sm:text-center" },
-                { value: "skip", label: "Prefer not to say", className: "sm:col-span-2 sm:text-center" },
+                { value: "9", label: "9", className: "sm:px-2 sm:text-center" },
+                { value: "10", label: "10", className: "sm:px-2 sm:text-center" },
+                { value: "11", label: "11", className: "sm:px-2 sm:text-center" },
+                { value: "12", label: "12", className: "sm:px-2 sm:text-center" },
+                { value: "other", label: "Other", className: "sm:px-2 sm:text-center" },
+                { value: "skip", label: "Prefer not to say", className: "sm:col-span-2 sm:px-2 sm:text-center" },
               ]}
             />
           </Field>

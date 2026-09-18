@@ -37,7 +37,7 @@ export default function RecurringBanner({
         </button>
       </div>
 
-      <div className="text-[15px] leading-relaxed text-ink">
+      <div className="text-[15px] leading-relaxed text-brand-900">
         {gap.studentBelief ? (
           <RichText text={gap.studentBelief} />
         ) : (
@@ -49,7 +49,7 @@ export default function RecurringBanner({
       </div>
 
       {gap.correctModel && (
-        <div className="mt-1 text-[15px] leading-relaxed text-slate-600">
+        <div className="mt-1 text-[15px] leading-relaxed text-brand-800">
           <RichText text={gap.correctModel} />
         </div>
       )}

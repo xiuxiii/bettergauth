@@ -71,13 +71,17 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
               )}
             </div>
 
-            <div className="mb-1 text-xs text-slate-500">
+            <div className={`mb-1 text-xs ${significant ? "text-danger-700" : "text-slate-500"}`}>
               <RichText text={`at ${firstError.location}`} />
             </div>
-            <div className="text-[15px] leading-relaxed text-ink">
+            <div className={`text-[15px] leading-relaxed ${significant ? "text-danger-800" : "text-ink"}`}>
               <RichText text={firstError.explanation} />
             </div>
-            <div className="mt-2 border-t border-hairline pt-2 text-[15px] leading-relaxed text-ink">
+            <div
+              className={`mt-2 border-t pt-2 text-[15px] leading-relaxed ${
+                significant ? "border-danger-100 text-danger-800" : "border-hairline text-ink"
+              }`}
+            >
               <span className="font-semibold">Fix: </span>
               <span className="inline">
                 <RichText text={firstError.correction} />
@@ -89,7 +93,7 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
         {/* How to continue from the corrected point. */}
         <div className="rounded-sm bg-brand-50 px-3 py-2">
           <Eyebrow className="mb-0.5 !text-brand-700">Continue from here</Eyebrow>
-          <div className="text-[15px] leading-relaxed text-ink">
+          <div className="text-[15px] leading-relaxed text-brand-900">
             <RichText text={continueFrom} />
           </div>
         </div>

@@ -35,7 +35,7 @@ export default function SolutionCard({
             <div
               className={
                 emphasis
-                  ? "rounded-sm bg-brand-50 px-3 py-2 text-[15px] font-medium leading-relaxed text-ink"
+                  ? "rounded-sm bg-brand-50 px-3 py-2 text-[15px] font-medium leading-relaxed text-brand-900"
                   : "text-[15px] leading-relaxed text-slate-700"
               }
             >

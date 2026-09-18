@@ -319,7 +319,7 @@ function Evaluated({
         <Eyebrow className="mb-0.5 !text-brand-700">
           {revealed ? "Worked solution" : "Focus on this"}
         </Eyebrow>
-        <div className="text-[15px] leading-relaxed text-ink">
+        <div className="text-[15px] leading-relaxed text-brand-900">
           <RichText text={evaluation.focus} />
         </div>
       </div>

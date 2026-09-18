@@ -388,7 +388,7 @@ export default function TutorWorkspace() {
       </aside>
 
       {/* Conversation column */}
-      <div className="flex min-h-0 flex-1 flex-col md:min-h-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           ref={scrollRef}
           aria-live="polite"

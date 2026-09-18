@@ -36,7 +36,7 @@ export default function UnlockForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center px-6 py-10">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center px-6 py-10 md:max-w-lg md:px-0">
       <div className="w-full animate-rise md:rounded-lg md:border md:border-hairline md:bg-surface md:p-10 md:shadow-card">
         <MindGapMark className="mb-4 h-8 w-8" />
         <h1 className="font-serif text-2xl font-normal leading-[1.15] tracking-tight text-ink">

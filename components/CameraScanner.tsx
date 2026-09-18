@@ -100,7 +100,7 @@ export default function CameraScanner({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
+    <div className="fixed inset-0 z-50 !mt-0 flex flex-col bg-black text-white">
       {/* live camera */}
       <video
         ref={videoRef}
