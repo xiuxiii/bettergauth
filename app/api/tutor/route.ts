@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
+import { rateLimited } from "@/lib/rateLimit";
 import type { TutorAction, TutorRequest } from "@/lib/tutor/types";
 
 export const runtime = "nodejs";
@@ -21,6 +22,9 @@ const ACTIONS: TutorAction[] = [
  * Returns: TutorTurn
  */
 export async function POST(req: Request) {
+  const limited = rateLimited(req);
+  if (limited) return limited;
+
   try {
     const body = (await req.json().catch(() => null)) as TutorRequest | null;
 
