@@ -75,7 +75,9 @@ export default function CameraScanner({
     if (!v || !v.videoWidth || busy) return;
     setBusy(true);
     try {
-      const url = videoFrameToJpeg(v);
+      // Full frame: the question cropper that follows does the cropping, with
+      // the whole page visible for context.
+      const url = videoFrameToJpeg(v, { autoCrop: false });
       // Brief shutter flash before handing the frame up.
       setFlashing(true);
       window.setTimeout(() => {

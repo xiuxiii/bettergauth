@@ -17,6 +17,7 @@
  */
 
 import { fileToDataUrl } from "@/lib/utils";
+import type { NormalizedRect } from "@/lib/tutor/types";
 
 const MAX_DIM = 1600; // longest edge, px — plenty for OCR, small enough to POST
 const QUALITY = 0.82; // JPEG quality
@@ -183,6 +184,49 @@ function loadImageEl(dataUrl: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error("Could not decode the image."));
     img.src = dataUrl;
   });
+}
+
+/**
+ * Local fallback for question detection: the ink bounding box of an image, as
+ * a normalised rect — or null when there is no clear region. Used by the
+ * cropper when the vision detection is unavailable.
+ */
+export async function detectContentRectNormalized(
+  dataUrl: string,
+): Promise<NormalizedRect | null> {
+  const img = await loadImageEl(dataUrl);
+  const canvas = scaledCanvas(img, img.naturalWidth, img.naturalHeight);
+  const r = detectContentRect(canvas);
+  if (!r) return null;
+  return {
+    x: r.x / canvas.width,
+    y: r.y / canvas.height,
+    w: r.w / canvas.width,
+    h: r.h / canvas.height,
+  };
+}
+
+/** Crop an image data URL to a normalised rect, returning a JPEG data URL. */
+export async function cropDataUrl(
+  dataUrl: string,
+  rect: NormalizedRect,
+): Promise<string> {
+  const img = await loadImageEl(dataUrl);
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  const x = Math.round(Math.min(Math.max(rect.x, 0), 1) * W);
+  const y = Math.round(Math.min(Math.max(rect.y, 0), 1) * H);
+  const w = Math.max(1, Math.round(Math.min(rect.w, 1 - rect.x) * W));
+  const h = Math.max(1, Math.round(Math.min(rect.h, 1 - rect.y) * H));
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D context unavailable.");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+  return canvasToJpeg(out);
 }
 
 /**

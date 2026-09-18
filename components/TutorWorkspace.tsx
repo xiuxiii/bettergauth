@@ -24,7 +24,7 @@ import {
   recordConceptError,
   resolveMisconception,
 } from "@/lib/tutor/types";
-import { IMAGE_KEY, uid } from "@/lib/utils";
+import { IMAGE_KEY, SUBJECT_KEY, uid } from "@/lib/utils";
 import {
   DEFAULT_PREFERENCES,
   loadPreferences,
@@ -122,10 +122,12 @@ export default function TutorWorkspace() {
     setPhase("loading");
     setAnalyzeError(null);
     try {
+      // The subject picked in the capture step, if any, rides along as a hint.
+      const subject = sessionStorage.getItem(SUBJECT_KEY) ?? undefined;
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl }),
+        body: JSON.stringify({ image: dataUrl, subject }),
       });
       if (!res.ok) throw new Error((await res.json())?.error ?? "Analysis failed.");
       const data: ProblemAnalysis = await res.json();
