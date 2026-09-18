@@ -5,7 +5,8 @@ import type { TutorPreferences } from "@/lib/tutor/types";
 /**
  * Compact in-session toggles for the two preferences the student may want to
  * flip mid-problem: how much help (hints vs. direct) and the goal emphasis.
- * Changes persist and apply to the next tutor turn.
+ * Changes persist and apply to the next tutor turn. Rendered inside the
+ * preferences popover in the workspace TopBar.
  */
 export default function SessionToggles({
   prefs,
@@ -17,7 +18,7 @@ export default function SessionToggles({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 overflow-x-auto border-t border-slate-200 bg-surface/95 px-3 py-2 text-xs backdrop-blur">
+    <div className="flex flex-col gap-3 text-sm">
       <Segment
         label="Help"
         disabled={disabled}
@@ -57,20 +58,26 @@ function Segment({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex flex-shrink-0 items-center gap-1.5">
-      <span className="text-slate-400">{label}</span>
-      <div className="flex rounded-full border border-slate-200 bg-slate-50 p-0.5">
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-slate-500">{label}</span>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        className="flex rounded-full bg-slate-100 p-0.5"
+      >
         {options.map((o) => {
           const active = o.value === value;
           return (
             <button
               key={o.value}
+              role="radio"
+              aria-checked={active}
               disabled={disabled}
               onClick={() => onChange(o.value)}
               className={
-                "whitespace-nowrap rounded-full px-2.5 py-1 font-medium transition-colors duration-200 active:scale-95 disabled:opacity-50 " +
+                "h-8 whitespace-nowrap rounded-full px-3 text-sm font-medium transition-colors duration-200 active:scale-95 disabled:opacity-50 " +
                 (active
-                  ? "bg-brand-600 text-white shadow-sm"
+                  ? "bg-brand-600 text-white"
                   : "text-slate-600 hover:text-brand-700")
               }
             >

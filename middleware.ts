@@ -39,6 +39,9 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Run on everything except Next's static assets and the app icon.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg).*)"],
+  // Run on everything except Next's static assets, the app icons and the
+  // web manifest — those must load before unlock.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|apple-icon.png|icon-192.png|icon-512.png).*)",
+  ],
 };

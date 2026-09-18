@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { IMAGE_KEY } from "@/lib/utils";
 import { fileToNormalizedJpeg } from "@/lib/image";
 import { hasPreferences } from "@/lib/preferences";
+import { Camera, Upload } from "lucide-react";
 import { ErrorState, Spinner } from "@/components/States";
 import CameraScanner from "@/components/CameraScanner";
 
@@ -64,18 +65,22 @@ export default function HomeUploader() {
           setError(null);
           setScanning(true);
         }}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-brand-700 active:scale-[0.99] disabled:opacity-60"
+        className="flex h-14 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:bg-brand-300 disabled:text-white/90 disabled:shadow-none"
       >
-        {busy ? <Spinner className="h-5 w-5" /> : <CameraIcon />}
+        {busy ? (
+          <Spinner className="h-5 w-5" />
+        ) : (
+          <Camera size={18} strokeWidth={1.75} aria-hidden="true" />
+        )}
         Take a photo
       </button>
 
       <button
         disabled={busy}
         onClick={() => uploadRef.current?.click()}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-surface px-5 py-4 text-base font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 active:scale-[0.99] disabled:opacity-60"
+        className="flex h-14 w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-surface px-5 text-base font-semibold text-slate-800 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-60"
       >
-        <UploadIcon />
+        <Upload size={18} strokeWidth={1.75} aria-hidden="true" />
         Upload problem
       </button>
 
@@ -92,22 +97,5 @@ export default function HomeUploader() {
         />
       )}
     </div>
-  );
-}
-
-function CameraIcon() {
-  return (
-    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.5 7l1.2-2h8.6l1.2 2H20a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V8a1 1 0 011-1h2.5z" />
-      <circle cx="12" cy="13" r="3.2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function UploadIcon() {
-  return (
-    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2" />
-    </svg>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ArrowRight, CircleHelp } from "lucide-react";
 import type { TutorAction } from "@/lib/tutor/types";
 import { Spinner } from "@/components/States";
 
@@ -19,7 +20,7 @@ const ASSIST: { action: Exclude<TutorAction, "ask">; label: string }[] = [
 ];
 
 const chipCls =
-  "whitespace-nowrap rounded-full border border-slate-300 bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700 active:scale-[0.97] disabled:opacity-50";
+  "h-9 flex-shrink-0 snap-start whitespace-nowrap rounded-full border border-slate-300 bg-surface px-3.5 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700 active:scale-[0.97] disabled:opacity-50";
 
 /**
  * The tutor controls: the assistance ladder, the two richer modes (check work /
@@ -52,21 +53,18 @@ export default function ActionBar({
   }
 
   return (
-    <div className="border-t border-slate-200 bg-surface/95 px-3 pb-3 pt-2 backdrop-blur">
-      <div className="mb-2 flex items-center gap-2 overflow-x-auto pb-1">
+    <div className="border-t border-hairline bg-surface/95 px-3 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] pt-2 backdrop-blur">
+      <div className="scroll-fade mb-2 flex snap-x snap-proximity items-center gap-2 overflow-x-auto pb-1 pr-6">
         {/* The headline diagnostic action — analyze THEIR reasoning. */}
         <button
           disabled={busy}
           onClick={onWhyWrong}
-          className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-brand-300 bg-brand-50 px-3.5 py-1.5 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 active:scale-[0.97] disabled:opacity-50"
+          className="flex h-9 flex-shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-full border border-brand-300 bg-brand-50 px-3.5 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 active:scale-[0.97] disabled:opacity-50"
         >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-            <circle cx="12" cy="12" r="9" strokeLinecap="round" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 9.5a2.5 2.5 0 1 1 3.2 2.4c-.6.2-.7.5-.7 1.1M12 16.5v.01" />
-          </svg>
+          <CircleHelp size={16} strokeWidth={1.75} aria-hidden="true" />
           Why am I wrong?
         </button>
-        <span className="mx-0.5 h-5 w-px flex-shrink-0 self-center bg-slate-200" />
+        <span className="mx-0.5 h-5 w-px flex-shrink-0 self-center bg-hairline" />
 
         {/* Assistance ladder — signals to the tutor engine. */}
         {ASSIST.map(({ action, label }) => (
@@ -81,7 +79,7 @@ export default function ActionBar({
         ))}
 
         {/* Divider, then the two richer modes. */}
-        <span className="mx-0.5 h-5 w-px flex-shrink-0 self-center bg-slate-200" />
+        <span className="mx-0.5 h-5 w-px flex-shrink-0 self-center bg-hairline" />
         <button disabled={busy} onClick={onCheckWork} className={chipCls}>
           Check my work
         </button>
@@ -91,31 +89,37 @@ export default function ActionBar({
       </div>
 
       <div className="flex items-end gap-2">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          rows={1}
-          placeholder="Ask a follow-up, or share your thinking…"
-          className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl border border-slate-300 px-3.5 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-        />
+        <div className="relative flex-1">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            rows={1}
+            placeholder="Ask a follow-up, or share your thinking…"
+            className="max-h-32 min-h-[44px] w-full resize-none rounded-md border border-slate-300 bg-surface px-3.5 py-2 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-slate-300 md:pr-40"
+          />
+          <kbd
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-3 right-3 hidden select-none font-sans text-xs text-slate-400 md:block"
+          >
+            ↵ send · ⇧↵ newline
+          </kbd>
+        </div>
         <button
           onClick={submit}
           disabled={busy || !text.trim()}
           aria-label="Send"
-          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-brand-700 active:scale-95 disabled:opacity-40"
+          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:bg-brand-300 disabled:text-white/90"
         >
           {busy ? (
             <Spinner className="h-5 w-5" />
           ) : (
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
+            <ArrowRight size={18} strokeWidth={1.75} aria-hidden="true" />
           )}
         </button>
       </div>

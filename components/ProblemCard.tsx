@@ -1,7 +1,9 @@
 "use client";
 
+import { CircleAlert } from "lucide-react";
 import type { ProblemAnalysis } from "@/lib/tutor/types";
 import RichText from "@/components/RichText";
+import { Eyebrow } from "@/components/States";
 
 /** Shows the uploaded image, the detected problem, and detected subject/topic. */
 export default function ProblemCard({
@@ -11,8 +13,10 @@ export default function ProblemCard({
   image: string;
   analysis: ProblemAnalysis;
 }) {
+  const lowConfidence = analysis.confidence < 0.7;
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-surface shadow-sm">
+    <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={image}
@@ -27,27 +31,23 @@ export default function ProblemCard({
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
             {analysis.topic}
           </span>
-          <span className="ml-auto text-xs text-slate-400">
-            {Math.round(analysis.confidence * 100)}% match
-          </span>
+          {lowConfidence && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-warn-50 px-2.5 py-1 text-xs font-medium text-warn-700">
+              <CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />
+              Low confidence — check the text below
+            </span>
+          )}
         </div>
         <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Detected problem
-          </p>
-          <div className="text-sm text-slate-800">
+          <Eyebrow className="mb-1">Detected problem</Eyebrow>
+          <div className="text-[15px] leading-relaxed text-ink">
             <RichText text={analysis.problemText} />
           </div>
         </div>
         {analysis.concept && (
           <div>
-            <div className="mb-1 flex items-center gap-2">
-              <span className="h-px w-4 bg-brand-600" />
-              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-700">
-                Key concept
-              </span>
-            </div>
-            <div className="font-serif text-[17px] leading-snug text-ink">
+            <Eyebrow className="mb-1">Key concept</Eyebrow>
+            <div className="font-serif text-lg leading-snug text-ink">
               <RichText text={analysis.concept} />
             </div>
           </div>

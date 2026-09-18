@@ -35,7 +35,7 @@ function renderMath(expr: string, display: boolean, key: number) {
     });
   } catch {
     return (
-      <code key={key} className="text-rose-600">
+      <code key={key} className="text-danger-600">
         {expr}
       </code>
     );

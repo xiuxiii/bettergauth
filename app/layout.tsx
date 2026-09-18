@@ -16,15 +16,24 @@ const serif = Newsreader({
   display: "swap",
 });
 
+const DESCRIPTION =
+  "Snap a high-school STEM problem and find the gap in your understanding — not just the answer.";
+
 export const metadata: Metadata = {
   title: "MindGap — Mind the gap",
-  description:
-    "Snap a high-school STEM problem and find the gap in your understanding — not just the answer.",
+  description: DESCRIPTION,
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "MindGap" },
+  openGraph: {
+    title: "MindGap — Mind the gap",
+    description: DESCRIPTION,
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   // Intentionally do NOT cap maximumScale: students must be able to pinch-zoom
   // into equations and the problem photo (accessibility — WCAG 1.4.4).
   themeColor: "#4E54DD",

@@ -14,7 +14,8 @@ import { practiceResolved } from "@/lib/tutor/types";
 import { fileToDataUrl } from "@/lib/utils";
 import RichText from "@/components/RichText";
 import SolutionCard from "@/components/SolutionCard";
-import { ErrorState, LoadingState, Spinner } from "@/components/States";
+import { CircleAlert, CircleCheck, CircleX, Sparkles } from "lucide-react";
+import { ErrorState, Eyebrow, LoadingState } from "@/components/States";
 
 type Phase = "generating" | "gen_error" | "solving" | "evaluating" | "done";
 
@@ -96,9 +97,9 @@ export default function PracticeCard({
   }
 
   return (
-    <div className="animate-rise overflow-hidden rounded-2xl border border-brand-200 bg-surface shadow-sm">
+    <div className="animate-rise overflow-hidden rounded-lg border border-brand-200 bg-surface">
       <div className="flex items-center gap-2 border-b border-brand-100 bg-brand-50 px-4 py-2.5">
-        <SparkIcon />
+        <Sparkles size={16} strokeWidth={1.75} className="text-brand-500" aria-hidden="true" />
         <span className="text-sm font-semibold text-brand-800">
           {focus ? "Retry — clear the gap" : "Practice — one like this"}
         </span>
@@ -120,10 +121,8 @@ export default function PracticeCard({
 
         {problem && phase !== "generating" && phase !== "gen_error" && (
           <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Your problem
-            </p>
-            <div className="text-sm text-slate-800">
+            <Eyebrow className="mb-1">Your problem</Eyebrow>
+            <div className="text-[15px] leading-relaxed text-ink">
               <RichText text={problem.problemText} />
             </div>
           </div>
@@ -141,8 +140,8 @@ export default function PracticeCard({
           <div
             className={
               resolved
-                ? "rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800"
-                : "rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800"
+                ? "rounded-sm bg-success-50 px-3 py-2 text-sm font-medium text-success-800"
+                : "rounded-sm bg-warn-50 px-3 py-2 text-sm font-medium text-warn-800"
             }
           >
             {resolved
@@ -189,7 +188,7 @@ function SolveArea({
   const canSubmit = text.trim().length > 0 || !!image;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+    <div className="rounded-sm bg-slate-100 p-3">
       <p className="mb-2 text-sm font-medium text-slate-700">
         Solve it yourself first, then submit for feedback.
       </p>
@@ -207,17 +206,17 @@ function SolveArea({
         onChange={(e) => setText(e.target.value)}
         rows={3}
         placeholder="Show your working and final answer…"
-        className="w-full resize-none rounded-xl border border-slate-300 bg-surface px-3 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+        className="w-full resize-none rounded-md border border-slate-300 bg-surface px-3.5 py-2.5 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-slate-300"
       />
 
       {image ? (
-        <div className="mt-2 flex items-center gap-3 rounded-lg border border-slate-200 bg-surface p-2">
+        <div className="mt-2 flex items-center gap-3 rounded-sm bg-surface p-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt="Your work" className="h-12 w-12 rounded object-cover" />
+          <img src={image} alt="Your work" className="h-12 w-12 rounded-sm object-cover" />
           <span className="flex-1 text-sm text-slate-600">Photo attached</span>
           <button
             onClick={() => setImage(null)}
-            className="rounded px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
+            className="h-9 rounded-md px-3 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-ink"
           >
             Remove
           </button>
@@ -225,26 +224,26 @@ function SolveArea({
       ) : (
         <button
           onClick={() => fileRef.current?.click()}
-          className="mt-2 text-sm font-medium text-brand-700 hover:underline"
+          className="mt-1 inline-flex h-9 items-center rounded-md text-sm font-medium text-brand-700 underline-offset-4 hover:underline"
         >
           + Attach a photo of your work
         </button>
       )}
 
-      {readError && <p className="mt-2 text-sm text-rose-600">{readError}</p>}
-      {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+      {readError && <p className="mt-2 text-sm text-danger-600">{readError}</p>}
+      {error && <p className="mt-2 text-sm text-danger-600">{error}</p>}
 
       <div className="mt-3 flex items-center gap-2">
         <button
           onClick={() => onSubmit({ text: text.trim() || undefined, imageDataUrl: image ?? undefined })}
           disabled={!canSubmit}
-          className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+          className="h-11 flex-1 rounded-md bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:bg-brand-300 disabled:text-white/90"
         >
           Submit for feedback
         </button>
         <button
           onClick={() => onSubmit({})}
-          className="rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-100"
+          className="h-11 rounded-md px-3 text-sm font-medium text-slate-500 transition hover:bg-slate-200 hover:text-ink"
         >
           Show solution
         </button>
@@ -262,9 +261,9 @@ const AXIS_LABEL: Record<PracticeAxis, string> = {
 };
 
 const VERDICT = {
-  correct: { label: "Correct", cls: "bg-emerald-50 text-emerald-800 border-emerald-100" },
-  partially_correct: { label: "Almost there", cls: "bg-amber-50 text-amber-800 border-amber-100" },
-  incorrect: { label: "Let's regroup", cls: "bg-rose-50 text-rose-800 border-rose-100" },
+  correct: { label: "Correct", cls: "bg-success-50 text-success-800" },
+  partially_correct: { label: "Almost there", cls: "bg-warn-50 text-warn-800" },
+  incorrect: { label: "Let's regroup", cls: "bg-danger-50 text-danger-800" },
 } as const;
 
 /** The evaluation view: student attempt, rubric, focused feedback, solution. */
@@ -281,12 +280,10 @@ function Evaluated({
   return (
     <div className="space-y-3">
       {attempt && (attempt.text || attempt.imageDataUrl) && (
-        <div className="rounded-xl border border-slate-200 bg-surface p-3">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Your answer
-          </p>
+        <div className="rounded-sm bg-slate-100 p-3">
+          <p className="mb-1 text-xs font-medium text-slate-500">Your answer</p>
           {attempt.text && (
-            <div className="text-sm text-slate-800">
+            <div className="text-[15px] leading-relaxed text-ink">
               <RichText text={attempt.text} />
             </div>
           )}
@@ -295,7 +292,7 @@ function Evaluated({
             <img
               src={attempt.imageDataUrl}
               alt="Your work"
-              className="mt-2 max-h-40 rounded-lg border border-slate-200 object-contain"
+              className="mt-2 max-h-40 rounded-sm object-contain"
             />
           )}
         </div>
@@ -304,12 +301,12 @@ function Evaluated({
       {!revealed && (
         <>
           <span
-            className={`inline-block rounded-full border px-3 py-1 text-sm font-semibold ${verdict.cls}`}
+            className={`inline-block rounded-full px-3 py-1 text-sm font-semibold ${verdict.cls}`}
           >
             {verdict.label}
           </span>
 
-          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+          <ul className="divide-y divide-hairline">
             {evaluation.rubric.map((r) => (
               <RubricRow key={r.axis} result={r} />
             ))}
@@ -318,19 +315,17 @@ function Evaluated({
       )}
 
       {/* The single most important issue. */}
-      <div className="rounded-xl bg-brand-50/70 px-3 py-2.5">
-        <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-brand-700">
+      <div className="rounded-sm bg-brand-50 px-3 py-2.5">
+        <Eyebrow className="mb-0.5 !text-brand-700">
           {revealed ? "Worked solution" : "Focus on this"}
-        </p>
-        <div className="text-sm text-slate-800">
+        </Eyebrow>
+        <div className="text-[15px] leading-relaxed text-ink">
           <RichText text={evaluation.focus} />
         </div>
       </div>
 
       <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Solution
-        </p>
+        <p className="mb-1 text-xs font-medium text-slate-500">Solution</p>
         <SolutionCard solution={evaluation.solution} />
       </div>
     </div>
@@ -339,7 +334,7 @@ function Evaluated({
 
 function RubricRow({ result }: { result: RubricResult }) {
   return (
-    <li className="flex items-start gap-2.5 px-3 py-2">
+    <li className="flex items-start gap-2.5 py-2.5">
       <StatusDot status={result.status} />
       <div className="min-w-0">
         <span className="text-sm font-medium text-slate-800">
@@ -356,27 +351,21 @@ function RubricRow({ result }: { result: RubricResult }) {
 }
 
 function StatusDot({ status }: { status: RubricResult["status"] }) {
-  const map = {
-    correct: { cls: "bg-emerald-500", ch: "✓" },
-    minor_issue: { cls: "bg-amber-500", ch: "!" },
-    incorrect: { cls: "bg-rose-500", ch: "✕" },
-    not_shown: { cls: "bg-slate-300", ch: "–" },
-  } as const;
-  const { cls, ch } = map[status];
-  return (
-    <span
-      className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${cls}`}
-      aria-hidden="true"
-    >
-      {ch}
-    </span>
-  );
-}
-
-function SparkIcon() {
-  return (
-    <svg className="h-4 w-4 text-brand-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <path d="M10 1l1.8 5.2L17 8l-5.2 1.8L10 15l-1.8-5.2L3 8l5.2-1.8L10 1z" />
-    </svg>
-  );
+  const common = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
+  const cls = "mt-0.5 flex-shrink-0";
+  switch (status) {
+    case "correct":
+      return <CircleCheck {...common} className={`${cls} text-success-600`} />;
+    case "minor_issue":
+      return <CircleAlert {...common} className={`${cls} text-warn-600`} />;
+    case "incorrect":
+      return <CircleX {...common} className={`${cls} text-danger-600`} />;
+    default:
+      return (
+        <span
+          className={`${cls} mt-1.5 h-2 w-2 rounded-full bg-slate-300`}
+          aria-hidden="true"
+        />
+      );
+  }
 }

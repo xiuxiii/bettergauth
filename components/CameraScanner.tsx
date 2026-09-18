@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { videoFrameToJpeg, fileToNormalizedJpeg } from "@/lib/image";
+import { Image as ImageIcon, X } from "lucide-react";
 import { Spinner } from "@/components/States";
 
 /**
@@ -118,26 +119,24 @@ export default function CameraScanner({
         <div className="flex items-start justify-between p-4 pt-[calc(env(safe-area-inset-top,0px)+16px)]">
           <button
             onClick={onClose}
-            className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur"
+            className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur"
             aria-label="Close scanner"
           >
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
+            <X size={18} strokeWidth={1.75} aria-hidden="true" />
           </button>
           <span className="rounded-full bg-black/40 px-3 py-1 text-xs font-medium backdrop-blur">
             Fit the whole question in the frame
           </span>
-          <span className="h-10 w-10" />
+          <span className="h-11 w-11" />
         </div>
 
         {/* corner brackets */}
         <div className="relative flex flex-1 items-center justify-center px-6">
           <div className="relative aspect-[3/4] w-full max-w-sm">
-            <Corner className="left-0 top-0 rounded-tl-lg border-l-[3px] border-t-[3px]" />
-            <Corner className="right-0 top-0 rounded-tr-lg border-r-[3px] border-t-[3px]" />
-            <Corner className="bottom-0 left-0 rounded-bl-lg border-b-[3px] border-l-[3px]" />
-            <Corner className="bottom-0 right-0 rounded-br-lg border-b-[3px] border-r-[3px]" />
+            <Corner className="left-0 top-0 rounded-tl-sm border-l-[3px] border-t-[3px]" />
+            <Corner className="right-0 top-0 rounded-tr-sm border-r-[3px] border-t-[3px]" />
+            <Corner className="bottom-0 left-0 rounded-bl-sm border-b-[3px] border-l-[3px]" />
+            <Corner className="bottom-0 right-0 rounded-br-sm border-b-[3px] border-r-[3px]" />
           </div>
         </div>
       </div>
@@ -158,11 +157,11 @@ export default function CameraScanner({
               </p>
               <button
                 onClick={() => fileRef.current?.click()}
-                className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black"
+                className="h-11 rounded-md bg-white px-5 text-sm font-semibold text-black"
               >
                 Choose from library
               </button>
-              <button onClick={onClose} className="text-sm text-white/70">
+              <button onClick={onClose} className="h-9 rounded-md px-3 text-sm text-white/70">
                 Cancel
               </button>
             </>
@@ -175,13 +174,10 @@ export default function CameraScanner({
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-8 pb-[calc(env(safe-area-inset-bottom,0px)+28px)] pt-6">
           <button
             onClick={() => fileRef.current?.click()}
-            className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/30 bg-white/10 backdrop-blur"
+            className="flex h-12 w-12 items-center justify-center rounded-md border border-white/30 bg-white/10 backdrop-blur"
             aria-label="Upload from library"
           >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 16l4-4 3 3 4-5 5 6" />
-              <rect x="3" y="4" width="18" height="16" rx="2" />
-            </svg>
+            <ImageIcon size={18} strokeWidth={1.75} aria-hidden="true" />
           </button>
 
           <button
