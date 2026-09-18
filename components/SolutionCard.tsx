@@ -37,7 +37,7 @@ export default function SolutionCard({
               className={
                 emphasis
                   ? "rounded-lg bg-brand-50/60 px-3 py-2 text-[15px] font-medium text-slate-900"
-                  : "text-sm text-slate-700"
+                  : "text-[15px] text-slate-700"
               }
             >
               <RichText text={solution[key]} />

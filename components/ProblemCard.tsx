@@ -35,7 +35,7 @@ export default function ProblemCard({
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
             Detected problem
           </p>
-          <div className="text-sm text-slate-800">
+          <div className="text-[15px] text-slate-800">
             <RichText text={analysis.problemText} />
           </div>
         </div>

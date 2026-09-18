@@ -4,24 +4,173 @@ import katex from "katex";
 import { useMemo } from "react";
 
 /**
- * Renders tutor/student text with:
+ * Renders tutor/student text as real blocks so answers read like structured
+ * steps instead of one crammed paragraph:
+ *   - "## Label" or a bold-only line  -> a section heading
+ *   - "- item" / "1. item"            -> proper bulleted / numbered lists
  *   - $inline$ and $$block$$ LaTeX via KaTeX
  *   - **bold** and *italic*
- *   - blank-line paragraph breaks
+ *   - blank lines separate paragraphs
  *
- * Deliberately small: enough Markdown-lite for tutoring content without
- * pulling in a full Markdown engine.
+ * Without this, markdown lists from the model rendered as literal dashes
+ * inside a wall of text.
  */
+
+type Block =
+  | { kind: "heading"; text: string }
+  | { kind: "para"; text: string }
+  | { kind: "ul"; items: string[] }
+  | { kind: "ol"; items: string[] }
+  | { kind: "math"; expr: string };
+
+const BULLET = /^[-*•]\s+/;
+const NUMBER = /^\d+[.)]\s+/;
+const HEADING = /^#{2,4}\s+(.*)$/;
+const BOLD_LINE = /^\*\*(.+?)\*\*:?$/;
+
+function parseBlocks(text: string): Block[] {
+  const lines = text.split("\n");
+  const blocks: Block[] = [];
+  let i = 0;
+
+  const starts = (t: string) =>
+    HEADING.test(t) || BULLET.test(t) || NUMBER.test(t) || t.startsWith("$$");
+
+  while (i < lines.length) {
+    const t = lines[i].trim();
+    if (!t) {
+      i += 1;
+      continue;
+    }
+
+    // Block math, possibly spanning several lines.
+    if (t.startsWith("$$")) {
+      const parts: string[] = [];
+      let body = t.slice(2);
+      let closed = false;
+      if (body.endsWith("$$") && body.length >= 2) {
+        body = body.slice(0, -2);
+        closed = true;
+      }
+      parts.push(body);
+      i += 1;
+      while (!closed && i < lines.length) {
+        const line = lines[i];
+        const end = line.indexOf("$$");
+        if (end >= 0) {
+          parts.push(line.slice(0, end));
+          closed = true;
+        } else {
+          parts.push(line);
+        }
+        i += 1;
+      }
+      blocks.push({ kind: "math", expr: parts.join("\n").trim() });
+      continue;
+    }
+
+    const h = t.match(HEADING) ?? t.match(BOLD_LINE);
+    if (h) {
+      blocks.push({ kind: "heading", text: h[1].trim() });
+      i += 1;
+      continue;
+    }
+
+    if (BULLET.test(t)) {
+      const items: string[] = [];
+      while (i < lines.length && BULLET.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(BULLET, ""));
+        i += 1;
+      }
+      blocks.push({ kind: "ul", items });
+      continue;
+    }
+
+    if (NUMBER.test(t)) {
+      const items: string[] = [];
+      while (i < lines.length && NUMBER.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(NUMBER, ""));
+        i += 1;
+      }
+      blocks.push({ kind: "ol", items });
+      continue;
+    }
+
+    const para: string[] = [];
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      if (!line || starts(line)) break;
+      para.push(line);
+      i += 1;
+    }
+    blocks.push({ kind: "para", text: para.join(" ") });
+  }
+
+  return blocks;
+}
+
 export default function RichText({ text }: { text: string }) {
-  const paragraphs = useMemo(() => text.split(/\n{2,}/), [text]);
+  const blocks = useMemo(() => parseBlocks(text), [text]);
 
   return (
-    <div className="space-y-3 leading-relaxed">
-      {paragraphs.map((para, i) => (
-        <p key={i} className="whitespace-pre-wrap break-words">
-          {renderSegments(para)}
-        </p>
-      ))}
+    <div className="space-y-3.5 leading-7">
+      {blocks.map((b, i) => {
+        if (b.kind === "heading") {
+          return (
+            <p
+              key={i}
+              className="pt-1 text-[0.95em] font-semibold text-ink first:pt-0"
+            >
+              {renderSegments(b.text)}
+            </p>
+          );
+        }
+        if (b.kind === "math") {
+          return (
+            <div key={i} className="overflow-x-auto py-1">
+              {renderMath(b.expr, true, 0)}
+            </div>
+          );
+        }
+        if (b.kind === "ul") {
+          return (
+            <ul key={i} className="space-y-2">
+              {b.items.map((item, j) => (
+                <li key={j} className="flex gap-2.5">
+                  <span
+                    className="mt-[0.7em] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-400"
+                    aria-hidden
+                  />
+                  <span className="min-w-0 break-words">
+                    {renderSegments(item)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        if (b.kind === "ol") {
+          return (
+            <ol key={i} className="space-y-2.5">
+              {b.items.map((item, j) => (
+                <li key={j} className="flex gap-2.5">
+                  <span className="mt-[0.15em] flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-semibold text-brand-700">
+                    {j + 1}
+                  </span>
+                  <span className="min-w-0 break-words">
+                    {renderSegments(item)}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          );
+        }
+        return (
+          <p key={i} className="break-words">
+            {renderSegments(b.text)}
+          </p>
+        );
+      })}
     </div>
   );
 }
@@ -49,9 +198,8 @@ function renderMath(expr: string, display: boolean, key: number) {
   );
 }
 
-/** Split a paragraph into math and non-math parts, rendering each. */
+/** Split a run of text into math and non-math parts, rendering each. */
 function renderSegments(para: string) {
-  // Match $$...$$ (block) or $...$ (inline).
   const regex = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
   const out: React.ReactNode[] = [];
   let last = 0;

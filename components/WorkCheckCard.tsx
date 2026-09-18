@@ -38,7 +38,7 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
         {/* What's right — always shown first. */}
         <div className="flex gap-2">
           <CheckIcon />
-          <div className="text-sm text-slate-700">
+          <div className="text-[15px] text-slate-700">
             <RichText text={strengths} />
           </div>
         </div>
@@ -69,10 +69,10 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
             <div className="mb-1 text-xs text-slate-400">
               <RichText text={`at ${firstError.location}`} />
             </div>
-            <div className="text-sm text-slate-800">
+            <div className="text-[15px] text-slate-800">
               <RichText text={firstError.explanation} />
             </div>
-            <div className="mt-2 border-t border-slate-200/70 pt-2 text-sm text-slate-800">
+            <div className="mt-2 border-t border-slate-200/70 pt-2 text-[15px] text-slate-800">
               <span className="font-semibold text-slate-900">Fix: </span>
               <span className="inline">
                 <RichText text={firstError.correction} />
@@ -86,7 +86,7 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
           <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-brand-700">
             Continue from here
           </p>
-          <div className="text-sm text-slate-800">
+          <div className="text-[15px] text-slate-800">
             <RichText text={continueFrom} />
           </div>
         </div>

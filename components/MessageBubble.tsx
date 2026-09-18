@@ -33,8 +33,8 @@ export default function MessageBubble({
         <div
           className={
             isStudent
-              ? "rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-sm text-white shadow-sm"
-              : "rounded-2xl rounded-bl-md border border-slate-200 bg-surface px-4 py-2.5 text-sm text-slate-800 shadow-sm"
+              ? "rounded-2xl rounded-br-md bg-brand-600 px-[18px] py-3.5 text-[16px] text-white shadow-sm"
+              : "rounded-2xl rounded-bl-md border border-slate-200 bg-surface px-[18px] py-3.5 text-[16px] text-slate-800 shadow-sm"
           }
         >
           <RichText text={message.content} />
@@ -68,7 +68,7 @@ export default function MessageBubble({
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-700">
               Try a similar problem
             </p>
-            <div className="text-sm text-amber-900">
+            <div className="text-[15px] text-amber-900">
               <RichText text={similarProblem} />
             </div>
           </div>
