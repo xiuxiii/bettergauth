@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, Newsreader } from "next/font/google";
 import "./globals.css";
 
-// Aria's type system: Hanken Grotesk for UI, Newsreader for display/serif.
+// MindGap's type system: Hanken Grotesk for UI, Newsreader for display/serif.
 const sans = Hanken_Grotesk({
   subsets: ["latin"],
   variable: "--font-sans",
@@ -17,9 +17,9 @@ const serif = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Aria — STEM Tutor",
+  title: "MindGap — Mind the gap",
   description:
-    "Snap a high-school STEM problem and learn the concept behind it, not just the answer.",
+    "Snap a high-school STEM problem and find the gap in your understanding — not just the answer.",
 };
 
 export const viewport: Viewport = {
@@ -27,7 +27,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Intentionally do NOT cap maximumScale: students must be able to pinch-zoom
   // into equations and the problem photo (accessibility — WCAG 1.4.4).
-  themeColor: "#6E2A39",
+  themeColor: "#4E54DD",
 };
 
 export default function RootLayout({

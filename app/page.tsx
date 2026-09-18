@@ -1,16 +1,19 @@
 import HomeUploader from "@/components/HomeUploader";
-import AriaMark from "@/components/AriaMark";
+import MindGapMark from "@/components/MindGapMark";
+import Wordmark from "@/components/Wordmark";
 
 export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-10 pt-14">
       <header className="mb-10 text-center">
-        <AriaMark className="mx-auto mb-4 h-14 w-14" />
-        <h1 className="font-serif text-4xl font-normal tracking-tight text-ink">
-          Aria
-        </h1>
+        <MindGapMark className="mx-auto mb-4 h-14 w-14" />
+        <Wordmark className="text-4xl" />
+        <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-600">
+          Mind the gap
+        </p>
         <p className="mx-auto mt-3 max-w-xs text-[15px] leading-relaxed text-slate-600">
-          Snap a problem. Understand the concept behind it — not just the answer.
+          Snap a problem. Find the gap in your understanding — not just the
+          answer.
         </p>
       </header>
 

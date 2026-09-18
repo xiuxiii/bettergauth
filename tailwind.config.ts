@@ -23,9 +23,9 @@ const config: Config = {
         ink: "#201B14", // primary text
         hairline: "#E7E0D3", // borders
         accent: {
-          DEFAULT: "#6E2A39",
-          deep: "#551F2B",
-          tint: "#F0E7E8",
+          DEFAULT: "#4E54DD",
+          deep: "#3F44BE",
+          tint: "#E1E6FD",
         },
         // Warm neutral remap of Tailwind's slate scale
         slate: {
@@ -40,18 +40,18 @@ const config: Config = {
           800: "#2A241C",
           900: "#201B14",
         },
-        // Bordeaux remap of the brand scale
+        // Indigo / periwinkle remap of the brand scale (MindGap)
         brand: {
-          50: "#F7EDEF",
-          100: "#F0E7E8",
-          200: "#E3D2D5",
-          300: "#C9A6AD",
-          400: "#A15E6E",
-          500: "#833F50",
-          600: "#6E2A39",
-          700: "#551F2B",
-          800: "#481A25",
-          900: "#3B1620",
+          50: "#EEF1FE",
+          100: "#E1E6FD",
+          200: "#C7CEFB",
+          300: "#A2ACF6",
+          400: "#7A83EE",
+          500: "#5C63E6",
+          600: "#4E54DD",
+          700: "#3F44BE",
+          800: "#343A98",
+          900: "#2F3479",
         },
       },
       fontFamily: {
