@@ -12,6 +12,7 @@ import type {
 } from "@/lib/tutor/types";
 import { practiceResolved } from "@/lib/tutor/types";
 import { fileToDataUrl } from "@/lib/utils";
+import { readApiError } from "@/lib/apiClient";
 import RichText from "@/components/RichText";
 import SolutionCard from "@/components/SolutionCard";
 import { CircleAlert, CircleCheck, CircleX, Sparkles } from "lucide-react";
@@ -54,7 +55,7 @@ export default function PracticeCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ problem: source, focus }),
       });
-      if (!res.ok) throw new Error((await res.json())?.error ?? "Generation failed.");
+      if (!res.ok) throw new Error(await readApiError(res, "Generation failed."));
       setProblem(await res.json());
       setPhase("solving");
     } catch (err) {
@@ -80,7 +81,7 @@ export default function PracticeCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ practice: problem, attempt }),
       });
-      if (!res.ok) throw new Error((await res.json())?.error ?? "Evaluation failed.");
+      if (!res.ok) throw new Error(await readApiError(res, "Evaluation failed."));
       const evaluation: PracticeEvaluation = await res.json();
       setEvaluation(evaluation);
       setPhase("done");

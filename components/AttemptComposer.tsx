@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus } from "lucide-react";
 import type { StudentAttempt } from "@/lib/tutor/types";
-import { fileToDataUrl } from "@/lib/utils";
+import { fileToNormalizedJpeg } from "@/lib/image";
 import { Spinner } from "@/components/States";
 
 const CLOSE_MS = 180;
@@ -112,7 +112,10 @@ export default function AttemptComposer({
     }
     setReadError(null);
     try {
-      setImage(await fileToDataUrl(file));
+      // Downscale + EXIF-upright, exactly like the capture path. A raw phone
+      // photo as a data URL is several MB of base64 and blew past the platform
+      // request limit, which came back as a 413 the client couldn't parse.
+      setImage(await fileToNormalizedJpeg(file));
     } catch {
       setReadError("Could not read that image. Try another photo.");
     }

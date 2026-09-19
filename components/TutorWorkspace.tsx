@@ -25,6 +25,7 @@ import {
   resolveMisconception,
 } from "@/lib/tutor/types";
 import { IMAGE_KEY, SUBJECT_KEY, uid } from "@/lib/utils";
+import { readApiError } from "@/lib/apiClient";
 import {
   DEFAULT_PREFERENCES,
   loadPreferences,
@@ -75,6 +76,11 @@ export default function TutorWorkspace() {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [turnBusy, setTurnBusy] = useState(false);
   const [turnError, setTurnError] = useState<string | null>(null);
+  // What "Try again" should re-run. Set by whichever request failed, so a
+  // failed work-check retries the work-check (image and all) instead of
+  // silently falling back to a plain "ask" — which succeeded and made the
+  // failure look intermittent while quietly never checking the student's work.
+  const retryRef = useRef<(() => void) | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerMode, setComposerMode] = useState<"check" | "why">("why");
   const [prefs, setPrefs] = useState<TutorPreferences>(DEFAULT_PREFERENCES);
@@ -129,7 +135,7 @@ export default function TutorWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: dataUrl, subject }),
       });
-      if (!res.ok) throw new Error((await res.json())?.error ?? "Analysis failed.");
+      if (!res.ok) throw new Error(await readApiError(res, "Analysis failed."));
       const data: ProblemAnalysis = await res.json();
       setAnalysis(data);
       setPhase("ready");
@@ -203,6 +209,7 @@ export default function TutorWorkspace() {
   ) {
     setTurnBusy(true);
     setTurnError(null);
+    retryRef.current = null;
     try {
       const res = await fetch("/api/tutor", {
         method: "POST",
@@ -216,7 +223,7 @@ export default function TutorWorkspace() {
           memory: memoryRef.current,
         }),
       });
-      if (!res.ok) throw new Error((await res.json())?.error ?? "Tutor failed.");
+      if (!res.ok) throw new Error(await readApiError(res, "Tutor failed."));
       const turn: TutorTurn = await res.json();
       if (turn.memory) {
         memoryRef.current = turn.memory;
@@ -235,6 +242,8 @@ export default function TutorWorkspace() {
         },
       ]);
     } catch (err) {
+      retryRef.current = () =>
+        void requestTurn(action, problem, history, studentText);
       setTurnError(err instanceof Error ? err.message : "Tutor failed.");
     } finally {
       setTurnBusy(false);
@@ -264,11 +273,12 @@ export default function TutorWorkspace() {
     void requestTurn("ask", analysis, next, text);
   }
 
-  async function handleCheckWork(attempt: StudentAttempt) {
+  function handleCheckWork(attempt: StudentAttempt) {
     if (!analysis || turnBusy) return;
     setComposerOpen(false);
 
-    // Show the student's attempt in the conversation.
+    // Show the student's attempt in the conversation. Posting it is a separate
+    // step so a retry re-sends the attempt without echoing their bubble again.
     const student: DisplayMessage = {
       id: uid("s"),
       role: "student",
@@ -279,16 +289,21 @@ export default function TutorWorkspace() {
       attemptImage: attempt.imageDataUrl,
     };
     setMessages((prev) => [...prev, student]);
+    void sendCheckWork(attempt);
+  }
 
+  async function sendCheckWork(attempt: StudentAttempt) {
+    if (!analysis) return;
     setTurnBusy(true);
     setTurnError(null);
+    retryRef.current = null;
     try {
       const res = await fetch("/api/check-work", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ problem: analysis, attempt }),
       });
-      if (!res.ok) throw new Error((await res.json())?.error ?? "Check failed.");
+      if (!res.ok) throw new Error(await readApiError(res, "Check failed."));
       const check: WorkCheck = await res.json();
       // Fold the diagnosis into memory so it counts toward recurrence /
       // resolution, then refresh the recurring-gap banner.
@@ -309,6 +324,7 @@ export default function TutorWorkspace() {
         },
       ]);
     } catch (err) {
+      retryRef.current = () => void sendCheckWork(attempt);
       setTurnError(err instanceof Error ? err.message : "Check failed.");
     } finally {
       setTurnBusy(false);
@@ -460,9 +476,7 @@ export default function TutorWorkspace() {
             {turnError && (
               <ErrorState
                 message={turnError}
-                onRetry={() =>
-                  analysis && requestTurn("ask", analysis, messages)
-                }
+                onRetry={() => retryRef.current?.()}
               />
             )}
           </div>
