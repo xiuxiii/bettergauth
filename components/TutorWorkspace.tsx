@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ArrowRight, ChevronDown, ChevronLeft, Settings2 } from "lucide-react";
 import type {
   ChatMessage,
   PracticeFocus,
@@ -23,7 +24,7 @@ import {
   recordConceptError,
   resolveMisconception,
 } from "@/lib/tutor/types";
-import { IMAGE_KEY, uid } from "@/lib/utils";
+import { IMAGE_KEY, SUBJECT_KEY, uid } from "@/lib/utils";
 import {
   DEFAULT_PREFERENCES,
   loadPreferences,
@@ -36,7 +37,13 @@ import AttemptComposer from "@/components/AttemptComposer";
 import PracticeCard from "@/components/PracticeCard";
 import SessionToggles from "@/components/SessionToggles";
 import RecurringBanner from "@/components/RecurringBanner";
-import { EmptyState, ErrorState, LoadingState } from "@/components/States";
+import Wordmark from "@/components/Wordmark";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  ProblemCardSkeleton,
+} from "@/components/States";
 
 /** A chat message plus any structured payloads attached to a turn. */
 type DisplayMessage = ChatMessage & {
@@ -115,10 +122,12 @@ export default function TutorWorkspace() {
     setPhase("loading");
     setAnalyzeError(null);
     try {
+      // The subject picked in the capture step, if any, rides along as a hint.
+      const subject = sessionStorage.getItem(SUBJECT_KEY) ?? undefined;
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl }),
+        body: JSON.stringify({ image: dataUrl, subject }),
       });
       if (!res.ok) throw new Error((await res.json())?.error ?? "Analysis failed.");
       const data: ProblemAnalysis = await res.json();
@@ -163,6 +172,20 @@ export default function TutorWorkspace() {
       behavior: "smooth",
     });
   }, [messages, turnBusy]);
+
+  // Keyboard follow (visual only): when the composer gains focus, and again
+  // once the on-screen keyboard has finished resizing the visual viewport,
+  // pin the newest message above the input so it is never hidden.
+  const scrollToBottom = useCallback(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, []);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    vv.addEventListener("resize", scrollToBottom);
+    return () => vv.removeEventListener("resize", scrollToBottom);
+  }, [scrollToBottom]);
 
   const toHistory = (msgs: DisplayMessage[]): ChatMessage[] =>
     msgs.map(({ id, role, content, createdAt }) => ({
@@ -329,7 +352,7 @@ export default function TutorWorkspace() {
         />
         <Link
           href="/"
-          className="mt-4 inline-block rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white"
+          className="mt-4 inline-flex h-11 items-center rounded-md bg-brand-600 px-4 text-sm font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700"
         >
           Go to home
         </Link>
@@ -342,105 +365,137 @@ export default function TutorWorkspace() {
   const canContinue =
     !!last && last.role === "tutor" && !!last.hasMore && !last.practiceFor;
 
+  // The reference material (skeleton → error → problem card). Rendered inside
+  // the scroll list on mobile and in the sticky left pane on md+; both slots
+  // read the same state, so nothing is fetched twice.
+  const reference = (
+    <>
+      {phase === "loading" && !analysis && <ProblemCardSkeleton />}
+
+      {phase === "error" && (
+        <ErrorState
+          message={analyzeError ?? "Could not analyze the problem."}
+          onRetry={() => image && runAnalysis(image)}
+        />
+      )}
+
+      {image && analysis && (
+        <div className="animate-rise">
+          <ProblemCard image={image} analysis={analysis} />
+        </div>
+      )}
+    </>
+  );
+
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-slate-50">
-      <TopBar onBack={() => router.push("/")} topic={analysis?.topic} />
+    <div className="mx-auto flex h-dvh w-full max-w-md animate-rise flex-col bg-slate-50 md:grid md:max-w-6xl md:grid-cols-[minmax(320px,400px)_1fr] md:grid-rows-[auto_minmax(0,1fr)] md:gap-0">
+      <TopBar
+        onBack={() => router.push("/")}
+        topic={analysis?.topic}
+        prefs={prefs}
+        onPrefsChange={updatePrefs}
+        prefsDisabled={turnBusy}
+        showPrefs={!!analysis}
+      />
 
-      <div ref={scrollRef} className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
-        {phase === "loading" && !analysis && (
-          <LoadingState label="Reading your problem…" />
-        )}
+      {/* Sticky reference pane (md+) */}
+      <aside className="hidden md:block md:min-h-0 md:overflow-y-auto md:border-r md:border-hairline md:p-5">
+        {reference}
+      </aside>
 
-        {phase === "error" && (
-          <ErrorState
-            message={analyzeError ?? "Could not analyze the problem."}
-            onRetry={() => image && runAnalysis(image)}
-          />
-        )}
+      {/* Conversation column */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div
+          ref={scrollRef}
+          aria-live="polite"
+          className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6"
+        >
+          <div className="mx-auto w-full space-y-6 md:max-w-2xl">
+            <div className="md:hidden">{reference}</div>
 
-        {image && analysis && (
-          <div className="animate-rise">
-            <ProblemCard image={image} analysis={analysis} />
-          </div>
-        )}
+            {messages.map((m) =>
+              m.practiceFor ? (
+                <div key={m.id} className="animate-rise">
+                  <PracticeCard
+                    source={m.practiceFor}
+                    focus={m.practiceFocus}
+                    onResolved={handlePracticeResolved}
+                  />
+                </div>
+              ) : (
+                <MessageBubble
+                  key={m.id}
+                  message={m}
+                  solution={m.solution}
+                  similarProblem={m.similarProblem}
+                  workCheck={m.workCheck}
+                  attemptImage={m.attemptImage}
+                />
+              ),
+            )}
 
-        {messages.map((m) =>
-          m.practiceFor ? (
-            <div key={m.id} className="animate-rise">
-              <PracticeCard
-                source={m.practiceFor}
-                focus={m.practiceFocus}
-                onResolved={handlePracticeResolved}
-              />
-            </div>
-          ) : (
-            <MessageBubble
-              key={m.id}
-              message={m}
-              solution={m.solution}
-              similarProblem={m.similarProblem}
-              workCheck={m.workCheck}
-              attemptImage={m.attemptImage}
-            />
-          ),
-        )}
+            {turnBusy && <LoadingState label="Tutor is thinking…" />}
 
-        {turnBusy && <LoadingState label="Tutor is thinking…" />}
-
-        {canContinue && !turnBusy && (
-          <div className="flex animate-rise justify-start">
-            <button
-              onClick={handleContinue}
-              className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-surface px-4 py-2 text-sm font-semibold text-brand-700 shadow-sm transition hover:border-brand-500 hover:bg-brand-50 active:scale-[0.98]"
+            {/* "Continue" expands into place instead of popping and shifting the list. */}
+            <div
+              className={`grid transition-[grid-template-rows] duration-200 ${
+                canContinue && !turnBusy ? "grid-rows-[1fr]" : "grid-rows-[0fr] !mt-0"
+              }`}
             >
-              Continue
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
-              </svg>
-            </button>
-          </div>
-        )}
+              <div className="overflow-hidden">
+                {canContinue && !turnBusy && (
+                  <div className="flex justify-start">
+                    <button
+                      onClick={handleContinue}
+                      className="inline-flex h-11 items-center gap-1.5 rounded-full border border-brand-300 bg-surface px-4 text-sm font-semibold text-brand-700 shadow-raised transition hover:border-brand-500 hover:bg-brand-50 active:scale-[0.98]"
+                    >
+                      Continue
+                      <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
 
-        {turnError && (
-          <ErrorState
-            message={turnError}
-            onRetry={() =>
-              analysis && requestTurn("ask", analysis, messages)
+            {turnError && (
+              <ErrorState
+                message={turnError}
+                onRetry={() =>
+                  analysis && requestTurn("ask", analysis, messages)
+                }
+              />
+            )}
+          </div>
+        </div>
+
+        {analysis && showRecurring && recurring && (
+          <RecurringBanner
+            gap={recurring}
+            onPractice={() =>
+              handlePractice({
+                concept: recurring.concept,
+                studentBelief: recurring.studentBelief,
+                correctModel: recurring.correctModel,
+              })
+            }
+            onDismiss={() =>
+              setDismissed({ concept: recurring.concept, count: recurring.count })
             }
           />
         )}
+
+        {analysis && (
+          <ActionBar
+            busy={turnBusy}
+            onAction={handleAction}
+            onAsk={handleAsk}
+            onFocus={scrollToBottom}
+            onWhyWrong={() => openComposer("why")}
+            onCheckWork={() => openComposer("check")}
+            onPractice={() => handlePractice()}
+          />
+        )}
       </div>
-
-      {analysis && showRecurring && recurring && (
-        <RecurringBanner
-          gap={recurring}
-          onPractice={() =>
-            handlePractice({
-              concept: recurring.concept,
-              studentBelief: recurring.studentBelief,
-              correctModel: recurring.correctModel,
-            })
-          }
-          onDismiss={() =>
-            setDismissed({ concept: recurring.concept, count: recurring.count })
-          }
-        />
-      )}
-
-      {analysis && (
-        <SessionToggles prefs={prefs} onChange={updatePrefs} disabled={turnBusy} />
-      )}
-
-      {analysis && (
-        <ActionBar
-          busy={turnBusy}
-          onAction={handleAction}
-          onAsk={handleAsk}
-          onWhyWrong={() => openComposer("why")}
-          onCheckWork={() => openComposer("check")}
-          onPractice={() => handlePractice()}
-        />
-      )}
 
       {composerOpen && (
         <AttemptComposer
@@ -454,35 +509,110 @@ export default function TutorWorkspace() {
   );
 }
 
+const HELP_LABEL: Record<TutorPreferences["assistanceStyle"], string> = {
+  hint_first: "Hints",
+  direct: "Direct",
+};
+const GOAL_LABEL: Record<TutorPreferences["goal"], string> = {
+  both: "Both",
+  understand: "Understand",
+  exam: "Exam",
+};
+
 function TopBar({
   onBack,
   topic,
+  prefs,
+  onPrefsChange,
+  prefsDisabled,
+  showPrefs,
 }: {
   onBack: () => void;
   topic?: string;
+  prefs: TutorPreferences;
+  onPrefsChange: (next: TutorPreferences) => void;
+  prefsDisabled?: boolean;
+  showPrefs: boolean;
 }) {
+  // Purely presentational: whether the preferences popover is open.
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!popoverRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
   return (
-    <header className="flex items-center gap-3 border-b border-slate-200 bg-surface px-3 py-3">
+    <header className="relative z-10 flex min-h-14 items-center gap-2 border-b border-hairline bg-surface px-2 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top,0px))] md:col-span-2 md:px-4">
       <button
         onClick={onBack}
         aria-label="Back"
-        className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100"
+        className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100"
       >
-        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" />
-        </svg>
+        <ChevronLeft size={18} strokeWidth={1.75} aria-hidden="true" />
       </button>
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-900">Tutoring session</p>
-        {topic && <p className="truncate text-xs text-slate-500">{topic}</p>}
+      <div className="min-w-0 flex-1">
+        <Wordmark className="block text-base leading-5" />
+        {topic && (
+          <p className="truncate text-xs leading-4 text-slate-500 [@media(max-height:560px)]:hidden">{topic}</p>
+        )}
       </div>
+
+      {showPrefs && (
+        <div ref={popoverRef} className="relative flex-shrink-0">
+          <button
+            onClick={() => setOpen((v) => !v)}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-slate-300 bg-surface px-3 text-sm font-medium text-slate-700 transition hover:border-brand-400 hover:text-brand-700 md:h-9"
+          >
+            <Settings2 size={16} strokeWidth={1.75} aria-hidden="true" />
+            <span className="hidden sm:inline">
+              {HELP_LABEL[prefs.assistanceStyle]} · {GOAL_LABEL[prefs.goal]}
+            </span>
+            <span className="sr-only sm:hidden">Session preferences</span>
+            <ChevronDown
+              size={16}
+              strokeWidth={1.75}
+              aria-hidden="true"
+              className={`transition-transform ${open ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {open && (
+            <div
+              role="dialog"
+              aria-label="Session preferences"
+              className="absolute right-0 top-full z-30 mt-2 w-72 animate-pop-in rounded-lg border border-hairline bg-surface p-3 shadow-raised"
+            >
+              <SessionToggles
+                prefs={prefs}
+                onChange={onPrefsChange}
+                disabled={prefsDisabled}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </header>
   );
 }
 
 function CenteredShell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center px-6 text-center">
+    <main className="mx-auto flex min-h-dvh w-full max-w-md animate-rise flex-col items-center justify-center px-6 text-center">
       {children}
     </main>
   );

@@ -1,11 +1,13 @@
 import type {
   AnalyzeRequest,
   CheckWorkRequest,
+  DetectQuestionsRequest,
   EvaluatePracticeRequest,
   GeneratePracticeRequest,
   PracticeEvaluation,
   PracticeProblem,
   ProblemAnalysis,
+  QuestionDetection,
   TutorRequest,
   TutorTurn,
   WorkCheck,
@@ -23,6 +25,8 @@ import type {
  * keys are never bundled to the client.
  *
  * The methods below cover every capability the real system needs:
+ *   detectQuestions → image input · locate each question on a page (for the
+ *                     capture-time crop step)
  *   analyzeProblem  → image input · problem extraction · subject/topic
  *                     classification · concept identification
  *   tutor           → tutoring responses · follow-up questions
@@ -32,6 +36,12 @@ import type {
  */
 export interface AIProvider {
   readonly name: string;
+
+  /**
+   * Locate the individual questions in a photo of a page so the student can
+   * crop to one before analysis. Returns normalised bounding boxes.
+   */
+  detectQuestions(request: DetectQuestionsRequest): Promise<QuestionDetection>;
 
   /**
    * Analyze an uploaded problem image into structured text + classification +

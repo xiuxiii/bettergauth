@@ -2,6 +2,7 @@
 
 import type { StructuredSolution } from "@/lib/tutor/types";
 import RichText from "@/components/RichText";
+import { Eyebrow } from "@/components/States";
 
 const SECTIONS: {
   key: keyof StructuredSolution;
@@ -23,21 +24,19 @@ export default function SolutionCard({
   solution: StructuredSolution;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-brand-100 bg-surface shadow-sm">
+    <div className="overflow-hidden rounded-lg border border-brand-100 bg-surface">
       <div className="border-b border-brand-100 bg-brand-50 px-4 py-2.5">
-        <p className="text-sm font-semibold text-brand-800">Worked solution</p>
+        <Eyebrow className="!text-brand-800">Worked solution</Eyebrow>
       </div>
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-hairline">
         {SECTIONS.map(({ key, label, emphasis }) => (
           <section key={key} className="px-4 py-4">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              {label}
-            </p>
+            <p className="mb-1 text-xs font-medium text-slate-500">{label}</p>
             <div
               className={
                 emphasis
-                  ? "rounded-lg bg-brand-50/60 px-3 py-2 text-[15px] font-medium text-slate-900"
-                  : "text-[15px] text-slate-700"
+                  ? "rounded-sm bg-brand-50 px-3 py-2 text-[15px] font-medium leading-relaxed text-brand-900"
+                  : "text-[15px] leading-relaxed text-slate-700"
               }
             >
               <RichText text={solution[key]} />

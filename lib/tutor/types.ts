@@ -34,6 +34,46 @@ export interface ProblemAnalysis {
 export interface AnalyzeRequest {
   /** `data:<mediaType>;base64,<data>` URL of the problem photo/upload. */
   imageDataUrl: string;
+  /**
+   * The subject the student picked in the capture step, if any. Passed to the
+   * provider as context only — the model still classifies by content.
+   */
+  subjectHint?: Subject;
+}
+
+// ---------------------------------------------------------------------------
+// Question detection — locating individual questions on a photographed page
+// ---------------------------------------------------------------------------
+
+/** A rectangle in normalised image coordinates (fractions of width/height, 0..1). */
+export interface NormalizedRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** One question found on the page, with where it sits in the photo. */
+export interface DetectedQuestion {
+  /** The label printed on the page ("Question 5", "3(b)") or a generated one. */
+  label: string;
+  rect: NormalizedRect;
+}
+
+/** What the client sends to /api/detect-questions. */
+export interface DetectQuestionsRequest {
+  imageDataUrl: string;
+}
+
+/**
+ * The questions found in a photo, top-to-bottom, and which one the student
+ * most likely wants. Empty `questions` means nothing distinct was found and
+ * the whole photo should be offered as the crop.
+ */
+export interface QuestionDetection {
+  questions: DetectedQuestion[];
+  /** Index into `questions` of the most likely intended question. */
+  primaryIndex: number;
 }
 
 export type Role = "student" | "tutor";

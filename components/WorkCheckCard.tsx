@@ -1,7 +1,9 @@
 "use client";
 
+import { Check } from "lucide-react";
 import type { ErrorCategory, WorkCheck } from "@/lib/tutor/types";
 import RichText from "@/components/RichText";
+import { Eyebrow } from "@/components/States";
 
 /** Human labels for each error category. */
 const CATEGORY_LABEL: Record<ErrorCategory, string> = {
@@ -25,20 +27,25 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
 
   const accent =
     verdict === "correct"
-      ? "border-emerald-200"
+      ? "border-success-200"
       : significant
-        ? "border-rose-200"
-        : "border-amber-200";
+        ? "border-danger-200"
+        : "border-warn-200";
 
   return (
-    <div className={`overflow-hidden rounded-2xl border bg-surface shadow-sm ${accent}`}>
+    <div className={`overflow-hidden rounded-lg border bg-surface ${accent}`}>
       <Header verdict={verdict} />
 
       <div className="space-y-3 p-4">
         {/* What's right — always shown first. */}
         <div className="flex gap-2">
-          <CheckIcon />
-          <div className="text-[15px] text-slate-700">
+          <Check
+            size={18}
+            strokeWidth={1.75}
+            className="mt-0.5 flex-shrink-0 text-success-600"
+            aria-hidden="true"
+          />
+          <div className="text-[15px] leading-relaxed text-slate-700">
             <RichText text={strengths} />
           </div>
         </div>
@@ -47,33 +54,35 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
           <div
             className={
               significant
-                ? "rounded-xl border border-rose-100 bg-rose-50/70 p-3"
-                : "rounded-xl border border-slate-200 bg-slate-50 p-3"
+                ? "rounded-sm bg-danger-50 p-3"
+                : "rounded-sm bg-slate-100 p-3"
             }
           >
             <div className="mb-1.5 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                First thing to fix
-              </span>
+              <Eyebrow>First thing to fix</Eyebrow>
               <CategoryBadge
                 category={firstError.category}
                 significant={significant}
               />
               {firstError.conceptCorrect && (
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                <span className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-medium text-success-700">
                   concept is right
                 </span>
               )}
             </div>
 
-            <div className="mb-1 text-xs text-slate-400">
+            <div className={`mb-1 text-xs ${significant ? "text-danger-700" : "text-slate-500"}`}>
               <RichText text={`at ${firstError.location}`} />
             </div>
-            <div className="text-[15px] text-slate-800">
+            <div className={`text-[15px] leading-relaxed ${significant ? "text-danger-800" : "text-ink"}`}>
               <RichText text={firstError.explanation} />
             </div>
-            <div className="mt-2 border-t border-slate-200/70 pt-2 text-[15px] text-slate-800">
-              <span className="font-semibold text-slate-900">Fix: </span>
+            <div
+              className={`mt-2 border-t pt-2 text-[15px] leading-relaxed ${
+                significant ? "border-danger-100 text-danger-800" : "border-hairline text-ink"
+              }`}
+            >
+              <span className="font-semibold">Fix: </span>
               <span className="inline">
                 <RichText text={firstError.correction} />
               </span>
@@ -82,11 +91,9 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
         )}
 
         {/* How to continue from the corrected point. */}
-        <div className="rounded-xl bg-brand-50/70 px-3 py-2">
-          <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-brand-700">
-            Continue from here
-          </p>
-          <div className="text-[15px] text-slate-800">
+        <div className="rounded-sm bg-brand-50 px-3 py-2">
+          <Eyebrow className="mb-0.5 !text-brand-700">Continue from here</Eyebrow>
+          <div className="text-[15px] leading-relaxed text-brand-900">
             <RichText text={continueFrom} />
           </div>
         </div>
@@ -97,12 +104,12 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
 
 function Header({ verdict }: { verdict: WorkCheck["verdict"] }) {
   const map = {
-    correct: { label: "Looks correct", cls: "bg-emerald-50 text-emerald-800 border-emerald-100" },
+    correct: { label: "Looks correct", cls: "bg-success-50 text-success-800 border-success-100" },
     partially_correct: {
       label: "Partially correct",
-      cls: "bg-amber-50 text-amber-800 border-amber-100",
+      cls: "bg-warn-50 text-warn-800 border-warn-100",
     },
-    error_found: { label: "One thing to fix", cls: "bg-rose-50 text-rose-800 border-rose-100" },
+    error_found: { label: "One thing to fix", cls: "bg-danger-50 text-danger-800 border-danger-100" },
   } as const;
   const { label, cls } = map[verdict];
   return (
@@ -120,28 +127,11 @@ function CategoryBadge({
   significant: boolean;
 }) {
   const cls = significant
-    ? "bg-rose-100 text-rose-700"
+    ? "bg-danger-100 text-danger-700"
     : "bg-slate-200 text-slate-600";
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>
       {CATEGORY_LABEL[category]}
     </span>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500"
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        fillRule="evenodd"
-        d="M16.7 5.3a1 1 0 010 1.4l-7 7a1 1 0 01-1.4 0l-3-3a1 1 0 111.4-1.4l2.3 2.3 6.3-6.3a1 1 0 011.4 0z"
-        clipRule="evenodd"
-      />
-    </svg>
   );
 }

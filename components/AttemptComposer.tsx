@@ -1,9 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ImagePlus } from "lucide-react";
 import type { StudentAttempt } from "@/lib/tutor/types";
 import { fileToDataUrl } from "@/lib/utils";
 import { Spinner } from "@/components/States";
+
+const CLOSE_MS = 180;
+/** Drag past this (px), or flick faster than DRAG_VELOCITY (px/ms) for at
+ * least DRAG_FLICK_MIN_PX, dismisses. */
+const DRAG_DISMISS_PX = 80;
+const DRAG_VELOCITY = 0.5;
+const DRAG_FLICK_MIN_PX = 24;
 
 /**
  * Bottom-sheet composer for "Check My Work". The student types their working
@@ -39,7 +47,62 @@ export default function AttemptComposer({
   const [image, setImage] = useState<string | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
 
+  // Visual only: the sheet slides down and the backdrop fades before unmount,
+  // and the handle / title row can be dragged down to dismiss.
+  const [closing, setClosing] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ startY: number; startT: number } | null>(null);
+  // Mirrors dragY so a fast flick (several touch events before a re-render)
+  // still reads the latest offset at touchend.
+  const dragYRef = useRef(0);
+  const closeTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    };
+  }, []);
+
   const canSubmit = (text.trim().length > 0 || !!image) && !busy;
+
+  function close() {
+    if (closing) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      onCancel();
+      return;
+    }
+    setDragY(0); // drop any inline drag offset so the slide-down class applies
+    setClosing(true);
+    closeTimer.current = window.setTimeout(onCancel, CLOSE_MS);
+  }
+
+  function onDragStart(e: React.TouchEvent) {
+    if (closing) return;
+    drag.current = { startY: e.touches[0].clientY, startT: performance.now() };
+    setDragging(true);
+  }
+  function onDragMove(e: React.TouchEvent) {
+    if (!drag.current) return;
+    const y = Math.max(0, e.touches[0].clientY - drag.current.startY);
+    dragYRef.current = y;
+    setDragY(y);
+  }
+  function onDragEnd() {
+    if (!drag.current) return;
+    const y = dragYRef.current;
+    const elapsed = Math.max(1, performance.now() - drag.current.startT);
+    const velocity = y / elapsed;
+    drag.current = null;
+    dragYRef.current = 0;
+    setDragging(false);
+    if (y > DRAG_DISMISS_PX || (y > DRAG_FLICK_MIN_PX && velocity > DRAG_VELOCITY)) {
+      close();
+    } else {
+      setDragY(0); // spring back
+    }
+  }
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -63,26 +126,59 @@ export default function AttemptComposer({
     });
   }
 
+  // While dragging, the sheet follows the finger with no transition; on release
+  // it either springs back or runs the close slide. `animate-rise` stays on the
+  // element throughout (toggling it would replay the open animation); its
+  // `backwards` fill means the inline transform takes over once it has run.
+  const sheetMotion = closing
+    ? "translate-y-full transition-transform duration-200 ease-out"
+    : dragging
+      ? "animate-rise"
+      : "animate-rise transition-transform duration-200 ease-out";
+
   return (
-    <div className="fixed inset-0 z-20 flex items-end justify-center">
+    // h-dvh (not inset-0) so the sheet tracks the visual viewport on iOS.
+    <div className="fixed inset-x-0 top-0 z-20 flex h-dvh items-end justify-center">
       {/* Backdrop */}
       <button
         aria-label="Close"
-        onClick={onCancel}
-        className="absolute inset-0 animate-fade-in bg-slate-900/40"
+        onClick={close}
+        className={`absolute inset-0 bg-slate-900/40 dark:bg-black/60 ${
+          closing ? "opacity-0 transition-opacity duration-200" : "animate-fade-in"
+        }`}
       />
 
       {/* Sheet */}
-      <div className="relative mx-auto w-full max-w-md animate-rise rounded-t-3xl bg-surface p-4 shadow-2xl">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-serif text-lg font-normal text-ink">{copy.title}</h2>
-          <button
-            onClick={onCancel}
-            className="rounded-full px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
-          >
-            Cancel
-          </button>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="attempt-composer-title"
+        style={dragging || dragY ? { transform: `translateY(${dragY}px)` } : undefined}
+        className={`relative mx-auto flex max-h-[85dvh] w-full max-w-md flex-col overflow-y-auto overscroll-contain rounded-t-xl bg-surface p-4 shadow-sheet ${sheetMotion}`}
+      >
+        {/* Drag region: the handle and the title row. */}
+        <div
+          className="-mx-4 -mt-4 touch-none select-none px-4 pt-4"
+          onTouchStart={onDragStart}
+          onTouchMove={onDragMove}
+          onTouchEnd={onDragEnd}
+          onTouchCancel={onDragEnd}
+        >
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
+          <div className="mb-1 flex items-center justify-between">
+            <h2
+              id="attempt-composer-title"
+              className="font-serif text-lg font-normal leading-[1.15] tracking-tight text-ink"
+            >
+              {copy.title}
+            </h2>
+            <button
+              onClick={close}
+              className="h-10 rounded-md px-3 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-ink"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
         <p className="mb-3 text-sm text-slate-500">{copy.hint}</p>
 
@@ -94,27 +190,28 @@ export default function AttemptComposer({
           onChange={(e) => handleFile(e.target.files?.[0])}
         />
 
+        {/* No autoFocus: opening the keyboard mid-rise pushes the submit
+            button behind it. The student taps in when they are ready. */}
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={4}
-          autoFocus
           placeholder={"e.g. mgh = ½mv², so v = √(2·9.8·1.5) = 5.9 m/s"}
-          className="w-full resize-none rounded-2xl border border-slate-300 px-3.5 py-3 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+          className="w-full resize-none rounded-md border border-slate-300 bg-surface px-3.5 py-2.5 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-slate-300"
         />
 
         {image ? (
-          <div className="mt-2 flex items-center gap-3 rounded-xl border border-slate-200 p-2">
+          <div className="mt-2 flex items-center gap-3 rounded-sm bg-slate-100 p-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={image}
               alt="Your attempt"
-              className="h-14 w-14 rounded-lg bg-slate-100 object-cover"
+              className="h-14 w-14 rounded-sm bg-slate-200 object-cover"
             />
             <span className="flex-1 text-sm text-slate-600">Photo attached</span>
             <button
               onClick={() => setImage(null)}
-              className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
+              className="h-10 rounded-md px-3 text-sm text-slate-500 transition hover:bg-slate-200 hover:text-ink"
             >
               Remove
             </button>
@@ -122,34 +219,28 @@ export default function AttemptComposer({
         ) : (
           <button
             onClick={() => fileRef.current?.click()}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-brand-400 hover:text-brand-700"
+            className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 px-4 text-sm font-medium text-slate-600 transition hover:border-brand-400 hover:text-brand-700"
           >
-            <PhotoIcon />
+            <ImagePlus size={18} strokeWidth={1.75} aria-hidden="true" />
             Attach a photo of your work
           </button>
         )}
 
-        {readError && <p className="mt-2 text-sm text-rose-600">{readError}</p>}
+        {readError && <p className="mt-2 text-sm text-danger-600">{readError}</p>}
 
-        <button
-          onClick={submit}
-          disabled={!canSubmit}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-brand-700 active:scale-[0.99] disabled:opacity-50"
-        >
-          {busy ? <Spinner className="h-5 w-5" /> : null}
-          {copy.submit}
-        </button>
+        {/* Sticky footer: the primary action stays visible however tall the
+            sheet body gets, and clears the home indicator. */}
+        <div className="sticky bottom-0 -mx-4 -mb-4 mt-3 bg-surface px-4 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] pt-3">
+          <button
+            onClick={submit}
+            disabled={!canSubmit}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:bg-brand-300 disabled:text-white/90 disabled:shadow-none"
+          >
+            {busy ? <Spinner className="h-5 w-5" /> : null}
+            {copy.submit}
+          </button>
+        </div>
       </div>
     </div>
-  );
-}
-
-function PhotoIcon() {
-  return (
-    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <rect x="3" y="5" width="18" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="8.5" cy="10" r="1.5" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 16l-5-5-4 4-2-2-7 7" />
-    </svg>
   );
 }

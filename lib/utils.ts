@@ -16,3 +16,5 @@ export function fileToDataUrl(file: File): Promise<string> {
 
 /** sessionStorage key used to hand the captured image to the workspace. */
 export const IMAGE_KEY = "stem-tutor:image";
+/** sessionStorage key for the subject picked in the capture step (optional). */
+export const SUBJECT_KEY = "stem-tutor:subject";

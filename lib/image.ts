@@ -1,5 +1,5 @@
 /**
- * Client-side image normalization + content-aware auto-crop.
+ * Client-side image normalization (downscale + EXIF-upright).
  *
  * Every capture path (in-app camera + library upload) runs through here so the
  * server always receives a sane, upright JPEG. This fixes two real bugs:
@@ -9,14 +9,15 @@
  *      `imageOrientation: "from-image"` bakes the rotation in so the model sees
  *      the problem upright.
  *
- * Camera captures additionally get auto-cropped to the problem: an Otsu
- * threshold separates ink from paper, and we crop to the ink bounding box
- * (with margin). No OpenCV/WASM — just a luminance histogram — so it stays
- * light and fast on a phone. It's conservative: if it can't find a clear,
- * sensible region it returns the full frame untouched.
+ * Captures are NOT cropped here. Framing is the QuestionCropper's job: it asks
+ * the model to box the individual questions and hands the student a draggable
+ * box they can correct. The Otsu ink-bounding-box heuristic below survives only
+ * as that cropper's offline fallback — it seeds an editable box, and never
+ * silently crops a photo on its own.
  */
 
 import { fileToDataUrl } from "@/lib/utils";
+import type { NormalizedRect } from "@/lib/tutor/types";
 
 const MAX_DIM = 1600; // longest edge, px — plenty for OCR, small enough to POST
 const QUALITY = 0.82; // JPEG quality
@@ -144,16 +145,6 @@ function detectContentRect(canvas: HTMLCanvasElement): Rect | null {
   return { x, y, w: rw, h: rh };
 }
 
-function cropCanvas(canvas: HTMLCanvasElement, r: Rect): HTMLCanvasElement {
-  const out = document.createElement("canvas");
-  out.width = r.w;
-  out.height = r.h;
-  const ctx = out.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D context unavailable.");
-  ctx.drawImage(canvas, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
-  return out;
-}
-
 /** Normalize a picked/dropped File into a downscaled, upright JPEG data URL. */
 export async function fileToNormalizedJpeg(file: File): Promise<string> {
   if (typeof createImageBitmap === "function") {
@@ -186,20 +177,55 @@ function loadImageEl(dataUrl: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Grab the current frame of a live <video> as a downscaled JPEG data URL,
- * auto-cropped to the problem unless disabled.
+ * Local fallback for question detection: the ink bounding box of an image, as
+ * a normalised rect — or null when there is no clear region. Used by the
+ * cropper when the vision detection is unavailable.
  */
-export function videoFrameToJpeg(
-  video: HTMLVideoElement,
-  { autoCrop = true }: { autoCrop?: boolean } = {},
-): string {
+export async function detectContentRectNormalized(
+  dataUrl: string,
+): Promise<NormalizedRect | null> {
+  const img = await loadImageEl(dataUrl);
+  const canvas = scaledCanvas(img, img.naturalWidth, img.naturalHeight);
+  const r = detectContentRect(canvas);
+  if (!r) return null;
+  return {
+    x: r.x / canvas.width,
+    y: r.y / canvas.height,
+    w: r.w / canvas.width,
+    h: r.h / canvas.height,
+  };
+}
+
+/** Crop an image data URL to a normalised rect, returning a JPEG data URL. */
+export async function cropDataUrl(
+  dataUrl: string,
+  rect: NormalizedRect,
+): Promise<string> {
+  const img = await loadImageEl(dataUrl);
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  const x = Math.round(Math.min(Math.max(rect.x, 0), 1) * W);
+  const y = Math.round(Math.min(Math.max(rect.y, 0), 1) * H);
+  const w = Math.max(1, Math.round(Math.min(rect.w, 1 - rect.x) * W));
+  const h = Math.max(1, Math.round(Math.min(rect.h, 1 - rect.y) * H));
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D context unavailable.");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+  return canvasToJpeg(out);
+}
+
+/**
+ * Grab the current frame of a live <video> as a downscaled JPEG data URL.
+ * The full frame is kept: the student frames the question in the cropper.
+ */
+export function videoFrameToJpeg(video: HTMLVideoElement): string {
   const w = video.videoWidth;
   const h = video.videoHeight;
   if (!w || !h) throw new Error("Camera frame not ready.");
-  const canvas = scaledCanvas(video, w, h);
-  if (autoCrop) {
-    const rect = detectContentRect(canvas);
-    if (rect) return canvasToJpeg(cropCanvas(canvas, rect));
-  }
-  return canvasToJpeg(canvas);
+  return canvasToJpeg(scaledCanvas(video, w, h));
 }

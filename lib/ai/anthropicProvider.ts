@@ -8,11 +8,13 @@ import type { AIProvider } from "@/lib/ai/types";
 import type {
   AnalyzeRequest,
   CheckWorkRequest,
+  DetectQuestionsRequest,
   EvaluatePracticeRequest,
   GeneratePracticeRequest,
   PracticeEvaluation,
   PracticeProblem,
   ProblemAnalysis,
+  QuestionDetection,
   TutorPreferences,
   TutorTurn,
   TutorRequest,
@@ -40,6 +42,20 @@ const SubjectSchema = z.enum([
   "Mathematics",
   "Unknown",
 ]);
+
+/** Question locations on a page, in normalised (0..1) image coordinates. */
+const QuestionDetectionSchema = z.object({
+  questions: z.array(
+    z.object({
+      label: z.string(),
+      x: z.number(),
+      y: z.number(),
+      w: z.number(),
+      h: z.number(),
+    }),
+  ),
+  primaryIndex: z.number(),
+});
 
 const ProblemAnalysisSchema = z.object({
   problemText: z.string(),
@@ -161,6 +177,9 @@ const MATH_NOTE =
 const STYLE_NOTE =
   "Formatting: write for a phone screen. Keep every paragraph to 1-3 short sentences separated by a blank line. Use \"- \" bullets for parallel items and \"1. \" for ordered steps, one idea per line, and put key equations on their own line. Avoid em-dashes: use a period, comma, or colon instead. Never return a dense wall of text.";
 
+const DETECT_SYSTEM = `You locate the individual questions in a photo of a worksheet, textbook page or screen so an app can crop to one of them.
+Return one entry per distinct question — a numbered problem together with all of its parts, sub-parts, figures and answer options — ordered top-to-bottom then left-to-right. Give each a bounding box in normalised image coordinates: x, y are the top-left corner as fractions of the image width and height (0..1); w, h are the box size as fractions (0..1). A box must fully contain its question with a small margin and must not overlap neighbouring questions. Use the label printed on the page (e.g. "Question 5", "Q5", "3(b)"), or "Question 1", "Question 2", … when none is printed. If the photo shows a single problem or only a fragment, return exactly one box around it. Set primaryIndex to the question most likely intended: the most complete, central one — or the only one.`;
+
 const ANALYZE_SYSTEM = `You extract a single high-school STEM problem from a photo and classify it.
 Read the problem exactly as written (including all parts), identify the subject, a specific topic, and the single governing concept/principle the problem hinges on. Set confidence in 0..1 for how sure the extraction+classification is. ${MATH_NOTE}`;
 
@@ -190,7 +209,35 @@ export class AnthropicProvider implements AIProvider {
     this.model = config.model ?? "claude-sonnet-5";
   }
 
+  async detectQuestions(
+    request: DetectQuestionsRequest,
+  ): Promise<QuestionDetection> {
+    const res = await this.client.messages.parse({
+      model: this.model,
+      max_tokens: 1200,
+      thinking: { type: "disabled" },
+      system: DETECT_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: [
+            imageBlock(request.imageDataUrl),
+            { type: "text", text: "Locate every question in this photo." },
+          ],
+        },
+      ],
+      output_config: { format: zodOutputFormat(QuestionDetectionSchema) },
+    });
+    logUsage("detectQuestions", res);
+    const out = required(res.parsed_output, "question detection");
+    return normalizeDetection(out);
+  }
+
   async analyzeProblem(request: AnalyzeRequest): Promise<ProblemAnalysis> {
+    const hint =
+      request.subjectHint && request.subjectHint !== "Unknown"
+        ? ` The student selected the subject "${request.subjectHint}" — use it as context, but classify by the content if the problem clearly belongs to another subject.`
+        : "";
     const res = await this.client.messages.parse({
       model: this.model,
       max_tokens: 1500,
@@ -201,7 +248,7 @@ export class AnthropicProvider implements AIProvider {
           role: "user",
           content: [
             imageBlock(request.imageDataUrl),
-            { type: "text", text: "Extract and classify this problem." },
+            { type: "text", text: `Extract and classify this problem.${hint}` },
           ],
         },
       ],
@@ -470,6 +517,35 @@ export function dataUrlToImagePart(dataUrl: string): {
     throw new Error("Expected a base64 data URL (data:<mediaType>;base64,<data>).");
   }
   return { mediaType: match[1], data: match[2] };
+}
+
+/**
+ * Clamp the model's boxes into the image, drop degenerate ones, and keep
+ * `primaryIndex` valid. The cropper treats an empty list as "whole photo".
+ */
+function normalizeDetection(
+  raw: z.infer<typeof QuestionDetectionSchema>,
+): QuestionDetection {
+  const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+  const questions = raw.questions
+    .map((q, i) => {
+      const x = clamp01(q.x);
+      const y = clamp01(q.y);
+      const w = clamp01(q.x + q.w) - x;
+      const h = clamp01(q.y + q.h) - y;
+      return {
+        label: q.label.trim() || `Question ${i + 1}`,
+        rect: { x, y, w, h },
+      };
+    })
+    .filter((q) => q.rect.w > 0.02 && q.rect.h > 0.01);
+  const primaryIndex =
+    Number.isInteger(raw.primaryIndex) &&
+    raw.primaryIndex >= 0 &&
+    raw.primaryIndex < questions.length
+      ? raw.primaryIndex
+      : 0;
+  return { questions, primaryIndex };
 }
 
 /** Assert the model returned a validly-parsed structured object. */

@@ -7,9 +7,160 @@
 
 /* --font-sans / --font-serif are provided by next/font (see app/layout.tsx). */
 
+/* --------------------------------------------------------------------------
+ * Colour tokens. The Tailwind config reads these as `rgb(var(--x) / <alpha>)`
+ * so the warm dark theme below swaps the whole neutral system in place.
+ * Light: 50 = paper, 200 = default border, 500 = secondary text, 900 = ink.
+ * Dark: the neutral scale is mirrored (50↔900, 100↔800, …).
+ * ------------------------------------------------------------------------ */
+:root {
+  --paper: 247 243 236; /* #F7F3EC */
+  --surface: 252 250 245; /* #FCFAF5 */
+  --ink: 32 27 20; /* #201B14 */
+  --hairline: 228 220 205; /* #E4DCCD */
+
+  --slate-50: 247 243 236; /* #F7F3EC */
+  --slate-100: 239 232 219; /* #EFE8DB */
+  --slate-200: 228 220 205; /* #E4DCCD */
+  --slate-300: 211 201 182; /* #D3C9B6 */
+  --slate-400: 168 158 140; /* #A89E8C */
+  --slate-500: 122 114 100; /* #7A7264 */
+  --slate-600: 94 87 75; /* #5E574B */
+  --slate-700: 59 52 42; /* #3B342A */
+  --slate-800: 42 36 28; /* #2A241C */
+  --slate-900: 32 27 20; /* #201B14 */
+
+  /* Tinted surfaces + the text that sits on them. These flip with the theme
+     (the mid brand steps, e.g. brand-600 button fills, deliberately do not). */
+  --brand-50: 238 241 254; /* #EEF1FE */
+  --brand-100: 225 230 253; /* #E1E6FD */
+  --brand-200: 199 206 251; /* #C7CEFB */
+  --brand-700: 63 68 190; /* #3F44BE */
+  --brand-800: 52 58 152; /* #343A98 */
+  --brand-900: 47 52 121; /* #2F3479 */
+
+  --danger-50: 251 239 236; /* #FBEFEC */
+  --danger-100: 245 217 210; /* #F5D9D2 */
+  --danger-200: 235 181 169; /* #EBB5A9 */
+  --danger-600: 180 67 47; /* #B4432F */
+  --danger-700: 150 54 39; /* #963627 */
+  --danger-800: 116 42 30; /* #742A1E */
+
+  --warn-50: 250 241 223; /* #FAF1DF */
+  --warn-100: 243 224 184; /* #F3E0B8 */
+  --warn-200: 232 201 138; /* #E8C98A */
+  --warn-600: 165 106 18; /* #A56A12 */
+  --warn-700: 135 86 15; /* #87560F */
+  --warn-800: 106 67 12; /* #6A430C */
+
+  --success-50: 234 243 234; /* #EAF3EA */
+  --success-100: 210 229 209; /* #D2E5D1 */
+  --success-200: 174 207 173; /* #AECFAD */
+  --success-600: 62 122 67; /* #3E7A43 */
+  --success-700: 50 100 55; /* #326437 */
+  --success-800: 40 79 44; /* #284F2C */
+
+  --ease-soft: cubic-bezier(0.22, 0.7, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: 23 20 15; /* #17140F */
+    --surface: 31 27 21; /* #1F1B15 */
+    --ink: 241 236 226; /* #F1ECE2 */
+    --hairline: 46 40 32; /* #2E2820 */
+
+    --slate-50: 32 27 20; /* #201B14 */
+    --slate-100: 42 36 28; /* #2A241C */
+    --slate-200: 59 52 42; /* #3B342A */
+    --slate-300: 94 87 75; /* #5E574B */
+    --slate-400: 122 114 100; /* #7A7264 */
+    --slate-500: 168 158 140; /* #A89E8C */
+    --slate-600: 211 201 182; /* #D3C9B6 */
+    --slate-700: 228 220 205; /* #E4DCCD */
+    --slate-800: 239 232 219; /* #EFE8DB */
+    --slate-900: 247 243 236; /* #F7F3EC */
+
+    /* Tints become deep, saturated grounds; on-tint text becomes the light
+       step, so every `bg-brand-50` / `text-danger-800` pair stays legible. */
+    --brand-50: 29 31 58; /* deep indigo ground */
+    --brand-100: 38 42 74;
+    --brand-200: 63 68 190;
+    --brand-700: 162 172 246; /* #A2ACF6 */
+    --brand-800: 199 206 251; /* #C7CEFB */
+    --brand-900: 225 230 253; /* #E1E6FD */
+
+    --danger-50: 46 26 20;
+    --danger-100: 66 38 29;
+    --danger-200: 116 42 30;
+    --danger-600: 226 143 126;
+    --danger-700: 235 181 169; /* #EBB5A9 */
+    --danger-800: 245 217 210; /* #F5D9D2 */
+
+    --warn-50: 42 33 19;
+    --warn-100: 61 48 27;
+    --warn-200: 106 67 12;
+    --warn-600: 219 178 106;
+    --warn-700: 232 201 138; /* #E8C98A */
+    --warn-800: 243 224 184; /* #F3E0B8 */
+
+    --success-50: 24 38 21;
+    --success-100: 35 54 32;
+    --success-200: 40 79 44;
+    --success-600: 143 184 141;
+    --success-700: 174 207 173; /* #AECFAD */
+    --success-800: 210 229 209; /* #D2E5D1 */
+  }
+}
+
+html {
+  color-scheme: light dark;
+  /* iOS native feel: no grey tap flash, no text inflation in landscape, no
+     rubber-banding of the whole document behind the app's own scroll areas. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+button,
+[role="button"],
+a,
+summary {
+  touch-action: manipulation; /* no 300ms delay, no double-tap zoom */
+  user-select: none;
+  -webkit-touch-callout: none; /* no long-press text callout */
+}
+input,
+textarea {
+  touch-action: auto;
+  user-select: text;
+}
+
 html,
 body {
   @apply bg-paper text-ink antialiased;
+}
+
+/* One focus ring for everything. Per-element rings are removed on purpose. */
+:focus-visible {
+  outline: 2px solid theme("colors.brand.600");
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+h1,
+h2 {
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Keep long equations from breaking the mobile layout. */
@@ -17,14 +168,44 @@ body {
   @apply overflow-x-auto overflow-y-hidden py-1;
 }
 
+/* Edge fade for horizontally scrolling rows (chip row in the ActionBar). */
+.scroll-fade {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 16px,
+    black calc(100% - 24px),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 16px,
+    black calc(100% - 24px),
+    transparent
+  );
+  scrollbar-width: none;
+}
+.scroll-fade::-webkit-scrollbar {
+  display: none;
+}
+
+/* Phones: display maths slightly smaller, allowed to wrap, and edge-faded when
+   it still has to scroll, so a long equation never clips silently. */
+@media (max-width: 639px) {
+  .katex-display {
+    @apply scroll-fade;
+    font-size: 0.92em;
+  }
+  .katex-display > .katex {
+    white-space: normal;
+  }
+}
+
 /* --------------------------------------------------------------------------
  * Motion system — subtle, premium. Soft ease-out, 150–250ms, one reveal per
  * step. Everything below is suppressed under prefers-reduced-motion.
  * ------------------------------------------------------------------------ */
-:root {
-  --ease-soft: cubic-bezier(0.22, 0.7, 0.2, 1);
-}
-
 @keyframes rise {
   from { opacity: 0; transform: translateY(7px); }
   to { opacity: 1; transform: translateY(0); }
@@ -32,6 +213,10 @@ body {
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 @keyframes pop-in {
   from { opacity: 0; transform: scale(0.97); }
@@ -45,19 +230,44 @@ body {
   0%, 80%, 100% { opacity: 0.25; }
   40% { opacity: 1; }
 }
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
 
-.animate-rise { animation: rise 0.22s var(--ease-soft) both; }
+/* `backwards`, not `both`: once it lands the element must carry no transform,
+   so fixed-position overlays inside a page wrapper stay viewport-relative. */
+.animate-rise { animation: rise 0.22s var(--ease-soft) backwards; }
 .animate-fade-in { animation: fade-in 0.2s var(--ease-soft) both; }
+.animate-fade-out { animation: fade-out 0.18s var(--ease-soft) both; }
 .animate-pop-in { animation: pop-in 0.2s var(--ease-soft) both; }
 .animate-flash { animation: flash 0.15s ease-out forwards; }
 .typing-dot { animation: dot-pulse 1.2s var(--ease-soft) infinite; }
 
+/* Skeleton placeholder: a quiet shimmer over the subtle-fill neutral. In the
+   components layer so radius utilities (e.g. rounded-t-lg) can still override. */
+@layer components {
+  .skeleton {
+    @apply rounded-sm bg-slate-100;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgb(255 255 255 / 0.5),
+      transparent
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s var(--ease-soft) infinite;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
   .animate-fade-in,
+  .animate-fade-out,
   .animate-pop-in,
   .animate-flash,
-  .typing-dot {
+  .typing-dot,
+  .skeleton {
     animation: none !important;
   }
   *,

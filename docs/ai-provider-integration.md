@@ -27,6 +27,7 @@ returns one typed domain object:
 
 | Capability (from the brief) | Method | Request | Response |
 | --- | --- | --- | --- |
+| Image input · locate each question on a page (capture-time crop) | `detectQuestions` | `DetectQuestionsRequest` | `QuestionDetection` |
 | Image input · problem extraction · subject/topic classification · concept identification | `analyzeProblem` | `AnalyzeRequest` | `ProblemAnalysis` |
 | Tutoring responses · follow-up questions | `tutor` | `TutorRequest` | `TutorTurn` |
 | Student attempt analysis (Check My Work) | `checkWork` | `CheckWorkRequest` | `WorkCheck` |
@@ -45,9 +46,25 @@ carry one. A real provider splits it with `dataUrlToImagePart()`
 (`lib/ai/anthropicProvider.ts`) into `{ mediaType, data }` and builds an image
 content block. No other image handling is required.
 
+### `detectQuestions(DetectQuestionsRequest) → QuestionDetection`
+```
+DetectQuestionsRequest { imageDataUrl: string }   // the full photographed page
+QuestionDetection {
+  questions: { label: string,                     // "Question 5", "3(b)", …
+               rect: { x, y, w, h } }[]           // normalised 0..1 image coords
+  primaryIndex: number                            // the most likely intended one
+}
+```
+Backs the capture-time cropper (`components/QuestionCropper.tsx`): the student
+sees the detected question boxed on the photo, can switch between detected
+questions or adjust the box, then the crop goes to `analyzeProblem`. If this
+call fails, the client falls back to a local ink bounding box, so it is never on
+the critical path.
+
 ### `analyzeProblem(AnalyzeRequest) → ProblemAnalysis`
 ```
-AnalyzeRequest  { imageDataUrl: string }        // the problem photo/upload
+AnalyzeRequest  { imageDataUrl: string,          // the (cropped) problem photo
+                  subjectHint?: Subject }        // optional: the subject picked in the capture step
 ProblemAnalysis {
   problemText: string        // extracted problem (OCR)
   subject:     "Physics" | "Chemistry" | "Biology" | "Mathematics" | "Unknown"
