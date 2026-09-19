@@ -1,6 +1,7 @@
 "use client";
 
-import { CircleAlert } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, CircleAlert } from "lucide-react";
 import type { ProblemAnalysis } from "@/lib/tutor/types";
 import RichText from "@/components/RichText";
 import { Eyebrow } from "@/components/States";
@@ -14,6 +15,13 @@ export default function ProblemCard({
   analysis: ProblemAnalysis;
 }) {
   const lowConfidence = analysis.confidence < 0.7;
+
+  // The photo above IS the problem, and the model gets the transcription on
+  // every request regardless — so re-printing it here is for the student's
+  // benefit only, and costs a screen of text they've already read. Keep it one
+  // tap away instead. Open by default when detection was shaky, since that's
+  // exactly when it's worth checking what was actually read.
+  const [showText, setShowText] = useState(lowConfidence);
 
   return (
     <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
@@ -40,12 +48,7 @@ export default function ProblemCard({
             </div>
           )}
         </div>
-        <div>
-          <Eyebrow className="mb-1">Detected problem</Eyebrow>
-          <div className="text-[15px] leading-relaxed text-ink">
-            <RichText text={analysis.problemText} />
-          </div>
-        </div>
+
         {analysis.concept && (
           <div>
             <Eyebrow className="mb-1">Key concept</Eyebrow>
@@ -54,6 +57,36 @@ export default function ProblemCard({
             </div>
           </div>
         )}
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowText((v) => !v)}
+            aria-expanded={showText}
+            aria-controls="detected-problem-text"
+            className="-mx-1.5 flex items-center gap-1.5 rounded-sm px-1.5 py-1 transition-colors hover:bg-slate-100 active:scale-[0.99]"
+          >
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              {showText ? "Hide detected text" : "Show detected text"}
+            </span>
+            <ChevronDown
+              size={14}
+              strokeWidth={2.25}
+              aria-hidden="true"
+              className={`text-slate-500 transition-transform duration-200 ${
+                showText ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+          {showText && (
+            <div
+              id="detected-problem-text"
+              className="mt-1.5 animate-fade-in text-[15px] leading-relaxed text-ink"
+            >
+              <RichText text={analysis.problemText} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
