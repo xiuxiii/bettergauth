@@ -19,8 +19,23 @@
 import { fileToDataUrl } from "@/lib/utils";
 import type { NormalizedRect } from "@/lib/tutor/types";
 
-const MAX_DIM = 1600; // longest edge, px — plenty for OCR, small enough to POST
-const QUALITY = 0.82; // JPEG quality
+/**
+ * Longest edge, px. Sized to the model's own ceiling rather than guessed: on the
+ * high-resolution tier (Sonnet 5 / the 4.7-and-later family) the API caps images
+ * at a 2576 px long edge AND 4784 visual tokens, where a token is a 28x28 patch
+ * (ceil(w/28) * ceil(h/28)). For the 4:3 and 3:4 shapes phone cameras actually
+ * produce, the token cap binds first, at roughly 2240 px. 2200 sits just under
+ * it (79 x 59 = 4661 tokens), so a dense worksheet arrives at the highest
+ * resolution the model will actually look at, and we don't spend upload bytes on
+ * pixels the server would only throw away.
+ */
+const MAX_DIM = 2200;
+/**
+ * JPEG quality. Nudged up from 0.82 because these are photos of small
+ * handwriting and printed sub-parts, and compression artifacts cost legibility
+ * exactly where it matters most.
+ */
+const QUALITY = 0.85;
 
 function scaledCanvas(
   source: CanvasImageSource,
