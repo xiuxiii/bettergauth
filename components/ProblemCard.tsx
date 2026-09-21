@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, CircleAlert } from "lucide-react";
+import { ChevronDown, CircleAlert, PenLine } from "lucide-react";
 import type { ProblemAnalysis } from "@/lib/tutor/types";
 import RichText from "@/components/RichText";
 import { Eyebrow } from "@/components/States";
@@ -39,6 +39,12 @@ export default function ProblemCard({
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
             {analysis.topic}
           </span>
+          {analysis.studentWork?.present && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-success-50 px-2.5 py-1 text-xs font-medium text-success-700">
+              <PenLine size={14} strokeWidth={1.75} aria-hidden="true" />
+              Your working detected
+            </span>
+          )}
           {lowConfidence && (
             <div className="max-md:basis-full max-md:ml-0">
               <span className="inline-flex items-center gap-1 rounded-full bg-warn-50 px-2.5 py-1 text-xs font-medium text-warn-700">

@@ -24,6 +24,19 @@ export interface ProblemAnalysis {
   concept: string;
   /** 0..1 confidence that the detection is correct. */
   confidence: number;
+  /**
+   * The student's own handwritten attempt, when the photo already contains one.
+   * They frequently shoot a problem they have already worked on, so the session
+   * opens by diagnosing this instead of inviting them to start.
+   *
+   * Handwriting only: a printed worked example or answer key on the same page is
+   * part of the question, not an attempt. `transcript` preserves their steps and
+   * their mistakes verbatim.
+   */
+  studentWork: {
+    present: boolean;
+    transcript: string;
+  };
 }
 
 /**

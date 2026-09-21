@@ -150,6 +150,28 @@ export default function TutorWorkspace() {
       const data: ProblemAnalysis = await res.json();
       setAnalysis(data);
       setPhase("ready");
+
+      // The photo already shows their attempt: diagnose it instead of asking
+      // them to start. Seeded exactly like handleCheckWork does — their working
+      // as a student turn, then the diagnosis — so the rest of the session
+      // (memory, recurring gaps, retry) behaves as if they had submitted it.
+      if (data.studentWork?.present && data.studentWork.transcript.trim()) {
+        setMessages([
+          {
+            id: uid("s"),
+            role: "student",
+            content: data.studentWork.transcript.trim(),
+            createdAt: Date.now(),
+            attemptImage: dataUrl,
+          },
+        ]);
+        void sendCheckWork(
+          { text: data.studentWork.transcript.trim(), imageDataUrl: dataUrl },
+          data,
+        );
+        return;
+      }
+
       // Diagnosis-first opener: invite the student's own work instead of
       // opening with a concept lecture — their reasoning is what we diagnose.
       // Static (no API call), so it's instant, free, and reliably on-message.
@@ -220,12 +242,17 @@ export default function TutorWorkspace() {
   }, [scrollToBottom]);
 
   const toHistory = (msgs: DisplayMessage[]): ChatMessage[] =>
-    msgs.map(({ id, role, content, createdAt }) => ({
-      id,
-      role,
-      content,
-      createdAt,
-    }));
+    msgs
+      // A practice widget occupies a message slot with empty content, and the
+      // API rejects a message whose content is "" — so a tutor turn taken after
+      // one would 400. It carries no conversational text anyway.
+      .filter((m) => m.content.trim().length > 0)
+      .map(({ id, role, content, createdAt }) => ({
+        id,
+        role,
+        content,
+        createdAt,
+      }));
 
   async function requestTurn(
     action: TutorAction,
@@ -369,8 +396,20 @@ export default function TutorWorkspace() {
     void sendCheckWork(attempt);
   }
 
-  async function sendCheckWork(attempt: StudentAttempt) {
-    if (!analysis) return;
+  /**
+   * Post an attempt for diagnosis.
+   *
+   * `problem` is an explicit parameter rather than read from state because the
+   * opening auto-diagnosis runs in the same tick as `setAnalysis(data)`, when
+   * the `analysis` state is still null — and `runAnalysis` is a `[]`-deps
+   * callback, so it would close over the first render's value regardless.
+   */
+  async function sendCheckWork(
+    attempt: StudentAttempt,
+    problem?: ProblemAnalysis,
+  ) {
+    const forProblem = problem ?? analysis;
+    if (!forProblem) return;
     setTurnBusy(true);
     setTurnError(null);
     retryRef.current = null;
@@ -378,7 +417,7 @@ export default function TutorWorkspace() {
       const res = await fetch("/api/check-work", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problem: analysis, attempt }),
+        body: JSON.stringify({ problem: forProblem, attempt }),
       });
       if (!res.ok) throw new Error(await readApiError(res, "Check failed."));
       const check: WorkCheck = await res.json();
@@ -387,7 +426,7 @@ export default function TutorWorkspace() {
       memoryRef.current = applyWorkCheckToMemory(
         memoryRef.current,
         check,
-        analysis.concept,
+        forProblem.concept,
       );
       setRecurring(detectRecurring(memoryRef.current));
       setMessages((prev) => [
@@ -401,7 +440,7 @@ export default function TutorWorkspace() {
         },
       ]);
     } catch (err) {
-      retryRef.current = () => void sendCheckWork(attempt);
+      retryRef.current = () => void sendCheckWork(attempt, forProblem);
       setTurnError(err instanceof Error ? err.message : "Check failed.");
     } finally {
       setTurnBusy(false);
