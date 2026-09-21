@@ -175,13 +175,35 @@ export default function RichText({ text }: { text: string }) {
   );
 }
 
+/**
+ * KaTeX output for an expression, cached by expression + mode.
+ *
+ * A streaming message re-parses and re-renders on every repaint, and the
+ * equations in it are identical each time — without this, a message with a
+ * displayed formula re-runs KaTeX on it dozens of times as the text grows.
+ */
+const katexCache = new Map<string, string>();
+
 function renderMath(expr: string, display: boolean, key: number) {
   let html: string;
+  const cacheKey = `${display ? "d" : "i"}:${expr}`;
+  const cached = katexCache.get(cacheKey);
+  if (cached !== undefined) {
+    return (
+      <span
+        key={key}
+        // KaTeX output is generated from our own strings, not user HTML.
+        dangerouslySetInnerHTML={{ __html: cached }}
+      />
+    );
+  }
   try {
     html = katex.renderToString(expr, {
       displayMode: display,
       throwOnError: false,
     });
+    if (katexCache.size > 500) katexCache.clear();
+    katexCache.set(cacheKey, html);
   } catch {
     return (
       <code key={key} className="text-danger-600">

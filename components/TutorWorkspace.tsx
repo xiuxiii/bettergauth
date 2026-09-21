@@ -25,7 +25,8 @@ import {
   resolveMisconception,
 } from "@/lib/tutor/types";
 import { IMAGE_KEY, SUBJECT_KEY, uid } from "@/lib/utils";
-import { readApiError } from "@/lib/apiClient";
+import { safePrefix } from "@/lib/tutor/streamText";
+import { readApiError, readNdjson } from "@/lib/apiClient";
 import {
   DEFAULT_PREFERENCES,
   loadPreferences,
@@ -65,6 +66,12 @@ type DisplayMessage = ChatMessage & {
   practiceFocus?: PracticeFocus;
 };
 
+/** One NDJSON frame from the streaming /api/tutor response. */
+type TutorStreamFrame =
+  | { t: "delta"; v: string }
+  | { t: "done"; turn: TutorTurn }
+  | { t: "error"; message: string };
+
 type Phase = "loading" | "ready" | "error" | "empty";
 
 export default function TutorWorkspace() {
@@ -76,6 +83,10 @@ export default function TutorWorkspace() {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [turnBusy, setTurnBusy] = useState(false);
   const [turnError, setTurnError] = useState<string | null>(null);
+  // Id of the message currently streaming in, or null. Distinct from turnBusy:
+  // controls stay locked until the turn completes, but the "thinking" dots give
+  // way as soon as there is real text to read.
+  const [streamingId, setStreamingId] = useState<string | null>(null);
   // What "Try again" should re-run. Set by whichever request failed, so a
   // failed work-check retries the work-check (image and all) instead of
   // silently falling back to a plain "ask" — which succeeded and made the
@@ -171,13 +182,28 @@ export default function TutorWorkspace() {
     void runAnalysis(stored);
   }, [runAnalysis]);
 
-  // Keep the newest message in view.
+  // Whether the student is parked at the bottom. Tracked from their own
+  // scrolling rather than measured after a render, because by then the new
+  // content has already changed the distance.
+  const pinnedRef = useRef(true);
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }, []);
+
+  // Keep the newest message in view — but only if they haven't scrolled up.
+  // While streaming this fires constantly; yanking the view back down while
+  // they are re-reading an earlier line would be worse than not following.
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
+    const el = scrollRef.current;
+    if (!el || !pinnedRef.current) return;
+    el.scrollTo({
+      top: el.scrollHeight,
+      // Queued smooth scrolls fight each other at streaming frequency.
+      behavior: streamingId ? "auto" : "smooth",
     });
-  }, [messages, turnBusy]);
+  }, [messages, turnBusy, streamingId]);
 
   // Keyboard follow (visual only): when the composer gains focus, and again
   // once the on-screen keyboard has finished resizing the visual viewport,
@@ -224,28 +250,79 @@ export default function TutorWorkspace() {
         }),
       });
       if (!res.ok) throw new Error(await readApiError(res, "Tutor failed."));
-      const turn: TutorTurn = await res.json();
-      if (turn.memory) {
-        memoryRef.current = turn.memory;
-        setRecurring(detectRecurring(turn.memory));
-      }
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uid("t"),
-          role: "tutor",
+
+      const id = uid("t");
+
+      /** Create the tutor message on first paint, then update it in place. */
+      const put = (patch: Partial<DisplayMessage> & { content: string }) =>
+        setMessages((prev) => {
+          const i = prev.findIndex((m) => m.id === id);
+          if (i === -1) {
+            return [
+              ...prev,
+              { id, role: "tutor", createdAt: Date.now(), ...patch },
+            ];
+          }
+          const next = prev.slice();
+          next[i] = { ...next[i], ...patch };
+          return next;
+        });
+
+      const finish = (turn: TutorTurn) => {
+        if (turn.memory) {
+          memoryRef.current = turn.memory;
+          setRecurring(detectRecurring(turn.memory));
+        }
+        put({
           content: turn.message,
-          createdAt: Date.now(),
           solution: turn.solution,
           similarProblem: turn.similarProblem,
           hasMore: turn.hasMore,
-        },
-      ]);
+        });
+      };
+
+      // show_solution / similar_problem still answer with one JSON body.
+      if (!res.headers.get("content-type")?.includes("ndjson")) {
+        finish((await res.json()) as TutorTurn);
+        return;
+      }
+
+      let shown = "";
+      let painted = 0;
+      // RichText re-parses and re-renders every KaTeX segment on each change, so
+      // painting per token would be hundreds of full re-renders on a phone.
+      const paint = () => {
+        const safe = safePrefix(shown);
+        if (!safe) return;
+        painted = Date.now();
+        setStreamingId(id);
+        put({ content: safe });
+      };
+
+      let completed = false;
+      for await (const frame of readNdjson<TutorStreamFrame>(res)) {
+        if (frame.t === "delta") {
+          shown += frame.v;
+          if (Date.now() - painted >= 60) paint();
+        } else if (frame.t === "done") {
+          completed = true;
+          finish(frame.turn);
+        } else if (frame.t === "error") {
+          throw new Error(frame.message);
+        }
+      }
+      // A dropped connection ends the loop without a `done` frame. Whatever was
+      // painted is a partial answer, so say so rather than letting it sit there
+      // looking finished.
+      if (!completed) {
+        throw new Error("The tutor's answer was cut off. Please try again.");
+      }
     } catch (err) {
       retryRef.current = () =>
         void requestTurn(action, problem, history, studentText);
       setTurnError(err instanceof Error ? err.message : "Tutor failed.");
     } finally {
+      setStreamingId(null);
       setTurnBusy(false);
     }
   }
@@ -423,6 +500,7 @@ export default function TutorWorkspace() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           ref={scrollRef}
+          onScroll={handleScroll}
           aria-live="polite"
           className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6"
         >
@@ -450,7 +528,9 @@ export default function TutorWorkspace() {
               ),
             )}
 
-            {turnBusy && <LoadingState label="Tutor is thinking…" />}
+            {turnBusy && !streamingId && (
+              <LoadingState label="Tutor is thinking…" />
+            )}
 
             {/* "Continue" expands into place instead of popping and shifting the list. */}
             <div

@@ -9,6 +9,40 @@
  * JSON` instead of "that photo is too big". So read the body defensively and
  * map the statuses this app actually hits.
  */
+/**
+ * Iterate a newline-delimited JSON response as it arrives.
+ *
+ * A chunk boundary can fall anywhere, including mid-line and mid-UTF-8, so the
+ * tail is buffered between reads and the decoder runs in streaming mode.
+ */
+export async function* readNdjson<T>(res: Response): AsyncGenerator<T> {
+  const body = res.body;
+  if (!body) return;
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let newline: number;
+      while ((newline = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (line) yield JSON.parse(line) as T;
+      }
+    }
+    const tail = buffer.trim();
+    if (tail) yield JSON.parse(tail) as T;
+  } finally {
+    // Covers an early `break` by the caller as well as normal completion.
+    reader.cancel().catch(() => {});
+  }
+}
+
 export async function readApiError(
   res: Response,
   fallback: string,

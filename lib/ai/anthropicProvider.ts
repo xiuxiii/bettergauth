@@ -15,13 +15,16 @@ import type {
   PracticeProblem,
   ProblemAnalysis,
   QuestionDetection,
+  SessionMemory,
   TutorPreferences,
+  TutorStreamEvent,
   TutorTurn,
   TutorRequest,
   WorkCheck,
 } from "@/lib/tutor/types";
 import { emptySessionMemory } from "@/lib/tutor/types";
 import { SYSTEM_INSTRUCTIONS } from "@/lib/tutor/engine";
+import { createMessageFieldDecoder } from "@/lib/tutor/streamText";
 
 /**
  * Real vision-capable provider (Claude). Turns each request into a Claude call
@@ -258,7 +261,18 @@ export class AnthropicProvider implements AIProvider {
     return required(res.parsed_output, "problem analysis");
   }
 
-  async tutor(request: TutorRequest): Promise<TutorTurn> {
+  /**
+   * Build the system + messages for a tutor turn.
+   *
+   * Shared by `tutor()` and `tutorStream()` so both send a byte-identical
+   * cached prefix — the `cache_control` block below only pays off if the
+   * streaming path reproduces it exactly.
+   */
+  private tutorContext(request: TutorRequest): {
+    memory: SessionMemory;
+    system: Anthropic.TextBlockParam[];
+    messages: Anthropic.MessageParam[];
+  } {
     // Split the system prompt so the big, frozen instructions are cached across
     // every turn/problem/user (prompt caching, ~90% cheaper on the cached
     // prefix), while the small per-problem block stays uncached.
@@ -301,6 +315,12 @@ Maintain it honestly from evidence:
       { role: "user", content: actionPrompt(request) },
     ];
 
+    return { memory, system, messages };
+  }
+
+  async tutor(request: TutorRequest): Promise<TutorTurn> {
+    const { memory, system, messages } = this.tutorContext(request);
+
     if (request.action === "show_solution") {
       const res = await this.client.messages.parse({
         model: this.model,
@@ -342,6 +362,55 @@ Maintain it honestly from evidence:
     logUsage("tutor:chunk", res);
     const out = required(res.parsed_output, "tutor reply");
     return { message: out.message, hasMore: out.hasMore, memory: out.memory };
+  }
+
+  /**
+   * The conceptual-move turn, streamed.
+   *
+   * Same request as the chunk branch of `tutor()` — same cached system prefix,
+   * same schema, same token cap. The difference is purely in delivery: the
+   * model writes `message` first (it is declared first in TutorChunkSchema) and
+   * only then regenerates the whole memory blob, so streaming lets the student
+   * read the sentences while that tail is still being written. The deeper into
+   * a session, the bigger that tail, and the more this saves.
+   *
+   * Deltas are best-effort display only — decoded out of the partial JSON. The
+   * authoritative turn comes from the SDK's validated `parsed_output` at the
+   * end, exactly as the non-streaming path does, so a desynced decoder can
+   * never produce wrong content: the final event overwrites it.
+   */
+  async *tutorStream(
+    request: TutorRequest,
+  ): AsyncGenerator<TutorStreamEvent, void, unknown> {
+    const { system, messages } = this.tutorContext(request);
+
+    const stream = this.client.messages.stream({
+      model: this.model,
+      max_tokens: 900,
+      thinking: { type: "disabled" },
+      system,
+      messages,
+      output_config: { format: zodOutputFormat(TutorChunkSchema) },
+    });
+
+    const decode = createMessageFieldDecoder();
+    for await (const event of stream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
+        const text = decode(event.delta.text);
+        if (text) yield { type: "delta", text };
+      }
+    }
+
+    const final = await stream.finalMessage();
+    logUsage("tutor:chunk", final);
+    const out = required(final.parsed_output, "tutor reply");
+    yield {
+      type: "done",
+      turn: { message: out.message, hasMore: out.hasMore, memory: out.memory },
+    };
   }
 
   async checkWork(request: CheckWorkRequest): Promise<WorkCheck> {

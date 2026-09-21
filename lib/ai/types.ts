@@ -9,6 +9,7 @@ import type {
   ProblemAnalysis,
   QuestionDetection,
   TutorRequest,
+  TutorStreamEvent,
   TutorTurn,
   WorkCheck,
 } from "@/lib/tutor/types";
@@ -51,6 +52,17 @@ export interface AIProvider {
 
   /** Produce the next tutor turn given the problem and conversation so far. */
   tutor(request: TutorRequest): Promise<TutorTurn>;
+
+  /**
+   * The same conceptual-move turn, delivered progressively.
+   *
+   * Yields display-only `delta` frames while the model is still writing, then
+   * exactly one authoritative `done` frame carrying the validated turn. Only
+   * the conceptual moves stream; `show_solution` and `similar_problem` go
+   * through `tutor()`, since their payloads are cards that are only meaningful
+   * complete.
+   */
+  tutorStream(request: TutorRequest): AsyncGenerator<TutorStreamEvent>;
 
   /**
    * "Check My Work": diagnose a student's attempted solution. Returns the FIRST

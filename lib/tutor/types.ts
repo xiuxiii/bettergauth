@@ -391,6 +391,18 @@ export interface TutorTurn {
   memory?: SessionMemory;
 }
 
+/**
+ * One frame of a streamed tutor turn.
+ *
+ * `delta` carries display-only text decoded from the partial response and may
+ * lag or differ slightly from the final text. `done` carries the validated turn
+ * and is authoritative — the client replaces whatever it has accumulated with
+ * `turn.message` when it arrives.
+ */
+export type TutorStreamEvent =
+  | { type: "delta"; text: string }
+  | { type: "done"; turn: TutorTurn };
+
 /** What the client sends to /api/tutor. */
 export interface TutorRequest {
   problem: ProblemAnalysis;
