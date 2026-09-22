@@ -130,12 +130,12 @@ export default function HomeUploader() {
       {scanning && (
         <CameraScanner
           onClose={() => setScanning(false)}
-          onCapture={(dataUrl) => {
+          onCapture={(file) => {
+            // A scan is now a File at the device's full still resolution, so it
+            // takes the identical path to an uploaded photo: downscaled preview
+            // for the cropper, original kept as the crop source.
             setScanning(false);
-            setPending(dataUrl);
-            // The scanner's frame is already at its native size, so it is both
-            // the preview and the crop source.
-            setSource(dataUrl);
+            void handleFile(file);
           }}
         />
       )}

@@ -312,12 +312,29 @@ async function decodeSource(source: File | string): Promise<{
 }
 
 /**
- * Grab the current frame of a live <video> as a downscaled JPEG data URL.
- * The full frame is kept: the student frames the question in the cropper.
+ * Grab the current frame of a live <video> at its NATIVE resolution, as a File.
+ *
+ * Deliberately not downscaled. This is the fallback capture when a device has
+ * no still-photo API, and it becomes the crop source — downscaling here would
+ * throw away the detail the cropper is about to go looking for, which is the
+ * whole problem `cropSourceToJpeg` exists to avoid. The preview is made
+ * separately by `fileToNormalizedJpeg`.
  */
-export function videoFrameToJpeg(video: HTMLVideoElement): string {
+export async function videoFrameToFile(
+  video: HTMLVideoElement,
+): Promise<File> {
   const w = video.videoWidth;
   const h = video.videoHeight;
   if (!w || !h) throw new Error("Camera frame not ready.");
-  return canvasToJpeg(scaledCanvas(video, w, h));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D context unavailable.");
+  ctx.drawImage(video, 0, 0, w, h);
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", QUALITY),
+  );
+  if (!blob) throw new Error("Could not read the camera frame.");
+  return new File([blob], "scan.jpg", { type: "image/jpeg" });
 }

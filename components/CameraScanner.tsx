@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { videoFrameToJpeg, fileToNormalizedJpeg } from "@/lib/image";
+import { videoFrameToFile } from "@/lib/image";
 import { Image as ImageIcon, X } from "lucide-react";
 import { Spinner } from "@/components/States";
 
@@ -16,7 +16,13 @@ export default function CameraScanner({
   onCapture,
   onClose,
 }: {
-  onCapture: (dataUrl: string) => void;
+  /**
+   * Hands back the capture as a File, at the highest resolution the device
+   * gave us. A File, not a data URL, so the caller can treat a scan exactly
+   * like an uploaded photo: small preview for the cropper, full-resolution
+   * original to crop from.
+   */
+  onCapture: (file: File) => void;
   onClose: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -44,8 +50,10 @@ export default function CameraScanner({
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            // Ask high and take what the device gives. This is the live preview,
+            // and on hardware with no still-photo API it is also the capture.
+            width: { ideal: 3840 },
+            height: { ideal: 2160 },
           },
           audio: false,
         });
@@ -70,35 +78,64 @@ export default function CameraScanner({
     };
   }, []);
 
-  function capture() {
+  /**
+   * Take a real still photo where the device supports it.
+   *
+   * A video frame is capped at the video track's resolution, typically around
+   * 2 MP, while the same phone's still camera is 12 MP or more. That difference
+   * is most of what makes handwriting readable, so `ImageCapture.takePhoto()`
+   * is tried first and the frame is only the fallback.
+   *
+   * `takePhoto()` is called with no settings on purpose: devices default to
+   * their full photo resolution, while asking for an explicit width and height
+   * risks a combination the camera doesn't actually support and a stretched
+   * image. The result is only accepted if it is genuinely bigger than the frame
+   * we already have, since a handful of devices return something smaller.
+   */
+  async function grabStill(v: HTMLVideoElement): Promise<File> {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (track && typeof ImageCapture !== "undefined") {
+      try {
+        const blob = await new ImageCapture(track).takePhoto();
+        const bmp = await createImageBitmap(blob);
+        const bigger = bmp.width * bmp.height > v.videoWidth * v.videoHeight;
+        bmp.close?.();
+        if (bigger) {
+          return new File([blob], "scan.jpg", {
+            type: blob.type || "image/jpeg",
+          });
+        }
+      } catch {
+        // No still support, or the device refused: fall through to the frame.
+      }
+    }
+    return videoFrameToFile(v);
+  }
+
+  async function capture() {
     const v = videoRef.current;
     if (!v || !v.videoWidth || busy) return;
     setBusy(true);
+    // Flash immediately: the still can take a moment, and the shutter should
+    // answer the tap, not the camera.
+    setFlashing(true);
     try {
       // Full frame: the question cropper that follows does the cropping, with
       // the whole page visible for context.
-      const url = videoFrameToJpeg(v);
-      // Brief shutter flash before handing the frame up.
-      setFlashing(true);
-      window.setTimeout(() => {
-        stopCamera();
-        onCapture(url);
-      }, 140);
+      const file = await grabStill(v);
+      stopCamera();
+      onCapture(file);
     } catch {
+      setFlashing(false);
       setBusy(false);
     }
   }
 
-  async function onPick(file: File | undefined) {
+  function onPick(file: File | undefined) {
     if (!file || busy) return;
     setBusy(true);
-    try {
-      const url = await fileToNormalizedJpeg(file);
-      stopCamera();
-      onCapture(url);
-    } catch {
-      setBusy(false);
-    }
+    stopCamera();
+    onCapture(file);
   }
 
   return (
