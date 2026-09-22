@@ -225,27 +225,90 @@ export async function detectContentRectNormalized(
   };
 }
 
-/** Crop an image data URL to a normalised rect, returning a JPEG data URL. */
-export async function cropDataUrl(
-  dataUrl: string,
+/**
+ * Crop the ORIGINAL capture to a normalised rect, returning a JPEG data URL.
+ *
+ * The rect is chosen on the downscaled preview the cropper shows, but it is
+ * applied here to the full-resolution source, because normalised coordinates
+ * are resolution independent. That ordering is the whole point: cropping the
+ * 2200px preview instead threw away roughly half the linear detail of the
+ * question before the model ever saw it, and handwriting is exactly what that
+ * detail is made of.
+ *
+ * One `drawImage` goes from the source region straight to the final size, so
+ * there is a single resample and a single JPEG encode. The previous path
+ * encoded twice (downscale at capture, re-encode at crop) and compounding lossy
+ * passes are specifically bad for text.
+ *
+ * Only the output canvas is ever allocated, never a full-size one, so a 12 MP
+ * photo does not risk the canvas-area ceiling phones impose.
+ */
+export async function cropSourceToJpeg(
+  source: File | string,
   rect: NormalizedRect,
 ): Promise<string> {
+  const { draw, width, height, done } = await decodeSource(source);
+  try {
+    const sx = Math.round(clamp01(rect.x) * width);
+    const sy = Math.round(clamp01(rect.y) * height);
+    const sw = Math.max(1, Math.round(Math.min(rect.w, 1 - rect.x) * width));
+    const sh = Math.max(1, Math.round(Math.min(rect.h, 1 - rect.y) * height));
+
+    // Downscale only if the region is still bigger than we send; never upscale,
+    // which would just be paying tokens for interpolated pixels.
+    const scale = Math.min(1, MAX_DIM / Math.max(sw, sh));
+    const dw = Math.max(1, Math.round(sw * scale));
+    const dh = Math.max(1, Math.round(sh * scale));
+
+    const out = document.createElement("canvas");
+    out.width = dw;
+    out.height = dh;
+    const ctx = out.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D context unavailable.");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, dw, dh);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(draw, sx, sy, sw, sh, 0, 0, dw, dh);
+    return canvasToJpeg(out);
+  } finally {
+    done();
+  }
+}
+
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+
+/** Decode a File (EXIF-upright) or a data URL at its full resolution. */
+async function decodeSource(source: File | string): Promise<{
+  draw: CanvasImageSource;
+  width: number;
+  height: number;
+  done: () => void;
+}> {
+  if (typeof source !== "string" && typeof createImageBitmap === "function") {
+    try {
+      const opts = {
+        imageOrientation: "from-image",
+      } as unknown as ImageBitmapOptions;
+      const bmp = await createImageBitmap(source, opts);
+      return {
+        draw: bmp,
+        width: bmp.width,
+        height: bmp.height,
+        done: () => bmp.close?.(),
+      };
+    } catch {
+      // fall through to the <img> path
+    }
+  }
+  const dataUrl =
+    typeof source === "string" ? source : await fileToDataUrl(source);
   const img = await loadImageEl(dataUrl);
-  const W = img.naturalWidth;
-  const H = img.naturalHeight;
-  const x = Math.round(Math.min(Math.max(rect.x, 0), 1) * W);
-  const y = Math.round(Math.min(Math.max(rect.y, 0), 1) * H);
-  const w = Math.max(1, Math.round(Math.min(rect.w, 1 - rect.x) * W));
-  const h = Math.max(1, Math.round(Math.min(rect.h, 1 - rect.y) * H));
-  const out = document.createElement("canvas");
-  out.width = w;
-  out.height = h;
-  const ctx = out.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D context unavailable.");
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
-  return canvasToJpeg(out);
+  return {
+    draw: img,
+    width: img.naturalWidth,
+    height: img.naturalHeight,
+    done: () => {},
+  };
 }
 
 /**

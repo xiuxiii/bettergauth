@@ -75,10 +75,14 @@ const ProblemAnalysisSchema = z.object({
   topic: z.string(),
   concept: z.string(),
   confidence: z.number(),
-  /** Whether the photo already contains the student's own handwritten attempt. */
+  /**
+   * Whether the photo already contains the student's own handwritten attempt.
+   * Only a flag: noticing that handwriting exists is a far easier call than
+   * reading it, and transcribing here made every OCR slip a "fact" the
+   * diagnosis then reasoned from. The diagnosis reads the photo itself.
+   */
   studentWork: z.object({
     present: z.boolean(),
-    transcript: z.string(),
   }),
   /** The session's opening nudge. Free: it rides along on this same call. */
   openingHint: z.string(),
@@ -204,7 +208,7 @@ Getting the box on the RIGHT question matters more than getting its edges perfec
 
 What counts as a question: one numbered problem together with all of its parts, sub-parts, figures and answer options. Its box must fully contain it with a small margin and must not overlap a neighbouring question.
 
-A question's box must ALSO contain any handwritten working the student has already done for it, usually below or beside the printed question. They often photograph a problem they have already attempted, and work left outside the box is lost. Stop before the next numbered question even when working runs close to it.
+A question's box must ALSO contain any handwritten working the student has already done for it, usually below or beside the printed question. They often photograph a problem they have already attempted, and work left outside the box is lost. Stop before the next numbered question even when working runs close to it, and never extend a box ABOVE its own printed number: working written above that number belongs to the question before it, not this one.
 
 Ignore everything that is not printed exercise content. Photos are taken on a desk, so a calculator, phone, pen, ruler, hand or any other object lying on the page is NEVER a question, and neither is a running header, a page number, a chapter title or a section heading on its own.
 
@@ -221,7 +225,7 @@ The photo often ALSO contains the student's own handwritten attempt, because the
 photograph problems they have already worked on. Separate the two:
 - \`problemText\` is the PRINTED question ONLY. Never fold handwriting into it. This text is shown to the tutor as the problem itself every turn, so a student's wrong working leaking into it would be read as part of the question.
 - Set \`studentWork.present\` true ONLY for HANDWRITTEN working that is this student's own attempt at this problem. Printed text never counts: a worked example, a textbook solution, an answer key or the question's own printed answer options are all part of the page, not an attempt. Stray doodles, labels on a diagram, and a lone underlined final answer with no reasoning are not an attempt either.
-- When it is present, set \`transcript\` to a faithful transcription of that working, keeping their steps, their notation and their mistakes exactly as written. Do NOT correct, complete or tidy it. Separate each line of their working with a BLANK line, so their steps stay on separate lines instead of running together. Otherwise set \`transcript\` to "".
+- Do NOT transcribe the working. Only say whether it is there; something else reads it.
 
 \`openingHint\` is the first thing the student reads, so make it worth reading:
 ONE short sentence that points at where to start, and nothing else. Name the move
@@ -233,7 +237,14 @@ contains the student's working, still write it, but aimed at the next step from
 where they are. ${MATH_NOTE}`;
 
 const CHECKWORK_SYSTEM = `You are an expert STEM tutor diagnosing a student's attempt.
-Trace the student's OWN reasoning and find the FIRST point where it diverges from correct reasoning — not just a wrong final answer. Diagnose that divergence in terms of THEIR mental model: what their work assumes or treats as true, and why that is the real problem. Do NOT replace their reasoning with a fresh solution of your own. When their approach is internally consistent but rests on a wrong assumption, say exactly that — e.g. "your calculation is consistent with using the total velocity, but this equation needs the vertical component $v_y$". Classify the error by category and severity. If the underlying concept/method is right, say so and keep any arithmetic/notation correction to one line — do NOT nitpick. If the attempt is actually correct, set verdict "correct", leave firstError null, and say why their reasoning holds. Always name briefly what the student did right and how to continue from the corrected point. ${MATH_NOTE} ${STYLE_NOTE}`;
+Trace the student's OWN reasoning and find the FIRST point where it diverges from correct reasoning — not just a wrong final answer. Diagnose that divergence in terms of THEIR mental model: what their work assumes or treats as true, and why that is the real problem. Do NOT replace their reasoning with a fresh solution of your own. When their approach is internally consistent but rests on a wrong assumption, say exactly that — e.g. "your calculation is consistent with using the total velocity, but this equation needs the vertical component $v_y$". Classify the error by category and severity. If the underlying concept/method is right, say so and keep any arithmetic/notation correction to one line — do NOT nitpick. If the attempt is actually correct, set verdict "correct", leave firstError null, and say why their reasoning holds. Always name briefly what the student did right and how to continue from the corrected point.
+
+You are reading their ACTUAL HANDWRITING off a photo, so read it carefully and honestly:
+- Diagnose only steps you can genuinely see. NEVER invent a line that would explain their answer, and never fill in a step they did not write. If something is illegible, say that line is hard to read and ask what it says, rather than guessing.
+- Printed text on the page is not theirs. Textbooks print the answer next to the question, e.g. "(ans: 42.4 N)", and that is the book talking, not the student. Never treat a printed answer, worked example or answer key as a step they wrote, and never reverse-engineer working to reach it.
+- The photo may also catch working for a NEIGHBOURING question. Use only what belongs to the stated problem.
+- Units here are almost always N, m, s, kg, J or degrees. A mark after a force value that looks like V or Y is nearly always N; a scrawled greek letter next to an angle is nearly always theta.
+${MATH_NOTE} ${STYLE_NOTE}`;
 
 const GENERATE_SYSTEM = `You generate ONE fresh practice problem testing the SAME concept as the given problem, with different numbers and context so memorization is useless, at matching or slightly higher difficulty, avoiding unnecessary complexity. Do NOT include or reveal a solution — the student solves it first. ${MATH_NOTE}`;
 
@@ -291,11 +302,10 @@ export class AnthropicProvider implements AIProvider {
         ? ` The student selected the subject "${request.subjectHint}" — use it as context, but classify by the content if the problem clearly belongs to another subject.`
         : "";
     const res = await this.client.messages.parse({
-      // Headroom: this response now carries a transcription of the student's
-      // working and an opening hint on top of the problem text. Truncation here
+      // Headroom for the problem text plus an opening hint. Truncation here
       // fails the parse and surfaces as a 500, which this route has hit before.
       model: this.model,
-      max_tokens: 2200,
+      max_tokens: 1800,
       thinking: { type: "disabled" },
       system: ANALYZE_SYSTEM,
       messages: [
@@ -609,7 +619,9 @@ function attemptContent(
   imageDataUrl?: string,
 ): Anthropic.MessageParam["content"] {
   if (!imageDataUrl) return text;
-  return [{ type: "text", text }, imageBlock(imageDataUrl)];
+  // Image first: the vision guidance is that Claude works best with the image
+  // ahead of the text, and this call's whole job is reading that image.
+  return [imageBlock(imageDataUrl), { type: "text", text }];
 }
 
 /** Build a Claude image content block from a data URL. */

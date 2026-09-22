@@ -8,7 +8,7 @@ import type {
   QuestionDetection,
   Subject,
 } from "@/lib/tutor/types";
-import { cropDataUrl, detectContentRectNormalized, imageSize } from "@/lib/image";
+import { detectContentRectNormalized, imageSize } from "@/lib/image";
 import { Spinner } from "@/components/States";
 
 /** The subjects the capture step offers. Values are the pipeline's own Subject. */
@@ -72,7 +72,16 @@ export default function QuestionCropper({
 }: {
   /** Normalized (upright, downscaled) photo of the page as a data URL. */
   image: string;
-  onConfirm: (result: { imageDataUrl: string; subject: CaptureSubject | null }) => void;
+  /**
+   * Hands back the chosen region, not a cropped image. The crop is applied to
+   * the full-resolution original by the caller: `image` here is only the small
+   * preview, and cropping it would throw away the detail the model needs to
+   * read handwriting.
+   */
+  onConfirm: (result: {
+    rect: NormalizedRect;
+    subject: CaptureSubject | null;
+  }) => void;
   onCancel: () => void;
 }) {
   // --- Detection -------------------------------------------------------------
@@ -243,17 +252,11 @@ export default function QuestionCropper({
   const [cropping, setCropping] = useState(false);
   const [cropError, setCropError] = useState<string | null>(null);
 
-  async function confirm() {
+  function confirm() {
     if (cropping) return;
     setCropping(true);
     setCropError(null);
-    try {
-      const imageDataUrl = sameRect(rect, FULL) ? image : await cropDataUrl(image, rect);
-      onConfirm({ imageDataUrl, subject });
-    } catch {
-      setCropError("Could not crop the photo. Try again.");
-      setCropping(false);
-    }
+    onConfirm({ rect, subject });
   }
 
   useEffect(() => {

@@ -25,17 +25,18 @@ export interface ProblemAnalysis {
   /** 0..1 confidence that the detection is correct. */
   confidence: number;
   /**
-   * The student's own handwritten attempt, when the photo already contains one.
+   * Whether the photo already contains the student's own handwritten attempt.
    * They frequently shoot a problem they have already worked on, so the session
-   * opens by diagnosing this instead of inviting them to start.
+   * opens by diagnosing it instead of inviting them to start.
    *
    * Handwriting only: a printed worked example or answer key on the same page is
-   * part of the question, not an attempt. `transcript` preserves their steps and
-   * their mistakes verbatim.
+   * part of the question, not an attempt. Deliberately just a flag — the
+   * diagnosis reads the photo itself rather than a transcription, because a
+   * transcription turns every misread stroke into a step the tutor then
+   * "corrects" the student for never having written.
    */
   studentWork: {
     present: boolean;
-    transcript: string;
   };
   /**
    * One short sentence pointing at where to start, shown as the session's first

@@ -157,24 +157,13 @@ export default function TutorWorkspace() {
       setPhase("ready");
 
       // The photo already shows their attempt: diagnose it instead of asking
-      // them to start. Seeded exactly like handleCheckWork does — their working
-      // as a student turn, then the diagnosis — so the rest of the session
-      // (memory, recurring gaps, retry) behaves as if they had submitted it.
-      if (data.studentWork?.present && data.studentWork.transcript.trim()) {
-        setMessages([
-          {
-            id: uid("s"),
-            role: "student",
-            content: data.studentWork.transcript.trim(),
-            createdAt: Date.now(),
-            // No attemptImage: the card directly above is already showing this
-            // exact photo, and repeating it under their own turn is clutter.
-          },
-        ]);
-        void sendCheckWork(
-          { text: data.studentWork.transcript.trim(), imageDataUrl: dataUrl },
-          data,
-        );
+      // them to start. No student turn is posted — the card directly above is
+      // already showing the photo with the working in it, and the diagnosis
+      // reads that same photo. Everything downstream (memory, recurring gaps,
+      // retry) behaves as if they had submitted it themselves.
+      if (data.studentWork?.present) {
+        setMessages([]);
+        void sendCheckWork({ imageDataUrl: dataUrl }, data);
         return;
       }
 

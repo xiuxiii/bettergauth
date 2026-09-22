@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IMAGE_KEY, SUBJECT_KEY } from "@/lib/utils";
-import { fileToNormalizedJpeg } from "@/lib/image";
+import type { NormalizedRect } from "@/lib/tutor/types";
+import { cropSourceToJpeg, fileToNormalizedJpeg } from "@/lib/image";
 import { hasPreferences } from "@/lib/preferences";
 import { Camera, Upload } from "lucide-react";
 import { ErrorState, Spinner } from "@/components/States";
@@ -26,6 +27,13 @@ export default function HomeUploader() {
   const [scanning, setScanning] = useState(false);
   /** A normalized photo waiting in the cropper for the student to confirm. */
   const [pending, setPending] = useState<string | null>(null);
+  /**
+   * The ORIGINAL capture behind that preview, kept so the confirmed crop can be
+   * cut from full resolution. Cropping `pending` instead would hand the model a
+   * question at roughly half the linear detail, which is most of why handwriting
+   * read badly. A File is just a handle here, decoded once at confirm.
+   */
+  const [source, setSource] = useState<File | string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // First-run gate: send new visitors through setup once.
@@ -42,6 +50,25 @@ export default function HomeUploader() {
     router.push("/workspace");
   }
 
+  /**
+   * Apply the region the student chose to the full-resolution original.
+   * Falls back to the preview if the original somehow isn't around, so a
+   * confirm can never dead-end.
+   */
+  async function confirmCrop(rect: NormalizedRect, subject: string | null) {
+    const preview = pending;
+    if (!preview) return;
+    setBusy(true);
+    try {
+      go(await cropSourceToJpeg(source ?? preview, rect), subject);
+      setPending(null);
+      setSource(null);
+    } catch {
+      setBusy(false);
+      setError("Could not crop that photo. Please try again.");
+    }
+  }
+
   async function handleFile(file: File | undefined) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -52,6 +79,7 @@ export default function HomeUploader() {
     setBusy(true);
     try {
       setPending(await fileToNormalizedJpeg(file));
+      setSource(file);
     } catch {
       setError("Could not read that image. Please try another photo.");
     } finally {
@@ -105,6 +133,9 @@ export default function HomeUploader() {
           onCapture={(dataUrl) => {
             setScanning(false);
             setPending(dataUrl);
+            // The scanner's frame is already at its native size, so it is both
+            // the preview and the crop source.
+            setSource(dataUrl);
           }}
         />
       )}
@@ -112,11 +143,11 @@ export default function HomeUploader() {
       {pending && (
         <QuestionCropper
           image={pending}
-          onCancel={() => setPending(null)}
-          onConfirm={({ imageDataUrl, subject }) => {
+          onCancel={() => {
             setPending(null);
-            go(imageDataUrl, subject);
+            setSource(null);
           }}
+          onConfirm={({ rect, subject }) => void confirmCrop(rect, subject)}
         />
       )}
     </div>
