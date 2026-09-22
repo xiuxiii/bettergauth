@@ -21,6 +21,7 @@ There are no tests. `npx tsc --noEmit && npm run build` is the verification gate
 |---|---|
 | `ANTHROPIC_API_KEY` | Required. Without it the provider reports `provider: "none"` at `/api/health`. |
 | `ANTHROPIC_MODEL` | Overrides the `claude-sonnet-5` default. |
+| `DETECTION_MODEL` | Question detection only. Unset = same as `ANTHROPIC_MODEL`. Exists to A/B a faster model (e.g. `claude-haiku-4-5`) on the box-finding call without touching tutoring. |
 | `ACCESS_CODE` | Shared-access gate. **Unset = gate disabled**, so local dev just works. |
 | `RATE_LIMIT_PER_MIN` | Per-IP fixed window, default 30. |
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |
@@ -86,6 +87,14 @@ high-resolution vision tier: 2576px long edge **and** 4784 visual tokens, a toke
 being a 28x28 patch. For the 4:3 and 3:4 shapes phone cameras produce the token cap
 binds first, around 2240px, so 2200 is the most that survives without the server
 re-downscaling it. Raising it spends upload bytes on pixels the model never sees.
+
+**Detection and analysis get different image sizes, on purpose.** `MAX_DIM` (2200)
+is for analysis, which has to read handwriting. `DETECT_MAX_DIM` (1600) is for
+question detection, which only has to find boxes and read printed numbers — at 2200
+it was paying 4661 visual tokens for a layout task, versus 2494 at 1600. The boxes
+come back in the pixel space of the image actually sent, so `imageForDetection`
+returns its own width/height: sending the preview's 2200px dimensions alongside a
+1600px image would scale every box by 0.73 and land them on the wrong questions.
 
 **Every image path must go through `fileToNormalizedJpeg`.**
 A raw phone photo as a data URL is ~7.8MB of base64, over Vercel's 4.5MB request

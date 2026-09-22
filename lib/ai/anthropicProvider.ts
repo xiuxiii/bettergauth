@@ -256,8 +256,10 @@ export class AnthropicProvider implements AIProvider {
   readonly name = "anthropic";
   private readonly client: Anthropic;
   private readonly model: string;
+  /** Question detection only — see DETECTION_MODEL in the constructor. */
+  private readonly detectionModel: string;
 
-  constructor(config: { apiKey: string; model?: string }) {
+  constructor(config: { apiKey: string; model?: string; detectionModel?: string }) {
     if (!config.apiKey) {
       throw new Error(
         "AnthropicProvider requires an API key (set ANTHROPIC_API_KEY).",
@@ -267,15 +269,27 @@ export class AnthropicProvider implements AIProvider {
     // Sonnet 5 is ~2.5x cheaper than Opus 5 and plenty for this workload.
     // Override with ANTHROPIC_MODEL if you want more headroom (e.g. claude-opus-5).
     this.model = config.model ?? "claude-sonnet-5";
+    // Detection is pure localisation — find the boxes, read the printed
+    // numbers — so it can plausibly run on something faster and cheaper than
+    // the model that does the tutoring. DETECTION_MODEL exists to A/B that
+    // (claude-haiku-4-5) against real worksheet photos on a deploy. It
+    // defaults to the main model, so nothing changes until it is set.
+    this.detectionModel = config.detectionModel ?? this.model;
   }
 
   async detectQuestions(
     request: DetectQuestionsRequest,
   ): Promise<QuestionDetection> {
     const res = await this.client.messages.parse({
-      model: this.model,
+      model: this.detectionModel,
       max_tokens: 1200,
-      thinking: { type: "disabled" },
+      // Thinking would only add latency to a localisation task. On Sonnet 5
+      // this has to be said explicitly, because OMITTING `thinking` there runs
+      // adaptive thinking rather than none. Haiku 4.5 doesn't take this shape
+      // (it uses budget_tokens), and for it "off" is simply leaving it out.
+      ...(isHaiku(this.detectionModel)
+        ? {}
+        : { thinking: { type: "disabled" as const } }),
       system: DETECT_SYSTEM,
       messages: [
         {
@@ -598,6 +612,11 @@ function preferencesBlock(prefs?: TutorPreferences): string {
  * caching is hitting (cache_read > 0 on repeat turns) and the real token counts.
  * Off by default.
  */
+/** Haiku takes a different thinking shape from the Sonnet/Opus default. */
+function isHaiku(model: string): boolean {
+  return model.toLowerCase().includes("haiku");
+}
+
 function logUsage(label: string, res: { usage?: unknown }): void {
   if (!process.env.DEBUG_TOKENS) return;
   const u = (res.usage ?? {}) as Record<string, unknown>;

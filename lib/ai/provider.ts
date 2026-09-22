@@ -21,6 +21,10 @@ export function getProvider(): AIProvider {
   const provider = (process.env.AI_PROVIDER?.trim() || "anthropic").toLowerCase();
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
   const model = process.env.ANTHROPIC_MODEL?.trim() || undefined;
+  // Optional: run question detection on a different (faster/cheaper) model than
+  // the tutoring calls. Unset means "same model", so this changes nothing until
+  // someone deliberately sets it.
+  const detectionModel = process.env.DETECTION_MODEL?.trim() || undefined;
 
   if (provider !== "anthropic") {
     throw new Error(
@@ -34,7 +38,10 @@ export function getProvider(): AIProvider {
     );
   }
 
-  console.log(`[ai] provider=anthropic; model=${model ?? "claude-sonnet-5"}`);
-  cached = new AnthropicProvider({ apiKey, model });
+  console.log(
+    `[ai] provider=anthropic; model=${model ?? "claude-sonnet-5"}` +
+      (detectionModel ? `; detection=${detectionModel}` : ""),
+  );
+  cached = new AnthropicProvider({ apiKey, model, detectionModel });
   return cached;
 }

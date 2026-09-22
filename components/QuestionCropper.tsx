@@ -7,7 +7,7 @@ import type {
   NormalizedRect,
   QuestionDetection,
 } from "@/lib/tutor/types";
-import { detectContentRectNormalized, imageSize } from "@/lib/image";
+import { detectContentRectNormalized, imageForDetection } from "@/lib/image";
 import { Spinner } from "@/components/States";
 
 type Handle = "move" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
@@ -15,6 +15,15 @@ type Handle = "move" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
 const FULL: NormalizedRect = { x: 0, y: 0, w: 1, h: 1 };
 const MIN_SIZE = 0.06; // smallest crop, as a fraction of the image
 const AUTO_PAD = 0.015; // breathing room around a detected question
+/** Ceiling on the detection call, after which the local seed box is all there is. */
+const DETECT_TIMEOUT_MS = 8000;
+
+/**
+ * Last detection result, so backing out of the cropper and re-entering with the
+ * same photo doesn't re-pay the call. One slot, not a Map: these data URLs are
+ * megabytes, and holding a history of them is how you run a phone out of memory.
+ */
+let lastDetection: { image: string; result: QuestionDetection } | null = null;
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n));
@@ -79,59 +88,107 @@ export default function QuestionCropper({
   // The auto-detected crop for the current selection (what "Reset" restores).
   const [autoRect, setAutoRect] = useState<NormalizedRect>(FULL);
 
+  // The student's framing beats the model's. Set the moment they touch the box,
+  // and read by the detection handler below, which would otherwise overwrite
+  // whatever they had just dragged.
+  const touchedRef = useRef(false);
+
+  // Phase 1: seed a real box immediately, with no network.
+  //
+  // This is the whole point of the screen's timing. Detection takes seconds,
+  // and until it lands the box used to sit at FULL — framing the entire page,
+  // which looks exactly like nothing has happened. The local ink bounding box
+  // needs no network and now runs at a small size, so a box is on the question
+  // from the first frame and there is nothing to wait through. It only ever
+  // seeds an editable box: the student can drag it, and detection replaces it.
   useEffect(() => {
     let cancelled = false;
+    void (async () => {
+      let local: NormalizedRect | null = null;
+      try {
+        local = await detectContentRectNormalized(image);
+      } catch {
+        local = null;
+      }
+      // Anything that already moved the box wins: a slow seed must not yank
+      // the frame out from under a student who got there first.
+      if (cancelled || !local || touchedRef.current) return;
+      setAutoRect(local);
+      setRect(local);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [image]);
+
+  // Phase 2: ask the model where the questions are, in the background.
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    // Without this the request had no ceiling at all: a hung call left
+    // "Finding the questions…" on screen forever, because the only
+    // setDetecting(false) sat after the await.
+    const timer = setTimeout(() => controller.abort(), DETECT_TIMEOUT_MS);
+
     async function detect() {
       let result: QuestionDetection | null = null;
       try {
-        // The model is asked for boxes in absolute pixels, so it has to be told
-        // the image's size. Measured here rather than read from the <img>'s
-        // onLoad, which may not have fired yet when detection starts.
-        const { width, height } = await imageSize(image);
-        const res = await fetch("/api/detect-questions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image, width, height }),
-        });
-        if (res.ok) result = (await res.json()) as QuestionDetection;
+        if (lastDetection && lastDetection.image === image) {
+          // Re-entering the cropper with the same photo: the effect is keyed on
+          // `image`, so without this every back-and-forth re-paid the call.
+          result = lastDetection.result;
+        } else {
+          // Detection gets its own, smaller image — and the dimensions that go
+          // with THAT image, since the boxes come back in its pixel space.
+          const shrunk = await imageForDetection(image);
+          const res = await fetch("/api/detect-questions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              image: shrunk.image,
+              width: shrunk.width,
+              height: shrunk.height,
+            }),
+            signal: controller.signal,
+          });
+          if (res.ok) {
+            result = (await res.json()) as QuestionDetection;
+            lastDetection = { image, result };
+          }
+        }
       } catch {
-        // fall through to the local fallback
+        // Aborted, offline, or a bad response. The phase-1 box already gives
+        // the student a usable screen, so there is nothing to recover here.
       }
       if (cancelled) return;
 
       if (result && result.questions.length > 0) {
         const i = clamp(result.primaryIndex, 0, result.questions.length - 1);
-        const auto = padded(result.questions[i].rect);
         setQuestions(result.questions);
         setSelected(i);
-        setAutoRect(auto);
-        setRect(auto);
-      } else {
-        // No model detection: box the ink on the page (the existing local
-        // heuristic), or leave the whole photo selected.
-        let local: NormalizedRect | null = null;
-        try {
-          local = await detectContentRectNormalized(image);
-        } catch {
-          local = null;
+        if (!touchedRef.current) {
+          const auto = padded(result.questions[i].rect);
+          setAutoRect(auto);
+          setRect(auto);
         }
-        if (cancelled) return;
-        const auto = local ?? FULL;
-        setQuestions([]);
-        setAutoRect(auto);
-        setRect(auto);
       }
       setDetecting(false);
     }
+
     void detect();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      controller.abort();
     };
   }, [image]);
 
   function selectQuestion(i: number) {
     if (i < 0 || i >= questions.length) return;
     const auto = padded(questions[i].rect);
+    // Tapping a number is the student asking for that question, so it overrides
+    // their earlier dragging rather than being suppressed by it.
+    touchedRef.current = false;
     setSelected(i);
     setAutoRect(auto);
     setRect(auto);
@@ -174,6 +231,7 @@ export default function QuestionCropper({
     e.stopPropagation();
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    touchedRef.current = true;
     drag.current = { handle, startX: e.clientX, startY: e.clientY, rect };
   };
 
@@ -239,14 +297,22 @@ export default function QuestionCropper({
   const multi = questions.length > 1;
   // The one thing worth reading, kept to a single phone line. The count is a
   // separate, quieter line: it is context, not an instruction.
-  const instruction = detecting
-    ? "Finding the questions…"
-    : multi
-      ? "Crop the question, or tap a number"
-      : questions.length === 1
-        ? "Drag the box to frame the question"
-        : "Drag the box around the question";
-  const count = multi ? `${questions.length} questions found` : "";
+  //
+  // Detection deliberately does NOT get the primary line. There is already a
+  // real box on the photo by now, so the student can act; announcing a wait
+  // over a screen that isn't waiting is what made this feel slow. Progress
+  // goes on the quiet line, where it reads as "more is coming" rather than
+  // "you can't do anything yet".
+  const instruction = multi
+    ? "Crop the question, or tap a number"
+    : questions.length === 1
+      ? "Drag the box to frame the question"
+      : "Drag the box around the question";
+  const count = multi
+    ? `${questions.length} questions found`
+    : detecting
+      ? "Looking for other questions…"
+      : "";
 
   return (
     <div
@@ -333,9 +399,7 @@ export default function QuestionCropper({
             >
             <div
               onPointerDown={startDrag("move")}
-              className={`absolute cursor-move rounded-sm border-2 ${
-                detecting ? "animate-pulse border-brand-300" : "border-brand-500"
-              }`}
+              className="absolute cursor-move rounded-sm border-2 border-brand-500"
               style={{
                 left: rect.x * fit.w,
                 top: rect.y * fit.h,
@@ -361,6 +425,10 @@ export default function QuestionCropper({
 
       {/* Controls */}
       <div className="border-t border-hairline bg-surface px-4 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] pt-3">
+        {/* Holds the nav row's height while detection is still running, so the
+            chips don't shove the instruction and button down when they land. */}
+        {!multi && detecting && <div className="mb-3 h-11" aria-hidden="true" />}
+
         {/* Question navigation — only when more than one was found. */}
         {multi && (
           <div className="mb-3 flex items-center justify-center gap-1">

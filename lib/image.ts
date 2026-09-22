@@ -31,6 +31,28 @@ import type { NormalizedRect } from "@/lib/tutor/types";
  */
 const MAX_DIM = 2200;
 /**
+ * Longest edge for the question-DETECTION image, px.
+ *
+ * Deliberately smaller than MAX_DIM, because the two calls read the page for
+ * different reasons. Analysis has to read handwriting, so it gets every pixel
+ * the model will look at. Detection only has to find where the questions are
+ * and read their printed numbers, and at 2200 it was paying the maximum
+ * possible image cost for a layout task: 79 x 59 = 4661 visual tokens, just
+ * under the 4784 cap. 1600 is 58 x 43 = 2494 tokens — roughly half the visual
+ * tokens and half the upload — while leaving printed question numbers on a
+ * dense worksheet comfortably legible.
+ */
+export const DETECT_MAX_DIM = 1600;
+/**
+ * Longest edge for the local ink-bounding-box seed, px.
+ *
+ * This one runs on the main thread while the capture screen is opening, and a
+ * bounding box does not need resolution: it is two O(w*h) passes plus a
+ * getImageData read-back. At MAX_DIM that is ~3.6M pixels and a visible stall;
+ * at 600 it is ~40x less work for the same rect.
+ */
+const SEED_MAX_DIM = 600;
+/**
  * JPEG quality. Nudged up from 0.82 because these are photos of small
  * handwriting and printed sub-parts, and compression artifacts cost legibility
  * exactly where it matters most.
@@ -41,8 +63,9 @@ function scaledCanvas(
   source: CanvasImageSource,
   srcW: number,
   srcH: number,
+  maxDim: number = MAX_DIM,
 ): HTMLCanvasElement {
-  const scale = Math.min(1, MAX_DIM / Math.max(srcW, srcH));
+  const scale = Math.min(1, maxDim / Math.max(srcW, srcH));
   const w = Math.max(1, Math.round(srcW * scale));
   const h = Math.max(1, Math.round(srcH * scale));
   const canvas = document.createElement("canvas");
@@ -183,17 +206,34 @@ export async function fileToNormalizedJpeg(file: File): Promise<string> {
 }
 
 /**
- * Pixel dimensions of a data URL.
+ * Re-encode a preview data URL down to DETECT_MAX_DIM for question detection,
+ * returning the image together with the dimensions it actually has.
  *
- * Question detection needs these: the model is asked for boxes in absolute
- * pixels (it is markedly worse at normalised 0..1 coordinates), so the server
- * has to know the size of the image those pixels refer to.
+ * Returning the size is the point, not a convenience. The model is asked for
+ * boxes in ABSOLUTE PIXELS of the image it was given, and the server divides
+ * those pixels by the width/height we send it to normalise them. So the
+ * dimensions reported here must be this downscaled image's own — passing the
+ * preview's 2200px size alongside a 1600px image would scale every box by
+ * 0.73 and land them all on the wrong questions.
+ *
+ * The rects come back normalised, so they still map onto the full-resolution
+ * original at crop time exactly as before.
  */
-export async function imageSize(
+export async function imageForDetection(
   dataUrl: string,
-): Promise<{ width: number; height: number }> {
+): Promise<{ image: string; width: number; height: number }> {
   const img = await loadImageEl(dataUrl);
-  return { width: img.naturalWidth, height: img.naturalHeight };
+  const canvas = scaledCanvas(
+    img,
+    img.naturalWidth,
+    img.naturalHeight,
+    DETECT_MAX_DIM,
+  );
+  return {
+    image: canvasToJpeg(canvas),
+    width: canvas.width,
+    height: canvas.height,
+  };
 }
 
 function loadImageEl(dataUrl: string): Promise<HTMLImageElement> {
@@ -214,7 +254,7 @@ export async function detectContentRectNormalized(
   dataUrl: string,
 ): Promise<NormalizedRect | null> {
   const img = await loadImageEl(dataUrl);
-  const canvas = scaledCanvas(img, img.naturalWidth, img.naturalHeight);
+  const canvas = scaledCanvas(img, img.naturalWidth, img.naturalHeight, SEED_MAX_DIM);
   const r = detectContentRect(canvas);
   if (!r) return null;
   return {
