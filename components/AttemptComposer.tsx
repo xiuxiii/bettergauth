@@ -14,9 +14,14 @@ const DRAG_VELOCITY = 0.5;
 const DRAG_FLICK_MIN_PX = 24;
 
 /**
- * Bottom-sheet composer for "Check My Work". The student types their working
- * and/or attaches a photo of it, then submits for diagnosis. At least one of the
- * two must be provided.
+ * Bottom-sheet composer for "Check My Work". The student photographs their
+ * working and submits it for diagnosis.
+ *
+ * Photo only, deliberately. Nobody types out physics working on a phone — it
+ * means transcribing square roots, fractions and exponents into a plain
+ * textarea, which is slower than redoing the problem. The typed field went
+ * unused, and offering it as the first and largest control implied it was the
+ * expected path.
  */
 export default function AttemptComposer({
   busy,
@@ -39,11 +44,10 @@ export default function AttemptComposer({
         }
       : {
           title: "Check my work",
-          hint: "Type your solution or attach a photo — I'll find the first thing worth fixing.",
+          hint: "Snap your working and your answer — I'll find the first thing worth fixing.",
           submit: "Check it",
         };
   const fileRef = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
 
@@ -64,7 +68,7 @@ export default function AttemptComposer({
     };
   }, []);
 
-  const canSubmit = (text.trim().length > 0 || !!image) && !busy;
+  const canSubmit = !!image && !busy;
 
   function close() {
     if (closing) return;
@@ -123,10 +127,7 @@ export default function AttemptComposer({
 
   function submit() {
     if (!canSubmit) return;
-    onSubmit({
-      text: text.trim() || undefined,
-      imageDataUrl: image ?? undefined,
-    });
+    onSubmit({ imageDataUrl: image ?? undefined });
   }
 
   // While dragging, the sheet follows the finger with no transition; on release
@@ -193,39 +194,43 @@ export default function AttemptComposer({
           onChange={(e) => handleFile(e.target.files?.[0])}
         />
 
-        {/* No autoFocus: opening the keyboard mid-rise pushes the submit
-            button behind it. The student taps in when they are ready. */}
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={4}
-          placeholder={"e.g. mgh = ½mv², so v = √(2·9.8·1.5) = 5.9 m/s"}
-          className="w-full resize-none rounded-md border border-slate-300 bg-surface px-3.5 py-2.5 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-slate-300"
-        />
-
         {image ? (
-          <div className="mt-2 flex items-center gap-3 rounded-sm bg-slate-100 p-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={image}
-              alt="Your attempt"
-              className="h-14 w-14 rounded-sm bg-slate-200 object-cover"
-            />
-            <span className="flex-1 text-sm text-slate-600">Photo attached</span>
-            <button
-              onClick={() => setImage(null)}
-              className="h-10 rounded-md px-3 text-sm text-slate-500 transition hover:bg-slate-200 hover:text-ink"
-            >
-              Remove
-            </button>
+          <div className="rounded-md border border-hairline bg-paper p-2">
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={image}
+                alt="Your attempt"
+                className="h-20 w-20 rounded-sm bg-slate-200 object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-ink">Photo attached</p>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="mt-0.5 h-8 text-sm font-medium text-brand-700 underline-offset-4 hover:underline"
+                >
+                  Retake
+                </button>
+              </div>
+              <button
+                onClick={() => setImage(null)}
+                className="h-10 rounded-md px-3 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-ink"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         ) : (
+          /* The only way in, so it is sized and coloured like the action it is
+             rather than the dashed afterthought it used to be next to a
+             textarea. */
           <button
             onClick={() => fileRef.current?.click()}
-            className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 px-4 text-sm font-medium text-slate-600 transition hover:border-brand-400 hover:text-brand-700"
+            className="flex w-full flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-brand-300 bg-brand-50 px-4 py-7 text-brand-800 transition hover:border-brand-400 hover:bg-brand-100"
           >
-            <ImagePlus size={18} strokeWidth={1.75} aria-hidden="true" />
-            Attach a photo of your work
+            <ImagePlus size={26} strokeWidth={1.5} aria-hidden="true" />
+            <span className="text-base font-semibold">Attach a photo of your work</span>
+            <span className="text-xs text-brand-700">Your working and your final answer</span>
           </button>
         )}
 
@@ -237,7 +242,7 @@ export default function AttemptComposer({
           <button
             onClick={submit}
             disabled={!canSubmit}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:bg-brand-300 disabled:text-white/90 disabled:shadow-none"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:cursor-not-allowed disabled:bg-brand-300 disabled:text-white/90 disabled:opacity-45 disabled:shadow-none"
           >
             {busy ? <Spinner className="h-5 w-5" /> : null}
             {copy.submit}

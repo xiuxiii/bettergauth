@@ -11,11 +11,11 @@ import type {
   StudentAttempt,
 } from "@/lib/tutor/types";
 import { practiceResolved } from "@/lib/tutor/types";
-import { fileToDataUrl } from "@/lib/utils";
+import { fileToNormalizedJpeg } from "@/lib/image";
 import { readApiError } from "@/lib/apiClient";
 import RichText from "@/components/RichText";
 import SolutionCard from "@/components/SolutionCard";
-import { CircleAlert, CircleCheck, CircleX, Sparkles } from "lucide-react";
+import { CircleAlert, CircleCheck, CircleX, ImagePlus, Sparkles } from "lucide-react";
 import { ErrorState, Eyebrow, LoadingState } from "@/components/States";
 
 type Phase = "generating" | "gen_error" | "solving" | "evaluating" | "done";
@@ -159,7 +159,13 @@ export default function PracticeCard({
   );
 }
 
-/** The independent-solve input: type and/or attach a photo, then submit. */
+/**
+ * The independent-solve input: photograph the working, then submit.
+ *
+ * Photo only — see the note on AttemptComposer. Typing physics working into a
+ * textarea on a phone is slower than redoing the problem, so the field went
+ * unused while sitting in the most prominent spot.
+ */
 function SolveArea({
   onSubmit,
   error,
@@ -168,7 +174,6 @@ function SolveArea({
   error: string | null;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
 
@@ -180,13 +185,13 @@ function SolveArea({
     }
     setReadError(null);
     try {
-      setImage(await fileToDataUrl(file));
+      setImage(await fileToNormalizedJpeg(file));
     } catch {
       setReadError("Could not read that image.");
     }
   }
 
-  const canSubmit = text.trim().length > 0 || !!image;
+  const canSubmit = !!image;
 
   return (
     <div className="rounded-sm bg-slate-100 p-3">
@@ -202,19 +207,19 @@ function SolveArea({
         onChange={(e) => handleFile(e.target.files?.[0])}
       />
 
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={3}
-        placeholder="Show your working and final answer…"
-        className="w-full resize-none rounded-md border border-slate-300 bg-surface px-3.5 py-2.5 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-slate-300"
-      />
-
       {image ? (
-        <div className="mt-2 flex items-center gap-3 rounded-sm bg-surface p-2">
+        <div className="flex items-center gap-3 rounded-sm bg-surface p-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt="Your work" className="h-12 w-12 rounded-sm object-cover" />
-          <span className="flex-1 text-sm text-slate-600">Photo attached</span>
+          <img src={image} alt="Your work" className="h-16 w-16 rounded-sm object-cover" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-ink">Photo attached</p>
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="mt-0.5 h-8 text-sm font-medium text-brand-700 underline-offset-4 hover:underline"
+            >
+              Retake
+            </button>
+          </div>
           <button
             onClick={() => setImage(null)}
             className="h-10 rounded-md px-3 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-ink"
@@ -225,9 +230,11 @@ function SolveArea({
       ) : (
         <button
           onClick={() => fileRef.current?.click()}
-          className="mt-1 inline-flex h-9 items-center rounded-md text-sm font-medium text-brand-700 underline-offset-4 hover:underline"
+          className="flex w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-brand-300 bg-brand-50 px-4 py-6 text-brand-800 transition hover:border-brand-400 hover:bg-brand-100"
         >
-          + Attach a photo of your work
+          <ImagePlus size={24} strokeWidth={1.5} aria-hidden="true" />
+          <span className="text-sm font-semibold">Attach a photo of your work</span>
+          <span className="text-xs text-brand-700">Your working and your final answer</span>
         </button>
       )}
 
@@ -236,9 +243,9 @@ function SolveArea({
 
       <div className="mt-3 flex items-center gap-2">
         <button
-          onClick={() => onSubmit({ text: text.trim() || undefined, imageDataUrl: image ?? undefined })}
+          onClick={() => onSubmit({ imageDataUrl: image ?? undefined })}
           disabled={!canSubmit}
-          className="h-11 flex-1 rounded-md bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:bg-brand-300 disabled:text-white/90"
+          className="h-11 flex-1 rounded-md bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:cursor-not-allowed disabled:bg-brand-300 disabled:text-white/90 disabled:opacity-45"
         >
           Submit for feedback
         </button>
