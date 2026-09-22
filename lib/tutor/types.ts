@@ -55,11 +55,6 @@ export interface ProblemAnalysis {
 export interface AnalyzeRequest {
   /** `data:<mediaType>;base64,<data>` URL of the problem photo/upload. */
   imageDataUrl: string;
-  /**
-   * The subject the student picked in the capture step, if any. Passed to the
-   * provider as context only — the model still classifies by content.
-   */
-  subjectHint?: Subject;
 }
 
 // ---------------------------------------------------------------------------

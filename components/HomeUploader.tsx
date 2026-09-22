@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IMAGE_KEY, SUBJECT_KEY } from "@/lib/utils";
+import { IMAGE_KEY } from "@/lib/utils";
 import type { NormalizedRect } from "@/lib/tutor/types";
 import { cropSourceToJpeg, fileToNormalizedJpeg } from "@/lib/image";
 import { hasPreferences } from "@/lib/preferences";
@@ -41,11 +41,9 @@ export default function HomeUploader() {
     if (!hasPreferences()) router.replace("/setup");
   }, [router]);
 
-  /** Hand the confirmed crop (and optional subject) to the workspace. */
-  function go(dataUrl: string, subject: string | null) {
+  /** Hand the confirmed crop to the workspace. */
+  function go(dataUrl: string) {
     sessionStorage.setItem(IMAGE_KEY, dataUrl);
-    if (subject) sessionStorage.setItem(SUBJECT_KEY, subject);
-    else sessionStorage.removeItem(SUBJECT_KEY);
     setBusy(true);
     router.push("/workspace");
   }
@@ -55,12 +53,12 @@ export default function HomeUploader() {
    * Falls back to the preview if the original somehow isn't around, so a
    * confirm can never dead-end.
    */
-  async function confirmCrop(rect: NormalizedRect, subject: string | null) {
+  async function confirmCrop(rect: NormalizedRect) {
     const preview = pending;
     if (!preview) return;
     setBusy(true);
     try {
-      go(await cropSourceToJpeg(source ?? preview, rect), subject);
+      go(await cropSourceToJpeg(source ?? preview, rect));
       setPending(null);
       setSource(null);
     } catch {
@@ -147,7 +145,7 @@ export default function HomeUploader() {
             setPending(null);
             setSource(null);
           }}
-          onConfirm={({ rect, subject }) => void confirmCrop(rect, subject)}
+          onConfirm={({ rect }) => void confirmCrop(rect)}
         />
       )}
     </div>

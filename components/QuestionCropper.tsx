@@ -6,19 +6,9 @@ import type {
   DetectedQuestion,
   NormalizedRect,
   QuestionDetection,
-  Subject,
 } from "@/lib/tutor/types";
 import { detectContentRectNormalized, imageSize } from "@/lib/image";
 import { Spinner } from "@/components/States";
-
-/** The subjects the capture step offers. Values are the pipeline's own Subject. */
-type CaptureSubject = Extract<Subject, "Mathematics" | "Physics" | "Chemistry">;
-const SUBJECTS: { value: CaptureSubject; label: string }[] = [
-  { value: "Mathematics", label: "Math" },
-  { value: "Physics", label: "Physics" },
-  { value: "Chemistry", label: "Chemistry" },
-];
-const LAST_SUBJECT_KEY = "stem-tutor:last-subject";
 
 type Handle = "move" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
 
@@ -62,7 +52,7 @@ function shortLabel(label: string) {
  * Capture-time crop step: shows the photo, finds the questions on it (via the
  * AI provider, with a local ink-bounding-box fallback), boxes the most likely
  * one, and lets the student switch between questions, drag / resize / move the
- * box, reset to the detected crop, pick a subject, and confirm. The confirmed
+ * box, reset to the detected crop, and confirm. The confirmed
  * crop then enters the existing MindGap flow unchanged.
  */
 export default function QuestionCropper({
@@ -78,10 +68,7 @@ export default function QuestionCropper({
    * preview, and cropping it would throw away the detail the model needs to
    * read handwriting.
    */
-  onConfirm: (result: {
-    rect: NormalizedRect;
-    subject: CaptureSubject | null;
-  }) => void;
+  onConfirm: (result: { rect: NormalizedRect }) => void;
   onCancel: () => void;
 }) {
   // --- Detection -------------------------------------------------------------
@@ -148,25 +135,6 @@ export default function QuestionCropper({
     setSelected(i);
     setAutoRect(auto);
     setRect(auto);
-  }
-
-  // --- Subject ---------------------------------------------------------------
-  const [subject, setSubject] = useState<CaptureSubject>("Mathematics");
-  useEffect(() => {
-    try {
-      const last = window.localStorage.getItem(LAST_SUBJECT_KEY);
-      if (SUBJECTS.some((s) => s.value === last)) setSubject(last as CaptureSubject);
-    } catch {
-      // storage unavailable: keep the default
-    }
-  }, []);
-  function chooseSubject(s: CaptureSubject) {
-    setSubject(s);
-    try {
-      window.localStorage.setItem(LAST_SUBJECT_KEY, s);
-    } catch {
-      // ignore
-    }
   }
 
   // --- Stage geometry (image fitted inside the stage) ------------------------
@@ -256,7 +224,7 @@ export default function QuestionCropper({
     if (cropping) return;
     setCropping(true);
     setCropError(null);
-    onConfirm({ rect, subject });
+    onConfirm({ rect });
   }
 
   useEffect(() => {
@@ -269,13 +237,16 @@ export default function QuestionCropper({
 
   const canReset = !sameRect(rect, autoRect);
   const multi = questions.length > 1;
-  const status = detecting
+  // The one thing worth reading, kept to a single phone line. The count is a
+  // separate, quieter line: it is context, not an instruction.
+  const instruction = detecting
     ? "Finding the questions…"
     : multi
-      ? `${questions.length} questions found — choose one, or adjust the box`
+      ? "Crop the question, or tap a number"
       : questions.length === 1
-        ? "Adjust the box if it missed anything"
+        ? "Drag the box to frame the question"
         : "Drag the box around the question";
+  const count = multi ? `${questions.length} questions found` : "";
 
   return (
     <div
@@ -293,12 +264,12 @@ export default function QuestionCropper({
         >
           <X size={18} strokeWidth={1.75} aria-hidden="true" />
         </button>
-        <h2
-          id="question-cropper-title"
-          className="min-w-0 flex-1 truncate text-sm font-semibold text-ink"
-        >
+        {/* The instruction lives at the bottom, next to the controls and the
+            thumb. A title up here would just say it a second time. */}
+        <h2 id="question-cropper-title" className="sr-only">
           Select the question
         </h2>
+        <div className="min-w-0 flex-1" />
         <button
           onClick={() => setRect(autoRect)}
           disabled={!canReset}
@@ -311,7 +282,11 @@ export default function QuestionCropper({
       {/* Stage: the whole photo stays visible; everything outside the box is dimmed. */}
       <div
         ref={stageRef}
-        className="relative min-h-0 flex-1 touch-none select-none overflow-hidden bg-ink"
+        /* Fixed dark, not `bg-ink`: this is a photo letterbox, so it must stay
+           dark in both themes. `--ink` is the *text* colour and flips light on
+           the dark theme, which turned these bars into cream slabs. Matches the
+           dimming mask's literal below. */
+        className="relative min-h-0 flex-1 touch-none select-none overflow-hidden bg-[rgb(32_27_20)]"
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
@@ -388,7 +363,7 @@ export default function QuestionCropper({
       <div className="border-t border-hairline bg-surface px-4 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] pt-3">
         {/* Question navigation — only when more than one was found. */}
         {multi && (
-          <div className="mb-3 flex items-center gap-1">
+          <div className="mb-3 flex items-center justify-center gap-1">
             <button
               onClick={() => selectQuestion(selected - 1)}
               disabled={selected === 0}
@@ -400,7 +375,7 @@ export default function QuestionCropper({
             <div
               role="radiogroup"
               aria-label="Detected questions"
-              className="scroll-fade flex min-w-0 flex-1 snap-x snap-proximity items-center gap-2 overflow-x-auto px-1 py-1 pr-6"
+              className="scroll-fade flex min-w-0 snap-x snap-proximity items-center justify-center gap-2 overflow-x-auto px-1 py-1"
             >
               {questions.map((q, i) => {
                 const active = i === selected;
@@ -436,37 +411,14 @@ export default function QuestionCropper({
           </div>
         )}
 
-        {/* Subject — context for the existing pipeline, nothing more. */}
-        <div
-          role="radiogroup"
-          aria-label="Subject"
-          className="scroll-fade -mx-1 mb-3 flex snap-x snap-proximity items-center gap-2 overflow-x-auto px-1 pr-6"
-        >
-          {SUBJECTS.map((s) => {
-            const active = s.value === subject;
-            return (
-              <button
-                key={s.value}
-                role="radio"
-                aria-checked={active}
-                onClick={() => chooseSubject(s.value)}
-                className={`h-10 flex-shrink-0 snap-start whitespace-nowrap rounded-full border px-4 text-sm font-medium transition ${
-                  active
-                    ? "border-brand-500 bg-brand-50 text-brand-800"
-                    : "border-slate-300 bg-surface text-slate-700 hover:border-brand-400"
-                }`}
-              >
-                {s.label}
-              </button>
-            );
-          })}
-        </div>
 
-        <p className="mb-2 text-xs text-slate-500" aria-live="polite">
-          {multi && !detecting ? `${questions[selected].label} · ` : ""}
-          {status}
-        </p>
-        {cropError && <p className="mb-2 text-sm text-danger-600">{cropError}</p>}
+        <div className="mb-3 text-center" aria-live="polite">
+          <p className="text-base font-medium text-ink">{instruction}</p>
+          {count && <p className="mt-0.5 text-xs text-slate-500">{count}</p>}
+        </div>
+        {cropError && (
+          <p className="mb-2 text-center text-sm text-danger-600">{cropError}</p>
+        )}
 
         <button
           onClick={confirm}

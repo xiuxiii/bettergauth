@@ -297,10 +297,6 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async analyzeProblem(request: AnalyzeRequest): Promise<ProblemAnalysis> {
-    const hint =
-      request.subjectHint && request.subjectHint !== "Unknown"
-        ? ` The student selected the subject "${request.subjectHint}" — use it as context, but classify by the content if the problem clearly belongs to another subject.`
-        : "";
     const res = await this.client.messages.parse({
       // Headroom for the problem text plus an opening hint. Truncation here
       // fails the parse and surfaces as a 500, which this route has hit before.
@@ -313,7 +309,7 @@ export class AnthropicProvider implements AIProvider {
           role: "user",
           content: [
             imageBlock(request.imageDataUrl),
-            { type: "text", text: `Extract and classify this problem.${hint}` },
+            { type: "text", text: "Extract and classify this problem." },
           ],
         },
       ],
