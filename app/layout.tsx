@@ -20,12 +20,14 @@ const DESCRIPTION =
   "Snap a high-school STEM problem and find the gap in your understanding — not just the answer.";
 
 export const metadata: Metadata = {
-  title: "MindGap — Mind the gap",
+  // Just the name. The title is what an installed PWA is labelled with on the
+  // home screen and in app search, and no app ships with its slogan in its name.
+  title: "MindGap",
   description: DESCRIPTION,
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "MindGap" },
   openGraph: {
-    title: "MindGap — Mind the gap",
+    title: "MindGap",
     description: DESCRIPTION,
   },
 };

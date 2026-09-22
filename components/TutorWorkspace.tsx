@@ -172,15 +172,17 @@ export default function TutorWorkspace() {
         return;
       }
 
-      // Diagnosis-first opener: invite the student's own work instead of
-      // opening with a concept lecture — their reasoning is what we diagnose.
-      // Static (no API call), so it's instant, free, and reliably on-message.
+      // Open with an actual hint, not instructions. It comes back on the
+      // analysis call, so it costs no extra request and no extra wait — the
+      // student lands on something useful having pressed nothing. Falls back to
+      // a plain nudge if the model returns an empty hint.
       setMessages([
         {
           id: uid("t"),
           role: "tutor",
           content:
-            "Give it a try first. When you've got an answer, tap “Why am I wrong?” and show me your working — I'll trace your reasoning to the exact step where it breaks. Want a nudge to start? Tap Hint. Just want it worked out? Show solution.",
+            data.openingHint?.trim() ||
+            "Start wherever you can and show me what you get.",
           createdAt: Date.now(),
         },
       ]);

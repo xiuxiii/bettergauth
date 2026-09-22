@@ -71,6 +71,8 @@ const ProblemAnalysisSchema = z.object({
     present: z.boolean(),
     transcript: z.string(),
   }),
+  /** The session's opening nudge. Free: it rides along on this same call. */
+  openingHint: z.string(),
 });
 
 const StructuredSolutionSchema = z.object({
@@ -196,7 +198,15 @@ photograph problems they have already worked on. Separate the two:
 - \`problemText\` is the PRINTED question ONLY. Never fold handwriting into it. This text is shown to the tutor as the problem itself every turn, so a student's wrong working leaking into it would be read as part of the question.
 - Set \`studentWork.present\` true ONLY for HANDWRITTEN working that is this student's own attempt at this problem. Printed text never counts: a worked example, a textbook solution, an answer key or the question's own printed answer options are all part of the page, not an attempt. Stray doodles, labels on a diagram, and a lone underlined final answer with no reasoning are not an attempt either.
 - When it is present, set \`transcript\` to a faithful transcription of that working, keeping their steps, their notation and their mistakes exactly as written. Do NOT correct, complete or tidy it. Separate each line of their working with a BLANK line, so their steps stay on separate lines instead of running together. Otherwise set \`transcript\` to "".
-${MATH_NOTE}`;
+
+\`openingHint\` is the first thing the student reads, so make it worth reading:
+ONE short sentence that points at where to start, and nothing else. Name the move
+or the thing to notice, never the answer and never the full method. "Every root
+divides 6, so start there." or "Resolve the weight along the incline first." Talk
+like a person: contractions, "you", no preamble, no sign-off, no restating the
+question, no mention of buttons or what the app can do. If the photo already
+contains the student's working, still write it, but aimed at the next step from
+where they are. ${MATH_NOTE}`;
 
 const CHECKWORK_SYSTEM = `You are an expert STEM tutor diagnosing a student's attempt.
 Trace the student's OWN reasoning and find the FIRST point where it diverges from correct reasoning — not just a wrong final answer. Diagnose that divergence in terms of THEIR mental model: what their work assumes or treats as true, and why that is the real problem. Do NOT replace their reasoning with a fresh solution of your own. When their approach is internally consistent but rests on a wrong assumption, say exactly that — e.g. "your calculation is consistent with using the total velocity, but this equation needs the vertical component $v_y$". Classify the error by category and severity. If the underlying concept/method is right, say so and keep any arithmetic/notation correction to one line — do NOT nitpick. If the attempt is actually correct, set verdict "correct", leave firstError null, and say why their reasoning holds. Always name briefly what the student did right and how to continue from the corrected point. ${MATH_NOTE} ${STYLE_NOTE}`;
@@ -254,8 +264,11 @@ export class AnthropicProvider implements AIProvider {
         ? ` The student selected the subject "${request.subjectHint}" — use it as context, but classify by the content if the problem clearly belongs to another subject.`
         : "";
     const res = await this.client.messages.parse({
+      // Headroom: this response now carries a transcription of the student's
+      // working and an opening hint on top of the problem text. Truncation here
+      // fails the parse and surfaces as a 500, which this route has hit before.
       model: this.model,
-      max_tokens: 1500,
+      max_tokens: 2200,
       thinking: { type: "disabled" },
       system: ANALYZE_SYSTEM,
       messages: [
@@ -508,7 +521,7 @@ function actionPrompt(request: TutorRequest): string {
     case "continue":
       return "Continue: give the next single small piece that builds on what you just said, then stop.";
     case "hint":
-      return "Give me just a hint — the smallest possible nudge toward the next step. Don't give the full method.";
+      return "Give me just a hint: the smallest nudge toward the next step from where I am right now. One sentence. Don't give the full method.";
     case "explain":
       return "Explain the key idea behind this problem — but one small piece at a time, then stop.";
     case "go_deeper":

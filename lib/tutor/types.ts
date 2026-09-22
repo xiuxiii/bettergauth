@@ -37,6 +37,13 @@ export interface ProblemAnalysis {
     present: boolean;
     transcript: string;
   };
+  /**
+   * One short sentence pointing at where to start, shown as the session's first
+   * message. It rides along on the analysis call, so the student gets a real
+   * hint with no extra wait and no extra request — rather than a paragraph
+   * explaining which buttons to press.
+   */
+  openingHint: string;
 }
 
 /**
