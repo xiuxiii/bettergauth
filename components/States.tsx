@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import MindGapMark from "@/components/MindGapMark";
+import RichText from "@/components/RichText";
 
 /** Reusable loading / error / empty presentational states. */
 
@@ -59,6 +60,28 @@ export function TutorLabel() {
         <MindGapMark className="h-3.5 w-3.5" />
       </span>
       <span className="text-xs font-medium text-slate-500">Tutor</span>
+    </div>
+  );
+}
+
+/**
+ * The session's opening nudge: one line pointing at where to start, plus a
+ * quiet reminder that asking is an option.
+ *
+ * Deliberately lighter than a real tutor turn — no avatar row, muted colour,
+ * smaller type. It is a starting point offered before the student has done
+ * anything, so it should sit in the corner of their eye rather than announce
+ * itself like an answer.
+ */
+export function OpeningNudge({ text }: { text: string }) {
+  return (
+    <div className="animate-fade-in space-y-1.5 border-l-2 border-hairline pl-3">
+      <div className="text-[15px] leading-relaxed text-slate-600">
+        <RichText text={text} />
+      </div>
+      <p className="text-xs text-slate-500">
+        Still stuck? Just ask below, or tap Hint.
+      </p>
     </div>
   );
 }

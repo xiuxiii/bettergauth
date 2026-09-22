@@ -83,6 +83,13 @@ export interface DetectedQuestion {
 /** What the client sends to /api/detect-questions. */
 export interface DetectQuestionsRequest {
   imageDataUrl: string;
+  /**
+   * Pixel dimensions of that image. The model is asked for boxes in absolute
+   * pixels, because it is measurably worse at normalised coordinates, so these
+   * are needed both to tell it the bounds and to convert its answer back.
+   */
+  width: number;
+  height: number;
 }
 
 /**

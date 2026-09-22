@@ -44,6 +44,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  OpeningNudge,
   ProblemCardSkeleton,
 } from "@/components/States";
 
@@ -64,6 +65,8 @@ type DisplayMessage = ChatMessage & {
   practiceFor?: ProblemAnalysis;
   /** When set, the practice widget is a targeted retry of this misconception. */
   practiceFocus?: PracticeFocus;
+  /** The session's opening nudge, rendered quieter than a real tutor turn. */
+  opener?: boolean;
 };
 
 /** One NDJSON frame from the streaming /api/tutor response. */
@@ -184,6 +187,7 @@ export default function TutorWorkspace() {
             data.openingHint?.trim() ||
             "Start wherever you can and show me what you get.",
           createdAt: Date.now(),
+          opener: true,
         },
       ]);
     } catch (err) {
@@ -557,6 +561,8 @@ export default function TutorWorkspace() {
                     onResolved={handlePracticeResolved}
                   />
                 </div>
+              ) : m.opener ? (
+                <OpeningNudge key={m.id} text={m.content} />
               ) : (
                 <MessageBubble
                   key={m.id}

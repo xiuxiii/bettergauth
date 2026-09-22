@@ -8,7 +8,7 @@ import type {
   QuestionDetection,
   Subject,
 } from "@/lib/tutor/types";
-import { cropDataUrl, detectContentRectNormalized } from "@/lib/image";
+import { cropDataUrl, detectContentRectNormalized, imageSize } from "@/lib/image";
 import { Spinner } from "@/components/States";
 
 /** The subjects the capture step offers. Values are the pipeline's own Subject. */
@@ -88,10 +88,14 @@ export default function QuestionCropper({
     async function detect() {
       let result: QuestionDetection | null = null;
       try {
+        // The model is asked for boxes in absolute pixels, so it has to be told
+        // the image's size. Measured here rather than read from the <img>'s
+        // onLoad, which may not have fired yet when detection starts.
+        const { width, height } = await imageSize(image);
         const res = await fetch("/api/detect-questions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image }),
+          body: JSON.stringify({ image, width, height }),
         });
         if (res.ok) result = (await res.json()) as QuestionDetection;
       } catch {

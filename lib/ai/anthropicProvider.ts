@@ -46,15 +46,24 @@ const SubjectSchema = z.enum([
   "Unknown",
 ]);
 
-/** Question locations on a page, in normalised (0..1) image coordinates. */
+/**
+ * Question locations on a page, as ABSOLUTE PIXEL corners in the image that was
+ * sent: [x1, y1] top-left, [x2, y2] bottom-right.
+ *
+ * Pixels rather than 0..1 fractions on purpose. The vision docs are explicit
+ * that Claude "does not work well when you ask for normalized coordinates" and
+ * to "always ask for pixel coordinates and normalize in your own code" — asking
+ * for fractions was putting boxes on the wrong questions entirely.
+ * `normalizeDetection` does the conversion.
+ */
 const QuestionDetectionSchema = z.object({
   questions: z.array(
     z.object({
       label: z.string(),
-      x: z.number(),
-      y: z.number(),
-      w: z.number(),
-      h: z.number(),
+      x1: z.number(),
+      y1: z.number(),
+      x2: z.number(),
+      y2: z.number(),
     }),
   ),
   primaryIndex: z.number(),
@@ -188,7 +197,22 @@ const STYLE_NOTE =
   "Formatting: write for a phone screen. Keep every paragraph to 1-3 short sentences separated by a blank line. Use \"- \" bullets for parallel items and \"1. \" for ordered steps, one idea per line, and put key equations on their own line. Avoid em-dashes: use a period, comma, or colon instead. Never return a dense wall of text.";
 
 const DETECT_SYSTEM = `You locate the individual questions in a photo of a worksheet, textbook page or screen so an app can crop to one of them.
-Return one entry per distinct question — a numbered problem together with all of its parts, sub-parts, figures and answer options — ordered top-to-bottom then left-to-right. Give each a bounding box in normalised image coordinates: x, y are the top-left corner as fractions of the image width and height (0..1); w, h are the box size as fractions (0..1). A box must fully contain its question with a small margin and must not overlap neighbouring questions. CRUCIALLY, a question's box must ALSO contain any handwritten working the student has already done for it — usually written below or beside the printed question. They often photograph a problem they have already attempted, and work left outside the box is lost, so extend the box to cover it. Stop before the next numbered question even when working runs close to it. Use the label printed on the page (e.g. "Question 5", "Q5", "3(b)"), or "Question 1", "Question 2", … when none is printed. If the photo shows a single problem or only a fragment, return exactly one box around it. Set primaryIndex to the question most likely intended: the most complete, central one — or the only one.`;
+
+Return the bounding box of each question as ABSOLUTE PIXEL coordinates in the image you were given: x1, y1 is the top-left corner and x2, y2 is the bottom-right corner, with (0, 0) at the top-left of the image, x increasing right and y increasing down. The user message states the image's exact pixel dimensions; every coordinate must fall inside them. Do not return fractions or percentages.
+
+Getting the box on the RIGHT question matters more than getting its edges perfect. Before you emit each entry, check that the question number printed inside that box is the number you are about to use as its label. If they disagree, fix the box.
+
+What counts as a question: one numbered problem together with all of its parts, sub-parts, figures and answer options. Its box must fully contain it with a small margin and must not overlap a neighbouring question.
+
+A question's box must ALSO contain any handwritten working the student has already done for it, usually below or beside the printed question. They often photograph a problem they have already attempted, and work left outside the box is lost. Stop before the next numbered question even when working runs close to it.
+
+Ignore everything that is not printed exercise content. Photos are taken on a desk, so a calculator, phone, pen, ruler, hand or any other object lying on the page is NEVER a question, and neither is a running header, a page number, a chapter title or a section heading on its own.
+
+Pages photographed as a two-page spread have independent columns: read each column top to bottom, left-hand page before right-hand page.
+
+Label each entry with the number printed at the start of that question ("Question 5", "Q5", "3(b)"). If a region has no printed number of its own, do not return it. Return only questions you can actually see a number for; five correct boxes are far better than eight with three in the wrong place.
+
+If the photo shows a single problem, or only a fragment of one, return exactly one box around it. Set primaryIndex to the question most likely intended: the most complete, central one, or the only one.`;
 
 const ANALYZE_SYSTEM = `You extract a single high-school STEM problem from a photo and classify it.
 Read the problem exactly as written (including all parts), identify the subject, a specific topic, and the single governing concept/principle the problem hinges on. Set confidence in 0..1 for how sure the extraction+classification is.
@@ -247,7 +271,10 @@ export class AnthropicProvider implements AIProvider {
           role: "user",
           content: [
             imageBlock(request.imageDataUrl),
-            { type: "text", text: "Locate every question in this photo." },
+            {
+              type: "text",
+              text: `This image is exactly ${request.width} x ${request.height} pixels. Locate every question in it and give each box in pixel coordinates within those bounds.`,
+            },
           ],
         },
       ],
@@ -255,7 +282,7 @@ export class AnthropicProvider implements AIProvider {
     });
     logUsage("detectQuestions", res);
     const out = required(res.parsed_output, "question detection");
-    return normalizeDetection(out);
+    return normalizeDetection(out, request.width, request.height);
   }
 
   async analyzeProblem(request: AnalyzeRequest): Promise<ProblemAnalysis> {
@@ -614,22 +641,30 @@ export function dataUrlToImagePart(dataUrl: string): {
 }
 
 /**
- * Clamp the model's boxes into the image, drop degenerate ones, and keep
- * `primaryIndex` valid. The cropper treats an empty list as "whole photo".
+ * Convert the model's pixel corners into normalised rects, clamp them into the
+ * image, drop degenerate ones, and keep `primaryIndex` valid. The cropper
+ * treats an empty list as "whole photo".
  */
 function normalizeDetection(
   raw: z.infer<typeof QuestionDetectionSchema>,
+  width: number,
+  height: number,
 ): QuestionDetection {
+  // A bad width/height would silently place every box wrong, so refuse rather
+  // than divide by it.
+  if (!(width > 0) || !(height > 0)) return { questions: [], primaryIndex: 0 };
+
   const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
   const questions = raw.questions
     .map((q, i) => {
-      const x = clamp01(q.x);
-      const y = clamp01(q.y);
-      const w = clamp01(q.x + q.w) - x;
-      const h = clamp01(q.y + q.h) - y;
+      // Tolerate corners handed back in either order.
+      const left = clamp01(Math.min(q.x1, q.x2) / width);
+      const right = clamp01(Math.max(q.x1, q.x2) / width);
+      const top = clamp01(Math.min(q.y1, q.y2) / height);
+      const bottom = clamp01(Math.max(q.y1, q.y2) / height);
       return {
         label: q.label.trim() || `Question ${i + 1}`,
-        rect: { x, y, w, h },
+        rect: { x: left, y: top, w: right - left, h: bottom - top },
       };
     })
     .filter((q) => q.rect.w > 0.02 && q.rect.h > 0.01);

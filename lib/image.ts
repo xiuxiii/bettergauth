@@ -182,6 +182,20 @@ export async function fileToNormalizedJpeg(file: File): Promise<string> {
   return canvasToJpeg(scaledCanvas(img, img.naturalWidth, img.naturalHeight));
 }
 
+/**
+ * Pixel dimensions of a data URL.
+ *
+ * Question detection needs these: the model is asked for boxes in absolute
+ * pixels (it is markedly worse at normalised 0..1 coordinates), so the server
+ * has to know the size of the image those pixels refer to.
+ */
+export async function imageSize(
+  dataUrl: string,
+): Promise<{ width: number; height: number }> {
+  const img = await loadImageEl(dataUrl);
+  return { width: img.naturalWidth, height: img.naturalHeight };
+}
+
 function loadImageEl(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
