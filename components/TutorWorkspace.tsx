@@ -67,6 +67,8 @@ type DisplayMessage = ChatMessage & {
   practiceFocus?: PracticeFocus;
   /** The session's opening nudge, rendered quieter than a real tutor turn. */
   opener?: boolean;
+  /** A student turn that is only a photo: `content` is for the model, not the UI. */
+  imageOnly?: boolean;
 };
 
 /** One NDJSON frame from the streaming /api/tutor response. */
@@ -165,7 +167,8 @@ export default function TutorWorkspace() {
             role: "student",
             content: data.studentWork.transcript.trim(),
             createdAt: Date.now(),
-            attemptImage: dataUrl,
+            // No attemptImage: the card directly above is already showing this
+            // exact photo, and repeating it under their own turn is clutter.
           },
         ]);
         void sendCheckWork(
@@ -389,14 +392,19 @@ export default function TutorWorkspace() {
 
     // Show the student's attempt in the conversation. Posting it is a separate
     // step so a retry re-sends the attempt without echoing their bubble again.
+    //
+    // When they only sent a photo, the content line exists so later tutor turns
+    // still see that an attempt was made at this point in the conversation, but
+    // it is not rendered: putting a chirpy sentence in their bubble that they
+    // never typed reads as the app speaking for them.
+    const typed = attempt.text?.trim();
     const student: DisplayMessage = {
       id: uid("s"),
       role: "student",
-      content: attempt.text?.trim()
-        ? attempt.text.trim()
-        : "Here's my attempt — can you check it?",
+      content: typed || "(sent a photo of my working)",
       createdAt: Date.now(),
       attemptImage: attempt.imageDataUrl,
+      imageOnly: !typed,
     };
     setMessages((prev) => [...prev, student]);
     void sendCheckWork(attempt);
@@ -571,6 +579,7 @@ export default function TutorWorkspace() {
                   similarProblem={m.similarProblem}
                   workCheck={m.workCheck}
                   attemptImage={m.attemptImage}
+                  imageOnly={m.imageOnly}
                 />
               ),
             )}

@@ -21,12 +21,19 @@ export default function MessageBubble({
   similarProblem,
   workCheck,
   attemptImage,
+  imageOnly,
 }: {
   message: ChatMessage;
   solution?: StructuredSolution;
   similarProblem?: string;
   workCheck?: WorkCheck;
   attemptImage?: string;
+  /**
+   * The student sent a photo and typed nothing. `message.content` still carries
+   * a line for the model, but showing it would be putting words in their mouth
+   * about a message they never wrote — so only the photo is rendered.
+   */
+  imageOnly?: boolean;
 }) {
   const isStudent = message.role === "student";
 
@@ -34,12 +41,14 @@ export default function MessageBubble({
     return (
       <div className="flex animate-rise flex-col items-end">
         <span className="mb-1 text-xs font-medium text-slate-500">You</span>
-        <div className="max-w-[85%] rounded-lg rounded-br-sm bg-brand-600 px-4 py-2.5 text-[15px] leading-relaxed text-white [overflow-wrap:anywhere]">
-          <RichText text={message.content} />
-        </div>
+        {!imageOnly && (
+          <div className="max-w-[85%] rounded-lg rounded-br-sm bg-brand-600 px-4 py-2.5 text-[15px] leading-relaxed text-white [overflow-wrap:anywhere]">
+            <RichText text={message.content} />
+          </div>
+        )}
 
         {attemptImage && (
-          <div className="mt-2 flex animate-pop-in justify-end">
+          <div className={`flex animate-pop-in justify-end ${imageOnly ? "" : "mt-2"}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={attemptImage}
