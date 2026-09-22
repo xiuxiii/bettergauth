@@ -1,4 +1,4 @@
-# Aria — AI STEM Tutor
+# MindGap
 
 A mobile-first web app where a high-school student snaps a photo of a STEM
 problem and gets a tutor that focuses on **conceptual understanding**, not
@@ -32,9 +32,10 @@ changing env (env is read at boot). See `.env.example` and
   **question cropper** (`components/QuestionCropper.tsx`): the questions on the
   page are located (`/api/detect-questions` → `AIProvider.detectQuestions`, with
   a local ink-bounding-box fallback), the most likely one is boxed, and the
-  student can switch between detected questions, adjust the box, pick
-  Math / Physics / Chemistry, and confirm. The crop (and subject hint) then
-  enters the normal analysis flow.
+  student can switch between detected questions, adjust the box, and confirm.
+  The box is seeded instantly from a local ink bounding box and the model's
+  detection refines it in the background, so the screen is usable from the
+  first frame. The confirmed crop then enters the normal analysis flow.
 - **Workspace** (`components/TutorWorkspace.tsx`) — shows the uploaded image, the
   detected problem, subject/topic, and the identified concept, then runs the
   session. In-session toggles (`SessionToggles`) flip help style and goal
@@ -91,10 +92,14 @@ The real provider is implemented in `lib/ai/anthropicProvider.ts` (Anthropic SDK
 - `ANTHROPIC_API_KEY` — required, server-side only.
 - `ANTHROPIC_MODEL` — optional, defaults to `claude-sonnet-5` (cheaper; set
   `claude-opus-5` for more headroom).
+- `DETECTION_MODEL` — optional, question detection only; unset means the same
+  model as above.
 - `ACCESS_CODE` — optional shared code that gates the app (protects your API
   credits on a public URL). Unset = no gate. See `docs/deploy.md`.
 
-Full schema and tuning notes: **`docs/ai-provider-integration.md`**. Deploying so
+The full env list (rate limiting, debug flags) is in `.env.example` and the
+table in `CLAUDE.md`. Full schema and tuning notes:
+**`docs/ai-provider-integration.md`**. Deploying so
 others can test it: **`docs/deploy.md`**.
 
 ## Not included (by design)

@@ -7,7 +7,14 @@ import type { TutorPreferences } from "@/lib/tutor/types";
  * degrade to the default.
  */
 
-const PREFS_KEY = "stem-tutor:preferences";
+const PREFS_KEY = "mindgap:preferences";
+/**
+ * The key this used to live under. localStorage survives deploys, so renaming
+ * the key without this would silently drop every existing student's setup and
+ * march them back through the first-run page for a cosmetic rename. Migrated
+ * on first read; safe to delete once no one is on a pre-rename build.
+ */
+const LEGACY_PREFS_KEY = "stem-tutor:preferences";
 
 export const DEFAULT_PREFERENCES: TutorPreferences = {
   grade: null,
@@ -19,8 +26,15 @@ export const DEFAULT_PREFERENCES: TutorPreferences = {
 export function loadPreferences(): TutorPreferences | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(PREFS_KEY);
-    if (!raw) return null;
+    let raw = window.localStorage.getItem(PREFS_KEY);
+    if (!raw) {
+      const legacy = window.localStorage.getItem(LEGACY_PREFS_KEY);
+      if (!legacy) return null;
+      // Carry the old save forward, then stop reading the old key.
+      window.localStorage.setItem(PREFS_KEY, legacy);
+      window.localStorage.removeItem(LEGACY_PREFS_KEY);
+      raw = legacy;
+    }
     const parsed = JSON.parse(raw) as Partial<TutorPreferences>;
     // Merge over defaults so older/partial saves stay valid.
     return { ...DEFAULT_PREFERENCES, ...parsed };
