@@ -89,6 +89,21 @@ export default function SetupForm() {
             />
           </Field>
 
+          <Field label="Curriculum" hint="Matches the terms your course uses.">
+            <Options
+              value={prefs.curriculum ?? "standard"}
+              onChange={(v) =>
+                setPrefs({ ...prefs, curriculum: v as TutorPreferences["curriculum"] })
+              }
+              className="grid grid-cols-3"
+              options={[
+                { value: "standard", label: "Standard", className: "text-center" },
+                { value: "ib", label: "IB", className: "text-center" },
+                { value: "ap", label: "AP", className: "text-center" },
+              ]}
+            />
+          </Field>
+
           <Field
             label="How should it help?"
             hint="You can flip this mid-session."

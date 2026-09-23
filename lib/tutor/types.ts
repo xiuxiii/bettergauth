@@ -10,6 +10,12 @@ export type Subject =
 
 /** Result of analyzing an uploaded problem image (problem extraction + classification). */
 export interface ProblemAnalysis {
+  /**
+   * False when the photo holds no study material at all. Optional because
+   * sessions saved to history before this existed don't carry it — and absent
+   * is read as true, so an old record never reopens as "not a question".
+   */
+  hasStemContent?: boolean;
   /** The problem text as detected from the image (OCR in a real provider). */
   problemText: string;
   /** Subject classification. */
@@ -94,6 +100,12 @@ export interface DetectQuestionsRequest {
  * the whole photo should be offered as the crop.
  */
 export interface QuestionDetection {
+  /**
+   * False when the photo holds no study material at all (food, a room, an
+   * accidental shot). Only an explicit false means "not a question": a missing
+   * value is treated as true, so a malformed response never blocks real work.
+   */
+  hasStemContent: boolean;
   questions: DetectedQuestion[];
   /** Index into `questions` of the most likely intended question. */
   primaryIndex: number;
@@ -120,6 +132,9 @@ export interface ChatMessage {
  */
 export type TutorAction =
   | "ask"
+  /** Ask mode's opening turn: a direct question about a photo, answered as an
+   *  explanation rather than bounced back as a hint. */
+  | "question"
   | "continue"
   | "hint"
   | "explain"
@@ -142,6 +157,11 @@ export interface TutorPreferences {
   /** What the student is here for. Baseline always keeps exam-relevance +
    * conceptual depth; this only shifts emphasis. Toggleable. */
   goal: "understand" | "exam" | "both";
+  /**
+   * Which course family the student is in, so the tutor uses its terms. Only
+   * vocabulary and notation — never a basis to assume syllabus content.
+   */
+  curriculum?: "standard" | "ib" | "ap" | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -57,7 +57,16 @@ const SubjectSchema = z.enum([
  * for fractions was putting boxes on the wrong questions entirely.
  * `normalizeDetection` does the conversion.
  */
+/**
+ * "Is there anything here to tutor at all?" — decided BEFORE anything else, so
+ * a photo of dinner stops at one cheap boolean instead of paying for a full
+ * analysis and then failing. Defined by content, not by a printed question
+ * number: in Ask mode the photo is often just a diagram, and that must pass.
+ */
+const STEM_CONTENT_NOTE = `First decide hasStemContent: does this photo contain ANY study material at all — printed or handwritten text, an equation or expression, a diagram, graph, table, or worked steps? A photo of food, a room, a person, a pet, a screen showing something unrelated, a blank page, or a blurred accidental shot does NOT: set hasStemContent false. When in doubt (faint pencil, a partial page, an unusual diagram), set it TRUE — wrongly turning away a real problem is worse than analyzing a poor photo.`;
+
 const QuestionDetectionSchema = z.object({
+  hasStemContent: z.boolean(),
   questions: z.array(
     z.object({
       label: z.string(),
@@ -71,6 +80,7 @@ const QuestionDetectionSchema = z.object({
 });
 
 const ProblemAnalysisSchema = z.object({
+  hasStemContent: z.boolean(),
   problemText: z.string(),
   subject: SubjectSchema,
   topic: z.string(),
@@ -213,6 +223,8 @@ Never guess at causes you cannot see, never speculate about their effort, attitu
 
 const DETECT_SYSTEM = `You locate the individual questions in a photo of a worksheet, textbook page or screen so an app can crop to one of them.
 
+${STEM_CONTENT_NOTE} If it is false, return no questions.
+
 Return the bounding box of each question as ABSOLUTE PIXEL coordinates in the image you were given: x1, y1 is the top-left corner and x2, y2 is the bottom-right corner, with (0, 0) at the top-left of the image, x increasing right and y increasing down. The user message states the image's exact pixel dimensions; every coordinate must fall inside them. Do not return fractions or percentages.
 
 Getting the box on the RIGHT question matters more than getting its edges perfect. Before you emit each entry, check that the question number printed inside that box is the number you are about to use as its label. If they disagree, fix the box.
@@ -230,6 +242,9 @@ Label each entry with the number printed at the start of that question ("Questio
 If the photo shows a single problem, or only a fragment of one, return exactly one box around it. Set primaryIndex to the question most likely intended: the most complete, central one, or the only one.`;
 
 const ANALYZE_SYSTEM = `You extract a single high-school STEM problem from a photo and classify it.
+
+${STEM_CONTENT_NOTE} If it is false, leave the other fields empty or minimal; nothing downstream will read them.
+
 Read the problem exactly as written (including all parts), identify the subject, a specific topic, and the single governing concept/principle the problem hinges on. Set confidence in 0..1 for how sure the extraction+classification is.
 
 The photo often ALSO contains the student's own handwritten attempt, because they
@@ -621,6 +636,15 @@ function actionPrompt(request: TutorRequest): string {
       return "Show me the complete worked solution, concept first.";
     case "similar_problem":
       return "Give me a similar practice problem that tests the same concept with different numbers.";
+    case "question": {
+      // Ask mode. The student photographed something and asked a specific
+      // question about it, so the value is in the explanation itself. Under a
+      // hint-first preference the plain "ask" path could reasonably answer
+      // "why is T equal to Fg?" with a counter-question, which is exactly what
+      // they came here to avoid.
+      const q = request.studentText?.trim() || "What is going on here?";
+      return `I photographed this and my question is: "${q}"\n\nAnswer that question directly. Explain the concept behind it, tied to what is actually in the photo, the way a good teacher would at the board. Do not turn it into a hint or answer with a question of your own. Keep it short enough for a phone.`;
+    }
     case "ask":
     default: {
       const text = request.studentText?.trim();
@@ -648,7 +672,20 @@ function preferencesBlock(prefs?: TutorPreferences): string {
       : prefs.goal === "understand"
         ? "Emphasis: deep understanding — prioritize the why and the connections; keep exam-relevance in view."
         : "Emphasis: both exam readiness and deep understanding — exam-relevant reasoning grounded in the underlying why.";
-  return `\n\n# This student\n${[grade, style, goal].filter(Boolean).join("\n")}`;
+  // No line for "standard": that is the model's default register already, and
+  // naming it would only nudge the wording somewhere it didn't need to go.
+  const curriculum =
+    prefs.curriculum === "ib"
+      ? "Curriculum: IB. Use IB terminology and notation, and IB command terms (determine, deduce, show that, explain) where they fit naturally."
+      : prefs.curriculum === "ap"
+        ? "Curriculum: AP. Use College Board AP terminology and notation where it fits naturally."
+        : "";
+  return `\n\n# This student\n${[grade, curriculum, style, goal].filter(Boolean).join("\n")}`;
+}
+
+/** Haiku takes a different thinking shape from the Sonnet/Opus default. */
+function isHaiku(model: string): boolean {
+  return model.toLowerCase().includes("haiku");
 }
 
 /**
@@ -656,11 +693,6 @@ function preferencesBlock(prefs?: TutorPreferences): string {
  * caching is hitting (cache_read > 0 on repeat turns) and the real token counts.
  * Off by default.
  */
-/** Haiku takes a different thinking shape from the Sonnet/Opus default. */
-function isHaiku(model: string): boolean {
-  return model.toLowerCase().includes("haiku");
-}
-
 function logUsage(label: string, res: { usage?: unknown }): void {
   if (!process.env.DEBUG_TOKENS) return;
   const u = (res.usage ?? {}) as Record<string, unknown>;
@@ -723,7 +755,10 @@ function normalizeDetection(
 ): QuestionDetection {
   // A bad width/height would silently place every box wrong, so refuse rather
   // than divide by it.
-  if (!(width > 0) || !(height > 0)) return { questions: [], primaryIndex: 0 };
+  const hasStemContent = raw.hasStemContent !== false;
+  if (!(width > 0) || !(height > 0)) {
+    return { hasStemContent, questions: [], primaryIndex: 0 };
+  }
 
   const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
   const questions = raw.questions
@@ -745,7 +780,7 @@ function normalizeDetection(
     raw.primaryIndex < questions.length
       ? raw.primaryIndex
       : 0;
-  return { questions, primaryIndex };
+  return { hasStemContent, questions, primaryIndex };
 }
 
 /** Assert the model returned a validly-parsed structured object. */

@@ -105,6 +105,24 @@ On a non-JSON body that parse throws, and the SyntaxError *replaces* the real
 failure — that's where `Unexpected token 'R', "Request En"...` came from. Use
 `readApiError` in `lib/apiClient.ts`, which handles 413/429/401/5xx.
 
+**Client API calls go through `apiFetch` (`lib/apiClient.ts`).** When the
+connection drops before any response, `fetch` rejects with the browser's own
+wording — "Failed to fetch", "Load failed" — and that went raw onto the error card.
+`apiFetch` tags it as a `NetworkError` whose message is human. Don't detect this
+afterwards by `instanceof TypeError`: a plain code bug is also a TypeError, and it
+would be disguised as "check your connection".
+
+**The not-a-question gate fails open.** `hasStemContent` is asked of detection
+(cheap, before the student confirms) and again of analysis (for a quick tap that
+beats detection). Only an explicit `false` blocks; a missing field never turns a
+real problem away, and the cropper overlay keeps a "Use this photo anyway" link
+for a faint page misread as empty.
+
+**Tutor turns read `prefsRef`, not the `prefs` state.** The opening turns are
+fired from inside `runAnalysis`, a callback created once on mount, so reading
+state there gets the first render's defaults. Measured: with plain state, Ask
+mode's first request carried `grade: null` and no curriculum.
+
 **Captures are never auto-cropped.** `components/QuestionCropper.tsx` asks the model
 to box each question and hands the student a draggable box. The Otsu ink-bounding-box
 heuristic in `lib/image.ts` survives *only* as that cropper's offline fallback, where

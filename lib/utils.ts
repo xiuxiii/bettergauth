@@ -16,3 +16,10 @@ export function fileToDataUrl(file: File): Promise<string> {
 
 /** sessionStorage key used to hand the captured image to the workspace. */
 export const IMAGE_KEY = "mindgap:image";
+
+/**
+ * sessionStorage key for Ask mode's question, handed to the workspace beside
+ * the image. The workspace removes it as soon as it reads it, so a reload
+ * re-opens the photo without asking the same question twice.
+ */
+export const QUESTION_KEY = "mindgap:question";

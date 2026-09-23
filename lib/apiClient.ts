@@ -24,7 +24,15 @@ export async function* readNdjson<T>(res: Response): AsyncGenerator<T> {
 
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch (err) {
+        // The connection dropped mid-answer, after fetch had already resolved.
+        if (err instanceof DOMException && err.name === "AbortError") throw err;
+        throw new NetworkError();
+      }
+      const { done, value } = chunk;
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
@@ -73,4 +81,38 @@ export async function readApiError(
   if (res.status >= 500) return "The server had a problem with that one. Try again in a moment.";
 
   return fallback;
+}
+
+/**
+ * The connection dropped before any response arrived.
+ *
+ * `readApiError` only helps when a Response exists. When there is none — a phone
+ * switching from wifi to cellular, the page backgrounded mid-request, a platform
+ * cut-off — `fetch` rejects with the browser's own wording: "Failed to fetch"
+ * (Chrome), "Load failed" (Safari), "NetworkError when attempting to fetch
+ * resource" (Firefox). That text went straight onto the error card.
+ *
+ * It is tagged at the fetch call rather than recognised afterwards by being a
+ * TypeError, because a plain bug (`undefined.foo`) is also a TypeError, and
+ * dressing a real bug up as "check your connection" would hide it for good.
+ */
+export class NetworkError extends Error {
+  constructor() {
+    super("Couldn't reach MindGap. Check your connection and try again.");
+    this.name = "NetworkError";
+  }
+}
+
+/** `fetch`, but a dropped connection surfaces as a NetworkError. Aborts are
+ *  left alone: a caller that aborted on purpose has its own handling. */
+export async function apiFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new NetworkError();
+  }
 }

@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 
 const ACTIONS: TutorAction[] = [
   "ask",
+  "question",
   "continue",
   "hint",
   "explain",
@@ -23,6 +24,7 @@ const ACTIONS: TutorAction[] = [
  */
 const STREAMING_ACTIONS: TutorAction[] = [
   "ask",
+  "question",
   "continue",
   "hint",
   "explain",

@@ -24,9 +24,9 @@ import {
   recordConceptError,
   resolveMisconception,
 } from "@/lib/tutor/types";
-import { IMAGE_KEY, uid } from "@/lib/utils";
+import { IMAGE_KEY, QUESTION_KEY, uid } from "@/lib/utils";
 import { safePrefix } from "@/lib/tutor/streamText";
-import { readApiError, readNdjson } from "@/lib/apiClient";
+import { apiFetch, readApiError, readNdjson } from "@/lib/apiClient";
 import {
   DEFAULT_PREFERENCES,
   loadPreferences,
@@ -80,7 +80,9 @@ type TutorStreamFrame =
   | { t: "done"; turn: TutorTurn }
   | { t: "error"; message: string };
 
-type Phase = "loading" | "ready" | "error" | "empty";
+/** "notWork": the photo holds no study material at all (dinner, the floor, an
+ *  accidental shot) — shown as "Question not detected", not as an error. */
+type Phase = "loading" | "ready" | "error" | "empty" | "notWork";
 
 export default function TutorWorkspace() {
   const router = useRouter();
@@ -110,12 +112,21 @@ export default function TutorWorkspace() {
     setComposerOpen(true);
   }
 
+  // What requestTurn actually sends. A ref, not the state above, because the
+  // opening turns are fired from inside runAnalysis — a callback created once
+  // on mount — and would otherwise read the FIRST render's defaults: an Ask
+  // mode answer ignoring the student's curriculum and help style.
+  const prefsRef = useRef<TutorPreferences>(DEFAULT_PREFERENCES);
+
   // Load saved preferences (client-only) so tutor turns can carry them.
   useEffect(() => {
-    setPrefs(loadPreferences() ?? DEFAULT_PREFERENCES);
+    const loaded = loadPreferences() ?? DEFAULT_PREFERENCES;
+    prefsRef.current = loaded;
+    setPrefs(loaded);
   }, []);
 
   function updatePrefs(next: TutorPreferences) {
+    prefsRef.current = next;
     setPrefs(next);
     savePreferences(next);
   }
@@ -161,19 +172,32 @@ export default function TutorWorkspace() {
   // invocation (StrictMode / Fast Refresh) can never append a duplicate opener.
   // Manual retries call runAnalysis directly and are unaffected.
   const startedRef = useRef(false);
+  // Ask mode's question for this capture, if there is one. Read once at start.
+  const questionRef = useRef<string | null>(null);
 
   // Load the captured image and analyze it.
   const runAnalysis = useCallback(async (dataUrl: string) => {
     setPhase("loading");
     setAnalyzeError(null);
     try {
-      const res = await fetch("/api/analyze", {
+      const res = await apiFetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: dataUrl }),
       });
       if (!res.ok) throw new Error(await readApiError(res, "Analysis failed."));
       const data: ProblemAnalysis = await res.json();
+
+      // Second line of the not-work gate. Detection normally catches this in
+      // the cropper, but it doesn't block the confirm button (it mustn't — that
+      // was the slow screen), so a quick tap can get here first. Nothing gets
+      // recorded to history and no tutor turn is spent. Only an explicit false
+      // counts: a missing flag never turns a real problem away.
+      if (data.hasStemContent === false) {
+        setPhase("notWork");
+        return;
+      }
+
       setAnalysis(data);
       setPhase("ready");
 
@@ -184,6 +208,23 @@ export default function TutorWorkspace() {
         recordIdRef.current = id;
         if (id) bumpRecord();
       });
+
+      // Ask mode: they asked something specific, so answer that. It wins over
+      // both the opener and auto-diagnosis — a question about the tension in a
+      // diagram shouldn't be answered with a critique of their working.
+      const asked = questionRef.current;
+      if (asked) {
+        questionRef.current = null;
+        const student: DisplayMessage = {
+          id: uid("s"),
+          role: "student",
+          content: asked,
+          createdAt: Date.now(),
+        };
+        setMessages([student]);
+        void requestTurn("question", data, [student], asked);
+        return;
+      }
 
       // The photo already shows their attempt: diagnose it instead of asking
       // them to start. No student turn is posted — the card directly above is
@@ -284,6 +325,12 @@ export default function TutorWorkspace() {
       setPhase("empty");
       return;
     }
+    try {
+      questionRef.current = sessionStorage.getItem(QUESTION_KEY)?.trim() || null;
+      sessionStorage.removeItem(QUESTION_KEY);
+    } catch {
+      questionRef.current = null;
+    }
     setImage(stored);
     void runAnalysis(stored);
   }, [runAnalysis, reopenId]);
@@ -348,7 +395,7 @@ export default function TutorWorkspace() {
     setTurnError(null);
     retryRef.current = null;
     try {
-      const res = await fetch("/api/tutor", {
+      const res = await apiFetch("/api/tutor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -356,7 +403,7 @@ export default function TutorWorkspace() {
           history: toHistory(history),
           action,
           studentText,
-          preferences: prefs,
+          preferences: prefsRef.current,
           memory: memoryRef.current,
         }),
       });
@@ -504,7 +551,7 @@ export default function TutorWorkspace() {
     setTurnError(null);
     retryRef.current = null;
     try {
-      const res = await fetch("/api/check-work", {
+      const res = await apiFetch("/api/check-work", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ problem: forProblem, attempt }),
@@ -580,6 +627,26 @@ export default function TutorWorkspace() {
           className="mt-4 inline-flex h-11 items-center rounded-md bg-brand-600 px-4 text-sm font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700"
         >
           Go to home
+        </Link>
+      </CenteredShell>
+    );
+  }
+
+  // The photo had nothing to tutor. The same words the cropper uses, centred,
+  // with one way forward — not the red error card, because nothing failed:
+  // the photo just wasn't of work.
+  if (phase === "notWork") {
+    return (
+      <CenteredShell>
+        <EmptyState
+          title="Question not detected"
+          hint="Please try again with the problem in frame."
+        />
+        <Link
+          href="/"
+          className="mt-4 inline-flex h-11 items-center rounded-md bg-brand-600 px-4 text-sm font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700"
+        >
+          Take another photo
         </Link>
       </CenteredShell>
     );

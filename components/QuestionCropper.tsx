@@ -66,9 +66,17 @@ function shortLabel(label: string) {
  */
 export default function QuestionCropper({
   image,
+  mode = "diagnose",
   onConfirm,
   onCancel,
+  onRetake,
 }: {
+  /**
+   * "ask" is Ask mode: the student frames something and types a specific
+   * question about it. The frame may be a diagram with no printed question at
+   * all, so the copy talks about "what you're asking about".
+   */
+  mode?: "diagnose" | "ask";
   /** Normalized (upright, downscaled) photo of the page as a data URL. */
   image: string;
   /**
@@ -77,9 +85,14 @@ export default function QuestionCropper({
    * preview, and cropping it would throw away the detail the model needs to
    * read handwriting.
    */
-  onConfirm: (result: { rect: NormalizedRect }) => void;
+  onConfirm: (result: { rect: NormalizedRect; question?: string }) => void;
   onCancel: () => void;
+  /** Back to the camera, for when the photo turned out not to be work at all.
+   *  Falls back to onCancel when the caller has no capture to return to. */
+  onRetake?: () => void;
 }) {
+  const asking = mode === "ask";
+  const [question, setQuestion] = useState("");
   // --- Detection -------------------------------------------------------------
   const [detecting, setDetecting] = useState(true);
   const [questions, setQuestions] = useState<DetectedQuestion[]>([]);
@@ -92,6 +105,13 @@ export default function QuestionCropper({
   // and read by the detection handler below, which would otherwise overwrite
   // whatever they had just dragged.
   const touchedRef = useRef(false);
+  // The same fact as state, so the corners can stop pulsing the moment the
+  // student starts dragging — a ref change wouldn't re-render them.
+  const [touched, setTouched] = useState(false);
+  // The model said this photo holds no study material at all (dinner, the
+  // floor, an accidental shot). Shown as an overlay instead of letting them
+  // spend a full analysis on it.
+  const [notWork, setNotWork] = useState(false);
 
   // Phase 1: seed a real box immediately, with no network.
   //
@@ -161,6 +181,12 @@ export default function QuestionCropper({
         // the student a usable screen, so there is nothing to recover here.
       }
       if (cancelled) return;
+
+      if (result && result.hasStemContent === false) {
+        setNotWork(true);
+        setDetecting(false);
+        return;
+      }
 
       if (result && result.questions.length > 0) {
         const i = clamp(result.primaryIndex, 0, result.questions.length - 1);
@@ -232,6 +258,7 @@ export default function QuestionCropper({
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     touchedRef.current = true;
+    setTouched(true);
     drag.current = { handle, startX: e.clientX, startY: e.clientY, rect };
   };
 
@@ -278,11 +305,14 @@ export default function QuestionCropper({
   const [cropping, setCropping] = useState(false);
   const [cropError, setCropError] = useState<string | null>(null);
 
+  const trimmedQuestion = question.trim();
+  const canConfirm = !asking || trimmedQuestion.length > 0;
+
   function confirm() {
-    if (cropping) return;
+    if (cropping || !canConfirm) return;
     setCropping(true);
     setCropError(null);
-    onConfirm({ rect });
+    onConfirm(asking ? { rect, question: trimmedQuestion } : { rect });
   }
 
   useEffect(() => {
@@ -294,6 +324,7 @@ export default function QuestionCropper({
   }, [onCancel]);
 
   const canReset = !sameRect(rect, autoRect);
+  const cornersActive = detecting && !touched && !notWork;
   const multi = questions.length > 1;
   // The one thing worth reading, kept to a single phone line. The count is a
   // separate, quieter line: it is context, not an instruction.
@@ -303,14 +334,16 @@ export default function QuestionCropper({
   // over a screen that isn't waiting is what made this feel slow. Progress
   // goes on the quiet line, where it reads as "more is coming" rather than
   // "you can't do anything yet".
-  const instruction = multi
+  const instruction = asking
+    ? "Frame what you're asking about"
+    : multi
     ? "Crop the question, or tap a number"
     : questions.length === 1
       ? "Drag the box to frame the question"
       : "Drag the box around the question";
   const count = multi
     ? `${questions.length} questions found`
-    : detecting
+    : detecting && !asking
       ? "Looking for other questions…"
       : "";
 
@@ -413,17 +446,58 @@ export default function QuestionCropper({
               <Edge handle="w" onStart={startDrag} className="-left-3 top-0 h-full w-6 cursor-ew-resize" />
               <Edge handle="e" onStart={startDrag} className="-right-3 top-0 h-full w-6 cursor-ew-resize" />
               {/* Corner handles: 44px targets with a visible bracket. */}
-              <Corner handle="nw" onStart={startDrag} className="-left-[22px] -top-[22px] cursor-nwse-resize" bracket="rounded-tl-sm border-l-[3px] border-t-[3px] left-[19px] top-[19px]" />
-              <Corner handle="ne" onStart={startDrag} className="-right-[22px] -top-[22px] cursor-nesw-resize" bracket="rounded-tr-sm border-r-[3px] border-t-[3px] right-[19px] top-[19px]" />
-              <Corner handle="sw" onStart={startDrag} className="-bottom-[22px] -left-[22px] cursor-nesw-resize" bracket="rounded-bl-sm border-b-[3px] border-l-[3px] bottom-[19px] left-[19px]" />
-              <Corner handle="se" onStart={startDrag} className="-bottom-[22px] -right-[22px] cursor-nwse-resize" bracket="rounded-br-sm border-b-[3px] border-r-[3px] bottom-[19px] right-[19px]" />
+              {/* While detection runs, the corners go bold and breathe: the
+                  one useful thing to do in that time is frame the question,
+                  so that is where the eye should go — not to how long the
+                  processing takes. They settle as soon as detection lands or
+                  the student starts dragging, whichever comes first. */}
+              <Corner handle="nw" onStart={startDrag} active={cornersActive} className="-left-[22px] -top-[22px] cursor-nwse-resize" />
+              <Corner handle="ne" onStart={startDrag} active={cornersActive} className="-right-[22px] -top-[22px] cursor-nesw-resize" />
+              <Corner handle="sw" onStart={startDrag} active={cornersActive} className="-bottom-[22px] -left-[22px] cursor-nesw-resize" />
+              <Corner handle="se" onStart={startDrag} active={cornersActive} className="-bottom-[22px] -right-[22px] cursor-nwse-resize" />
             </div>
             </div>
           </>
         )}
+
+        {notWork && (
+          <div
+            role="alertdialog"
+            aria-labelledby="not-work-title"
+            aria-describedby="not-work-body"
+            className="absolute inset-0 z-10 flex animate-fade-in items-center justify-center bg-[rgb(32_27_20/0.72)] px-6"
+          >
+            <div className="w-full max-w-xs rounded-lg bg-surface p-5 text-center shadow-card">
+              <p id="not-work-title" className="text-lg font-semibold text-ink">
+                Question not detected
+              </p>
+              <p id="not-work-body" className="mt-1 text-sm text-slate-600">
+                Please try again with the problem in frame.
+              </p>
+              <button
+                onClick={onRetake ?? onCancel}
+                autoFocus
+                className="mt-4 flex h-12 w-full items-center justify-center rounded-md bg-brand-600 px-5 text-base font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98]"
+              >
+                Take another photo
+              </button>
+              {/* A way through for the rare real page read as empty (faint
+                  pencil, an odd diagram). Without it a wrong call is a dead
+                  end; kept small so it doesn't compete with retaking. */}
+              <button
+                onClick={() => setNotWork(false)}
+                className="mt-2 h-10 text-sm font-medium text-slate-500 underline-offset-4 hover:text-ink hover:underline"
+              >
+                Use this photo anyway
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Controls */}
+      {/* Controls. Hidden behind the not-work overlay: offering "Use this
+          question" under "Question not detected" would contradict itself. */}
+      {!notWork && (
       <div className="border-t border-hairline bg-surface px-4 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] pt-3">
         {/* Holds the nav row's height while detection is still running, so the
             chips don't shove the instruction and button down when they land. */}
@@ -488,15 +562,39 @@ export default function QuestionCropper({
           <p className="mb-2 text-center text-sm text-danger-600">{cropError}</p>
         )}
 
+        {asking && (
+          // Words, not working: a question typed in plain language is quick on
+          // a phone in a way that transcribing maths never was. No autoFocus —
+          // the keyboard rising over the photo before they've framed anything
+          // would hide the thing they're framing.
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                confirm();
+              }
+            }}
+            rows={2}
+            maxLength={500}
+            enterKeyHint="send"
+            aria-label="Your question"
+            placeholder="e.g. Why is the tension equal to Fg here?"
+            className="mb-3 w-full resize-none rounded-md border border-slate-300 bg-paper px-3.5 py-2.5 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-400"
+          />
+        )}
+
         <button
           onClick={confirm}
-          disabled={cropping || !fit}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:bg-brand-300 disabled:text-white/90 disabled:shadow-none"
+          disabled={cropping || !fit || !canConfirm}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:cursor-not-allowed disabled:bg-brand-300 disabled:text-white/90 disabled:opacity-45 disabled:shadow-none"
         >
           {cropping ? <Spinner className="h-5 w-5" /> : null}
-          Use this question
+          {asking ? "Ask" : "Use this question"}
         </button>
       </div>
+      )}
     </div>
   );
 }
@@ -523,13 +621,36 @@ function Corner({
   handle,
   onStart,
   className,
-  bracket,
+  active,
 }: {
   handle: Handle;
   onStart: (h: Handle) => (e: React.PointerEvent) => void;
   className: string;
-  bracket: string;
+  /** Bold and pulsing — see the note where the corners are placed. */
+  active: boolean;
 }) {
+  const top = handle.includes("n");
+  const left = handle.includes("w");
+  const width = active ? 5 : 3;
+  const size = active ? 26 : 20;
+  // The 44px hit target is centred on the box's corner (22px in). Offsetting
+  // by the border width keeps the bracket's inner edge on the box line at
+  // either weight, so going bold thickens outward instead of shifting.
+  const offset = 22 - width;
+  const style: React.CSSProperties = {
+    width: size,
+    height: size,
+    [top ? "top" : "bottom"]: offset,
+    [left ? "left" : "right"]: offset,
+    [top ? "borderTopWidth" : "borderBottomWidth"]: width,
+    [left ? "borderLeftWidth" : "borderRightWidth"]: width,
+    // Breathe around the bracket's own vertex, so the arms extend and retract
+    // from the corner rather than the whole mark drifting.
+    transformOrigin: `${top ? "top" : "bottom"} ${left ? "left" : "right"}`,
+  };
+  const rounded = top
+    ? left ? "rounded-tl-sm" : "rounded-tr-sm"
+    : left ? "rounded-bl-sm" : "rounded-br-sm";
   return (
     <div
       onPointerDown={onStart(handle)}
@@ -537,7 +658,10 @@ function Corner({
       aria-hidden="true"
     >
       <span
-        className={`absolute h-5 w-5 border-brand-500 drop-shadow-[0_0_1px_rgb(255_255_255/0.9)] ${bracket}`}
+        style={style}
+        className={`absolute border-brand-500 drop-shadow-[0_0_1px_rgb(255_255_255/0.9)] transition-[width,height,border-width,top,left,right,bottom] duration-200 ${rounded} ${
+          active ? "animate-corner-pulse" : ""
+        }`}
       />
     </div>
   );

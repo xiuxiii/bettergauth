@@ -51,7 +51,7 @@ export default function HomePage() {
       </div>
 
       <footer className="mt-10 text-center text-xs text-slate-500">
-        <p>Physics · Chemistry · Biology · Math — high-school level</p>
+        <p>Physics · Chemistry · Math</p>
         <a href="/setup" className={`mt-2 inline-block md:hidden ${prefsLinkCls}`}>
           Edit preferences
         </a>

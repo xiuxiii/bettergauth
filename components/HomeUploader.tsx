@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { IMAGE_KEY } from "@/lib/utils";
+import { IMAGE_KEY, QUESTION_KEY } from "@/lib/utils";
 import type { NormalizedRect } from "@/lib/tutor/types";
 import { cropSourceToJpeg, fileToNormalizedJpeg } from "@/lib/image";
 import { hasPreferences } from "@/lib/preferences";
-import { Camera, Clock, Upload } from "lucide-react";
+import { Camera, Clock, MessageCircleQuestion, Upload } from "lucide-react";
 import { ErrorState, Spinner } from "@/components/States";
 import CameraScanner from "@/components/CameraScanner";
 import QuestionCropper from "@/components/QuestionCropper";
@@ -36,6 +36,11 @@ export default function HomeUploader() {
    */
   const [source, setSource] = useState<File | string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Which button opened the capture. "ask" is Ask mode: frame something and
+   * ask a question about it, rather than have the work diagnosed.
+   */
+  const [mode, setMode] = useState<"diagnose" | "ask">("diagnose");
 
   // First-run gate: send new visitors through setup once.
   useEffect(() => {
@@ -43,8 +48,12 @@ export default function HomeUploader() {
   }, [router]);
 
   /** Hand the confirmed crop to the workspace. */
-  function go(dataUrl: string) {
+  function go(dataUrl: string, question?: string) {
     sessionStorage.setItem(IMAGE_KEY, dataUrl);
+    // Always written or cleared together with the image, so a question from an
+    // earlier Ask can never ride along with a later ordinary capture.
+    if (question) sessionStorage.setItem(QUESTION_KEY, question);
+    else sessionStorage.removeItem(QUESTION_KEY);
     setBusy(true);
     router.push("/workspace");
   }
@@ -54,12 +63,12 @@ export default function HomeUploader() {
    * Falls back to the preview if the original somehow isn't around, so a
    * confirm can never dead-end.
    */
-  async function confirmCrop(rect: NormalizedRect) {
+  async function confirmCrop(rect: NormalizedRect, question?: string) {
     const preview = pending;
     if (!preview) return;
     setBusy(true);
     try {
-      go(await cropSourceToJpeg(source ?? preview, rect));
+      go(await cropSourceToJpeg(source ?? preview, rect), question);
       setPending(null);
       setSource(null);
     } catch {
@@ -103,6 +112,7 @@ export default function HomeUploader() {
         disabled={busy}
         onClick={() => {
           setError(null);
+          setMode("diagnose");
           setScanning(true);
         }}
         className="flex h-14 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:bg-brand-300 disabled:text-white/90 disabled:shadow-none"
@@ -117,11 +127,29 @@ export default function HomeUploader() {
 
       <button
         disabled={busy}
-        onClick={() => uploadRef.current?.click()}
+        onClick={() => {
+          setMode("diagnose");
+          uploadRef.current?.click();
+        }}
         className="flex h-14 w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-surface px-5 text-base font-semibold text-slate-800 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-60"
       >
         <Upload size={18} strokeWidth={1.75} aria-hidden="true" />
         Upload problem
+      </button>
+
+      {/* Ask mode. Opens the same camera, which already falls back to a file
+          picker when the camera is unavailable or refused. */}
+      <button
+        disabled={busy}
+        onClick={() => {
+          setError(null);
+          setMode("ask");
+          setScanning(true);
+        }}
+        className="flex h-14 w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-surface px-5 text-base font-semibold text-slate-800 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-60"
+      >
+        <MessageCircleQuestion size={18} strokeWidth={1.75} aria-hidden="true" />
+        Ask about a photo
       </button>
 
       <Link
@@ -150,11 +178,19 @@ export default function HomeUploader() {
       {pending && (
         <QuestionCropper
           image={pending}
+          mode={mode}
           onCancel={() => {
             setPending(null);
             setSource(null);
           }}
-          onConfirm={({ rect }) => void confirmCrop(rect)}
+          // "Question not detected" → straight back to the camera in the same
+          // mode, rather than dumping them on the home screen to start over.
+          onRetake={() => {
+            setPending(null);
+            setSource(null);
+            setScanning(true);
+          }}
+          onConfirm={({ rect, question }) => void confirmCrop(rect, question)}
         />
       )}
     </div>
