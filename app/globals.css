@@ -63,58 +63,62 @@
   --ease-soft: cubic-bezier(0.22, 0.7, 0.2, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: 23 20 15; /* #17140F */
-    --surface: 31 27 21; /* #1F1B15 */
-    --ink: 241 236 226; /* #F1ECE2 */
-    --hairline: 46 40 32; /* #2E2820 */
+/* The dark palette. Selected by the `data-theme` attribute rather than a
+ * `prefers-color-scheme` media query, because the app offers an explicit
+ * System / Light / Dark choice: THEME_INIT_SCRIPT (lib/theme.ts) resolves
+ * "system" against the OS before first paint and writes the concrete value
+ * here. Doing it that way keeps ONE dark block — a media query plus an
+ * attribute override would mean maintaining this 40-variable list twice and
+ * letting the copies drift. */
+:root[data-theme="dark"] {
+  --paper: 23 20 15; /* #17140F */
+  --surface: 31 27 21; /* #1F1B15 */
+  --ink: 241 236 226; /* #F1ECE2 */
+  --hairline: 46 40 32; /* #2E2820 */
 
-    --slate-50: 32 27 20; /* #201B14 */
-    --slate-100: 42 36 28; /* #2A241C */
-    --slate-200: 59 52 42; /* #3B342A */
-    --slate-300: 94 87 75; /* #5E574B */
-    --slate-400: 122 114 100; /* #7A7264 */
-    --slate-500: 168 158 140; /* #A89E8C */
-    --slate-600: 211 201 182; /* #D3C9B6 */
-    --slate-700: 228 220 205; /* #E4DCCD */
-    --slate-800: 239 232 219; /* #EFE8DB */
-    --slate-900: 247 243 236; /* #F7F3EC */
+  --slate-50: 32 27 20; /* #201B14 */
+  --slate-100: 42 36 28; /* #2A241C */
+  --slate-200: 59 52 42; /* #3B342A */
+  --slate-300: 94 87 75; /* #5E574B */
+  --slate-400: 122 114 100; /* #7A7264 */
+  --slate-500: 168 158 140; /* #A89E8C */
+  --slate-600: 211 201 182; /* #D3C9B6 */
+  --slate-700: 228 220 205; /* #E4DCCD */
+  --slate-800: 239 232 219; /* #EFE8DB */
+  --slate-900: 247 243 236; /* #F7F3EC */
 
-    /* Tints become deep, saturated grounds; on-tint text becomes the light
-       step, so every `bg-brand-50` / `text-danger-800` pair stays legible. */
-    --brand-50: 29 31 58; /* deep indigo ground */
-    --brand-100: 38 42 74;
-    --brand-200: 63 68 190;
-    --brand-700: 162 172 246; /* #A2ACF6 */
-    --brand-800: 199 206 251; /* #C7CEFB */
-    --brand-900: 225 230 253; /* #E1E6FD */
+  /* Tints become deep, saturated grounds; on-tint text becomes the light
+     step, so every `bg-brand-50` / `text-danger-800` pair stays legible. */
+  --brand-50: 29 31 58; /* deep indigo ground */
+  --brand-100: 38 42 74;
+  --brand-200: 63 68 190;
+  --brand-700: 162 172 246; /* #A2ACF6 */
+  --brand-800: 199 206 251; /* #C7CEFB */
+  --brand-900: 225 230 253; /* #E1E6FD */
 
-    --danger-50: 46 26 20;
-    --danger-100: 66 38 29;
-    --danger-200: 116 42 30;
-    --danger-600: 226 143 126;
-    --danger-700: 235 181 169; /* #EBB5A9 */
-    --danger-800: 245 217 210; /* #F5D9D2 */
+  --danger-50: 46 26 20;
+  --danger-100: 66 38 29;
+  --danger-200: 116 42 30;
+  --danger-600: 226 143 126;
+  --danger-700: 235 181 169; /* #EBB5A9 */
+  --danger-800: 245 217 210; /* #F5D9D2 */
 
-    --warn-50: 42 33 19;
-    --warn-100: 61 48 27;
-    --warn-200: 106 67 12;
-    --warn-600: 219 178 106;
-    --warn-700: 232 201 138; /* #E8C98A */
-    --warn-800: 243 224 184; /* #F3E0B8 */
+  --warn-50: 42 33 19;
+  --warn-100: 61 48 27;
+  --warn-200: 106 67 12;
+  --warn-600: 219 178 106;
+  --warn-700: 232 201 138; /* #E8C98A */
+  --warn-800: 243 224 184; /* #F3E0B8 */
 
-    --success-50: 24 38 21;
-    --success-100: 35 54 32;
-    --success-200: 40 79 44;
-    --success-600: 143 184 141;
-    --success-700: 174 207 173; /* #AECFAD */
-    --success-800: 210 229 209; /* #D2E5D1 */
-  }
+  --success-50: 24 38 21;
+  --success-100: 35 54 32;
+  --success-200: 40 79 44;
+  --success-600: 143 184 141;
+  --success-700: 174 207 173; /* #AECFAD */
+  --success-800: 210 229 209; /* #D2E5D1 */
 }
 
 html {
-  color-scheme: light dark;
   /* iOS native feel: no grey tap flash, no text inflation in landscape, no
      rubber-banding of the whole document behind the app's own scroll areas. */
   -webkit-tap-highlight-color: transparent;

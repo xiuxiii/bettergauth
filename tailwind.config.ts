@@ -14,6 +14,11 @@ import type { Config } from "tailwindcss";
  * CSS variables (see globals.css) so the warm dark theme swaps them in place.
  */
 const config: Config = {
+  // The app themes itself with CSS variables keyed off `data-theme` (see
+  // globals.css), so the `dark:` variant has to follow that attribute too.
+  // Left on the default "media" it would track the OS and quietly ignore an
+  // explicit Light/Dark choice.
+  darkMode: ["selector", '[data-theme="dark"]'],
   content: [
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",

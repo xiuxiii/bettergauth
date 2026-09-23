@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { TutorPreferences } from "@/lib/tutor/types";
 import {
@@ -9,6 +9,13 @@ import {
   savePreferences,
 } from "@/lib/preferences";
 import MindGapMark from "@/components/MindGapMark";
+import {
+  applyTheme,
+  loadTheme,
+  saveTheme,
+  watchSystemTheme,
+  type Theme,
+} from "@/lib/theme";
 
 /**
  * First-run (and editable) preferences. Captures a light calibration — grade,
@@ -20,6 +27,26 @@ export default function SetupForm() {
   const [prefs, setPrefs] = useState<TutorPreferences>(
     () => loadPreferences() ?? DEFAULT_PREFERENCES,
   );
+
+  // Theme is stored separately from preferences (see lib/theme.ts) and starts
+  // at the SSR-safe default: reading storage during render would disagree with
+  // the server markup and trip a hydration mismatch on the selected chip.
+  const [theme, setThemeState] = useState<Theme>("system");
+  useEffect(() => setThemeState(loadTheme()), []);
+
+  // While on "system", follow the OS live rather than waiting for a reload.
+  useEffect(() => {
+    if (theme !== "system") return;
+    return watchSystemTheme(() => applyTheme("system"));
+  }, [theme]);
+
+  // Applied immediately, not on save: a colour choice you cannot see until you
+  // submit the form is a choice you cannot judge.
+  function chooseTheme(next: Theme) {
+    setThemeState(next);
+    applyTheme(next);
+    saveTheme(next);
+  }
 
   function save() {
     savePreferences(prefs);
@@ -88,6 +115,18 @@ export default function SetupForm() {
                 { value: "both", label: "Both", sub: "Exam-ready + deep" },
                 { value: "understand", label: "Understand", sub: "The why" },
                 { value: "exam", label: "Exam prep", sub: "Drill + traps" },
+              ]}
+            />
+          </Field>
+
+          <Field label="Appearance" hint="Applies right away.">
+            <Options
+              value={theme}
+              onChange={(v) => chooseTheme(v as Theme)}
+              options={[
+                { value: "system", label: "System", sub: "Match my phone" },
+                { value: "light", label: "Light" },
+                { value: "dark", label: "Dark" },
               ]}
             />
           </Field>

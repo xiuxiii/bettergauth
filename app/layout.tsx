@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, Newsreader } from "next/font/google";
 import "./globals.css";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 // MindGap's type system: Hanken Grotesk for UI, Newsreader for display/serif.
 const sans = Hanken_Grotesk({
@@ -47,7 +48,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable}`}>
+    // suppressHydrationWarning: the inline script below sets data-theme and
+    // color-scheme on <html> before React hydrates, so the server markup and
+    // the live DOM legitimately differ on this element.
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${sans.variable} ${serif.variable}`}
+    >
+      <head>
+        {/* Must be inline, in <head>, and before any content: a deferred or
+            bundled script runs after the first paint, which is exactly the
+            dark-flash-on-a-light-theme this prevents. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-dvh font-sans">{children}</body>
     </html>
   );
