@@ -194,6 +194,26 @@ export function emptySessionMemory(): SessionMemory {
   return { demonstrated: [], misconceptions: [], errors: [], bottleneck: "" };
 }
 
+/**
+ * One concept from the on-device ranking, sent to the model for a write-up.
+ *
+ * Text only, deliberately: no images and no transcripts, so the summary call
+ * stays cheap enough to be worth offering on demand.
+ */
+export interface ProgressConcept {
+  concept: string;
+  errors: number;
+  problems: number;
+  types: string[];
+  studentBelief?: string;
+  correctModel?: string;
+}
+
+/** What the client sends to /api/progress. */
+export interface ProgressRequest {
+  concepts: ProgressConcept[];
+}
+
 /** A concept that has tripped the student up more than once this session. */
 export interface RecurringGap {
   concept: string;

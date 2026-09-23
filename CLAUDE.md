@@ -111,6 +111,25 @@ heuristic in `lib/image.ts` survives *only* as that cropper's offline fallback, 
 it seeds an editable box. It must never decide a crop on its own — it was wrong often
 enough that silent cropping was the bug.
 
+**History lives in IndexedDB as Blobs, never localStorage.** Measured: a
+normalized worksheet photo is ~367KB as JPEG, ~489KB as a base64 data URL, so
+localStorage's ~5MB quota holds about ten — the whole quota, shared with
+preferences. Photos sit in their own object store and each record carries a 240px
+thumbnail inline (~3KB, 60x smaller), so listing the history never reads the
+photos. Every storage call is guarded: blocked site data must degrade to "no
+history", never throw. `syncedAt` on each record is the unused hook for adding a
+backend later.
+
+**The theme is resolved before first paint, by an inline script.** `data-theme`
+on `<html>` selects the dark variable block in `globals.css` — there is no
+`prefers-color-scheme` media query any more, because THEME_INIT_SCRIPT
+(`lib/theme.ts`) resolves "system" to a concrete value in `<head>`. That keeps
+ONE dark block instead of two that drift. Theme must NOT move into
+`lib/preferences.ts`: those load in a `useEffect` after hydration, far too late
+to colour the first frame, and the result is a dark flash for light-mode users.
+Tailwind's `darkMode` points at the same attribute, so `dark:` utilities follow
+the toggle rather than the OS.
+
 **Tinted surfaces use CSS variables, not fixed hex.** The `brand`/`danger`/`warn`/
 `success` tint steps (50/100/200) and on-tint text steps (700/800/900) are theme
 variables so they flip in dark mode; the mid brand steps (300-600) stay fixed indigo

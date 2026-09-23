@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, ChevronDown, ChevronLeft, Settings2 } from "lucide-react";
 import type {
@@ -32,6 +32,9 @@ import {
   loadPreferences,
   savePreferences,
 } from "@/lib/preferences";
+import { saveProgress, startSession } from "@/lib/history/record";
+import { getImage, getSession } from "@/lib/history/db";
+import { blobToDataUrl } from "@/lib/image";
 import ProblemCard from "@/components/ProblemCard";
 import MessageBubble from "@/components/MessageBubble";
 import ActionBar from "@/components/ActionBar";
@@ -81,6 +84,7 @@ type Phase = "loading" | "ready" | "error" | "empty";
 
 export default function TutorWorkspace() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [image, setImage] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<ProblemAnalysis | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
@@ -119,6 +123,14 @@ export default function TutorWorkspace() {
   // The tutor's cross-turn memory: round-tripped through /api/tutor so the
   // tutor adapts, avoids re-teaching, and catches recurring misconceptions.
   const memoryRef = useRef<SessionMemory>(emptySessionMemory());
+  // The history record for this session, or null when storage is unavailable
+  // (private window, blocked site data) — in which case nothing is recorded and
+  // the app behaves exactly as it did before history existed.
+  const recordIdRef = useRef<string | null>(null);
+  // Bumped whenever something worth persisting changes; the effect below
+  // debounces the actual write so a streamed turn is saved once, not per chunk.
+  const [recordTick, setRecordTick] = useState(0);
+  const bumpRecord = useCallback(() => setRecordTick((n) => n + 1), []);
   // A recurring conceptual gap to surface, and the last one dismissed (by
   // concept + count, so it re-surfaces if the same gap keeps growing).
   const [recurring, setRecurring] = useState<RecurringGap | null>(null);
@@ -132,6 +144,17 @@ export default function TutorWorkspace() {
     (dismissed === null ||
       dismissed.concept !== recurring.concept ||
       recurring.count > dismissed.count);
+
+  // Persist the transcript and concept memory, debounced: a streamed turn
+  // updates `messages` many times and only its final state is worth writing.
+  useEffect(() => {
+    const id = recordIdRef.current;
+    if (!id) return;
+    const timer = window.setTimeout(() => {
+      void saveProgress(id, messages, memoryRef.current);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [messages, recordTick]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   // Ensures the initial auto-analysis fires exactly once, so a double effect
@@ -153,6 +176,14 @@ export default function TutorWorkspace() {
       const data: ProblemAnalysis = await res.json();
       setAnalysis(data);
       setPhase("ready");
+
+      // Record the session from here: before this point there is no problem to
+      // file it under. Failure is silent by design — history is an extra, and
+      // must never block or break the tutoring itself.
+      void startSession(data, dataUrl).then((id) => {
+        recordIdRef.current = id;
+        if (id) bumpRecord();
+      });
 
       // The photo already shows their attempt: diagnose it instead of asking
       // them to start. No student turn is posted — the card directly above is
@@ -187,9 +218,66 @@ export default function TutorWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reopening a saved session (/workspace?session=<id>) rehydrates from the
+  // stored record instead of re-analyzing: the analysis, transcript and concept
+  // memory are already known, and paying for the model again to rebuild what is
+  // on disk would be both slow and billable.
+  const reopenId = searchParams.get("session");
+
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
+
+    if (reopenId) {
+      void (async () => {
+        const rec = await getSession(reopenId);
+        if (!rec) {
+          setPhase("empty");
+          return;
+        }
+        if (rec.imageId) {
+          const blob = await getImage(rec.imageId);
+          if (blob) {
+            try {
+              setImage(await blobToDataUrl(blob));
+            } catch {
+              /* the transcript is still worth showing without the photo */
+            }
+          }
+        }
+        setAnalysis(rec.analysis);
+        memoryRef.current = rec.memory;
+        setRecurring(detectRecurring(rec.memory));
+        // Attempt photos are stored as ids, not inline data URLs, so they have
+        // to be resolved back or the student's own working vanishes from the
+        // transcript they just reopened.
+        const restored = await Promise.all(
+          rec.messages.map(async (m) => {
+            const msg = { ...m } as unknown as DisplayMessage & {
+              attemptImageId?: string;
+            };
+            if (msg.attemptImageId) {
+              const blob = await getImage(msg.attemptImageId);
+              if (blob) {
+                try {
+                  msg.attemptImage = await blobToDataUrl(blob);
+                } catch {
+                  /* leave the bubble without its photo */
+                }
+              }
+            }
+            return msg as DisplayMessage;
+          }),
+        );
+        setMessages(restored);
+        // Keep writing to the same record, so continuing an old session
+        // extends it rather than forking a duplicate.
+        recordIdRef.current = rec.id;
+        setPhase("ready");
+      })();
+      return;
+    }
+
     const stored =
       typeof window !== "undefined" ? sessionStorage.getItem(IMAGE_KEY) : null;
     if (!stored) {
@@ -198,7 +286,7 @@ export default function TutorWorkspace() {
     }
     setImage(stored);
     void runAnalysis(stored);
-  }, [runAnalysis]);
+  }, [runAnalysis, reopenId]);
 
   // Whether the student is parked at the bottom. Tracked from their own
   // scrolling rather than measured after a render, because by then the new
@@ -295,6 +383,7 @@ export default function TutorWorkspace() {
         if (turn.memory) {
           memoryRef.current = turn.memory;
           setRecurring(detectRecurring(turn.memory));
+          bumpRecord();
         }
         put({
           content: turn.message,
@@ -472,6 +561,9 @@ export default function TutorWorkspace() {
       ? resolveMisconception(memoryRef.current, concept)
       : recordConceptError(memoryRef.current, concept);
     setRecurring(detectRecurring(memoryRef.current));
+    // No message changes here, so the persistence effect needs telling
+    // explicitly — this is the one path that moves the concept memory alone.
+    bumpRecord();
   }
 
   // ---- Render ----

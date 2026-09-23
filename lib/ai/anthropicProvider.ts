@@ -14,6 +14,7 @@ import type {
   PracticeEvaluation,
   PracticeProblem,
   ProblemAnalysis,
+  ProgressRequest,
   QuestionDetection,
   SessionMemory,
   TutorPreferences,
@@ -200,6 +201,16 @@ const MATH_NOTE =
 const STYLE_NOTE =
   "Formatting: write for a phone screen. Keep every paragraph to 1-3 short sentences separated by a blank line. Use \"- \" bullets for parallel items and \"1. \" for ordered steps, one idea per line, and put key equations on their own line. Avoid em-dashes: use a period, comma, or colon instead. Never return a dense wall of text.";
 
+const PROGRESS_SYSTEM = `You write a short, honest read on what a high-school STEM student keeps getting wrong, from a ranked list of concepts and the mistakes logged against each.
+
+Write to the student, in second person. Two or three short paragraphs at most.
+
+Lead with the pattern ACROSS concepts, not a restatement of the list: the list is already on screen above you, and repeating it back is wasted words. If several concepts share a root cause (sign errors under pressure, skipping the diagram, trusting a memorised formula over the setup), say that. If there is genuinely no pattern beyond "these two are unrelated gaps", say that instead of inventing a connection.
+
+Then give ONE concrete thing to do next. Not a study plan, not a list: the single next action.
+
+Never guess at causes you cannot see, never speculate about their effort, attitude or ability, and never be discouraging. A student reading this should feel like they have been given a specific, fixable target. ${STYLE_NOTE}`;
+
 const DETECT_SYSTEM = `You locate the individual questions in a photo of a worksheet, textbook page or screen so an app can crop to one of them.
 
 Return the bounding box of each question as ABSOLUTE PIXEL coordinates in the image you were given: x1, y1 is the top-left corner and x2, y2 is the bottom-right corner, with (0, 0) at the top-left of the image, x increasing right and y increasing down. The user message states the image's exact pixel dimensions; every coordinate must fall inside them. Do not return fractions or percentages.
@@ -308,6 +319,39 @@ export class AnthropicProvider implements AIProvider {
     logUsage("detectQuestions", res);
     const out = required(res.parsed_output, "question detection");
     return normalizeDetection(out, request.width, request.height);
+  }
+
+  async summarizeProgress(request: ProgressRequest): Promise<string> {
+    const lines = request.concepts.map((c) => {
+      const bits = [
+        `${c.concept}: ${c.errors} error${c.errors === 1 ? "" : "s"} across ${c.problems} problem${c.problems === 1 ? "" : "s"}`,
+        c.types.length ? `types: ${c.types.join(", ")}` : "",
+        c.studentBelief ? `they believe: ${c.studentBelief}` : "",
+        c.correctModel ? `correct: ${c.correctModel}` : "",
+      ].filter(Boolean);
+      return `- ${bits.join(" | ")}`;
+    });
+
+    const res = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 700,
+      // No thinking: this is a short piece of writing over a handful of lines
+      // of text, and adaptive thinking would only add latency and cost.
+      thinking: { type: "disabled" },
+      system: PROGRESS_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: `Concepts I keep missing, worst first:\n${lines.join("\n")}`,
+        },
+      ],
+    });
+    logUsage("summarizeProgress", res);
+    return res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
   }
 
   async analyzeProblem(request: AnalyzeRequest): Promise<ProblemAnalysis> {

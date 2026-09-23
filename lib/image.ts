@@ -236,6 +236,58 @@ export async function imageForDetection(
   };
 }
 
+/**
+ * A small JPEG for the history list. Rendering the full ~367KB photo per row
+ * would pull tens of megabytes into memory for a long history; a 240px thumb is
+ * a few KB, so it can sit inline on the session record and keep listing to a
+ * single store read.
+ */
+export async function thumbnailFromDataUrl(
+  dataUrl: string,
+  maxDim = 240,
+): Promise<string> {
+  const img = await loadImageEl(dataUrl);
+  // Already thumbnail-sized: re-encoding would not shrink it and can actually
+  // grow it, since a fresh JPEG pays its header cost again.
+  if (Math.max(img.naturalWidth, img.naturalHeight) <= maxDim) return dataUrl;
+  const canvas = scaledCanvas(img, img.naturalWidth, img.naturalHeight, maxDim);
+  return canvas.toDataURL("image/jpeg", 0.7);
+}
+
+/**
+ * Data URL -> Blob, without a network round trip.
+ *
+ * Storing photos as Blobs rather than data URLs is what keeps the history
+ * affordable: base64 inflates every image by a third, and that tax is paid on
+ * disk, on every read, forever.
+ */
+export function dataUrlToBlob(dataUrl: string): Blob | null {
+  try {
+    const comma = dataUrl.indexOf(",");
+    if (comma < 0) return null;
+    const header = dataUrl.slice(0, comma);
+    const type = /data:([^;,]+)/.exec(header)?.[1] ?? "image/jpeg";
+    if (!header.includes(";base64")) {
+      return new Blob([decodeURIComponent(dataUrl.slice(comma + 1))], { type });
+    }
+    const bin = atob(dataUrl.slice(comma + 1));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type });
+  } catch {
+    return null;
+  }
+}
+
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Could not read the stored image."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function loadImageEl(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();

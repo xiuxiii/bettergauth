@@ -7,6 +7,7 @@ import type {
   PracticeEvaluation,
   PracticeProblem,
   ProblemAnalysis,
+  ProgressRequest,
   QuestionDetection,
   TutorRequest,
   TutorStreamEvent,
@@ -49,6 +50,14 @@ export interface AIProvider {
    * the identified governing concept.
    */
   analyzeProblem(request: AnalyzeRequest): Promise<ProblemAnalysis>;
+
+  /**
+   * A short written read on the concepts the student keeps missing.
+   *
+   * The ranking itself is computed on-device and costs nothing; this only adds
+   * the prose, so it is called on demand rather than on every history visit.
+   */
+  summarizeProgress(request: ProgressRequest): Promise<string>;
 
   /** Produce the next tutor turn given the problem and conversation so far. */
   tutor(request: TutorRequest): Promise<TutorTurn>;

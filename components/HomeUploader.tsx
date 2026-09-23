@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { IMAGE_KEY } from "@/lib/utils";
 import type { NormalizedRect } from "@/lib/tutor/types";
 import { cropSourceToJpeg, fileToNormalizedJpeg } from "@/lib/image";
 import { hasPreferences } from "@/lib/preferences";
-import { Camera, Upload } from "lucide-react";
+import { Camera, Clock, Upload } from "lucide-react";
 import { ErrorState, Spinner } from "@/components/States";
 import CameraScanner from "@/components/CameraScanner";
 import QuestionCropper from "@/components/QuestionCropper";
@@ -122,6 +123,14 @@ export default function HomeUploader() {
         <Upload size={18} strokeWidth={1.75} aria-hidden="true" />
         Upload problem
       </button>
+
+      <Link
+        href="/history"
+        className="flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-ink"
+      >
+        <Clock size={16} strokeWidth={1.75} aria-hidden="true" />
+        Your history
+      </Link>
 
       {error && <ErrorState message={error} />}
 
