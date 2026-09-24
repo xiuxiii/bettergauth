@@ -24,7 +24,8 @@ There are no tests. `npx tsc --noEmit && npm run build` is the verification gate
 | `DETECTION_MODEL` | Question detection only. Unset = same as `ANTHROPIC_MODEL`. Exists to A/B a faster model (e.g. `claude-haiku-4-5`) on the box-finding call without touching tutoring. |
 | `ACCESS_CODE` | Shared-access gate. **Unset = gate disabled**, so local dev just works. |
 | `ACCESS_SECRET` | Key for the access cookie, which stores an HMAC of the code, never the code (`lib/accessToken.ts`). Unset = the code is the key. Changing this or the code logs everyone out once. |
-| `RATE_LIMIT_PER_MIN` | Per-IP fixed window, default 30. |
+| `RATE_LIMIT_PER_MIN` | Per-IP fixed window, default 30. A burst brake. |
+| `RATE_LIMIT_PER_DAY` | Per-IP 24h cap, default 150 — the real spend ceiling. Counts only admitted requests. In memory per warm instance for now; `lib/rateLimit.ts` has the TODO for Upstash/Vercel KV. |
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |
 | `DEBUG_TOKENS` | Logs per-call token usage, including whether prompt caching is hitting. |
 | `AI_PROVIDER` | Defaults to `anthropic`, the only implemented provider. Any other value throws at startup. |
