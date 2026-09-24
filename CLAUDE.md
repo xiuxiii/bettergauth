@@ -154,6 +154,15 @@ variables so they flip in dark mode; the mid brand steps (300-600) stay fixed in
 so buttons keep the brand colour. Adding a literal hex tint will render as a glaring
 white slab on the dark theme.
 
+The flip cuts the other way for **solid button fills**: never use a 700 step (or
+`danger-600`) as a fill behind white text. `brand-700` becomes #A2ACF6 in dark
+mode, which put white button text at 2.15:1 on every hover and tap; `danger-600`/
+`-700` become pale salmon (2.48:1 at rest, 1.79:1 on hover). Solid fills use the
+fixed tokens: `bg-brand-600` at rest, `hover:`/`active:bg-accent-deep` (#3F44BE,
+7.55:1); destructive buttons `bg-danger-solid` / `hover:bg-danger-deep` (5.55:1 /
+7.36:1). Those are the old light-mode values, so light mode is unchanged. Keep the
+700 steps for on-tint TEXT only.
+
 **The tutor's formatting is prompt-enforced.** `SYSTEM_INSTRUCTIONS` in
 `lib/tutor/engine.ts` and `STYLE_NOTE` in `lib/ai/anthropicProvider.ts` ask for short
 blank-line-separated paragraphs, `## ` section labels, and lists. `components/RichText.tsx`

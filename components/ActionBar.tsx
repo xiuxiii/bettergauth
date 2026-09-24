@@ -229,7 +229,7 @@ export default function ActionBar({
           onClick={submit}
           disabled={busy || !text.trim()}
           aria-label="Send"
-          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:bg-brand-300 disabled:text-white/90"
+          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-accent-deep active:scale-[0.98] active:bg-accent-deep disabled:bg-brand-300 disabled:text-white/90"
         >
           {busy ? (
             <Spinner className="h-5 w-5" />

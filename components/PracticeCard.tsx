@@ -245,7 +245,7 @@ function SolveArea({
         <button
           onClick={() => onSubmit({ imageDataUrl: image ?? undefined })}
           disabled={!canSubmit}
-          className="h-11 flex-1 rounded-md bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:cursor-not-allowed disabled:bg-brand-300 disabled:text-white/90 disabled:opacity-45"
+          className="h-11 flex-1 rounded-md bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-accent-deep active:scale-[0.98] active:bg-accent-deep disabled:cursor-not-allowed disabled:bg-brand-300 disabled:text-white/90 disabled:opacity-45"
         >
           Submit for feedback
         </button>

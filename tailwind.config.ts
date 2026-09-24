@@ -74,6 +74,11 @@ const config: Config = {
           600: "rgb(var(--danger-600) / <alpha-value>)",
           700: "rgb(var(--danger-700) / <alpha-value>)",
           800: "rgb(var(--danger-800) / <alpha-value>)",
+          // Fixed fills for solid destructive buttons with white text. 600/700
+          // above are theme variables that turn pale salmon in dark mode, which
+          // put white text at 2.5:1 (rest) and 1.8:1 (hover).
+          solid: "#B4432F",
+          deep: "#963627",
         },
         warn: {
           50: "rgb(var(--warn-50) / <alpha-value>)",

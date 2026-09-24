@@ -68,7 +68,7 @@ export default function UnlockForm() {
           <button
             type="submit"
             disabled={busy || !code.trim()}
-            className="h-12 w-full rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700 disabled:bg-brand-300 disabled:text-white/90 disabled:shadow-none"
+            className="h-12 w-full rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-accent-deep active:scale-[0.98] active:bg-accent-deep disabled:bg-brand-300 disabled:text-white/90 disabled:shadow-none"
           >
             {busy ? "Checking…" : "Unlock"}
           </button>

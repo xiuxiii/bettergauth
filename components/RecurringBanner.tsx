@@ -56,7 +56,7 @@ export default function RecurringBanner({
 
       <button
         onClick={onPractice}
-        className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-full bg-brand-600 px-3.5 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.97] active:bg-brand-700"
+        className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-full bg-brand-600 px-3.5 text-sm font-semibold text-white transition hover:bg-accent-deep active:scale-[0.97] active:bg-accent-deep"
       >
         Practice this
         <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />

@@ -105,7 +105,7 @@ export default function HistoryView() {
           </p>
           <Link
             href="/"
-            className="mt-4 inline-flex h-11 items-center rounded-md bg-brand-600 px-5 text-sm font-semibold text-white transition hover:bg-brand-700"
+            className="mt-4 inline-flex h-11 items-center rounded-md bg-brand-600 px-5 text-sm font-semibold text-white transition hover:bg-accent-deep"
           >
             Scan a problem
           </Link>
@@ -213,7 +213,7 @@ export default function HistoryView() {
                 <div className="mt-3 flex justify-center gap-2">
                   <button
                     onClick={() => void removeEverything()}
-                    className="h-10 rounded-md bg-danger-600 px-4 text-sm font-semibold text-white transition hover:bg-danger-700"
+                    className="h-10 rounded-md bg-danger-solid px-4 text-sm font-semibold text-white transition hover:bg-danger-deep"
                   >
                     Delete everything
                   </button>
