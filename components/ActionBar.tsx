@@ -215,8 +215,14 @@ export default function ActionBar({
               }
             }}
             rows={1}
-            placeholder="Ask a follow-up, or share your thinking…"
-            className="max-h-32 min-h-[44px] w-full resize-none rounded-md border border-slate-300 bg-surface px-3.5 py-2 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-slate-300 md:pr-40"
+            // Short enough for one line at 320px in the one-row box; the old
+            // "Ask a follow-up, or share your thinking…" wrapped and clipped.
+            placeholder="Ask or share your thinking…"
+            // A real focus state. `outline-none` beats the global
+            // :focus-visible ring, and the old focus border was the resting
+            // colour, so focus was effectively invisible. brand-500 is a fixed
+            // step: 4.59:1 on the light surface, 3.57:1 on the dark one.
+            className="max-h-32 min-h-[44px] w-full resize-none rounded-md border border-slate-300 bg-surface px-3.5 py-2 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 md:pr-40"
           />
           <kbd
             aria-hidden="true"
