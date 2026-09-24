@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { ACCESS_COOKIE, constantTimeEqual, expectedToken } from "@/lib/accessToken";
 
 /**
  * Lightweight shared-access gate. Protects the app and AI routes behind a code
@@ -8,9 +9,7 @@ import type { NextRequest } from "next/server";
  * (in the Vercel dashboard, no laptop needed). See docs/deploy.md.
  */
 
-const COOKIE = "stem_access";
-
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const code = process.env.ACCESS_CODE?.trim();
   if (!code) return NextResponse.next(); // gate disabled
 
@@ -24,7 +23,11 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (req.cookies.get(COOKIE)?.value === code) return NextResponse.next();
+  // The cookie holds an HMAC of the code, never the code (lib/accessToken.ts).
+  const cookie = req.cookies.get(ACCESS_COOKIE)?.value ?? "";
+  if (cookie && constantTimeEqual(cookie, await expectedToken(code))) {
+    return NextResponse.next();
+  }
 
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(
