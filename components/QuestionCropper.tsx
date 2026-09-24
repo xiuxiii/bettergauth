@@ -85,7 +85,12 @@ export default function QuestionCropper({
    * preview, and cropping it would throw away the detail the model needs to
    * read handwriting.
    */
-  onConfirm: (result: { rect: NormalizedRect; question?: string }) => void;
+  onConfirm: (result: {
+    rect: NormalizedRect;
+    question?: string;
+    /** Detection saw handwritten working in the chosen question. */
+    workLikely?: boolean;
+  }) => void;
   onCancel: () => void;
   /** Back to the camera, for when the photo turned out not to be work at all.
    *  Falls back to onCancel when the caller has no capture to return to. */
@@ -312,7 +317,10 @@ export default function QuestionCropper({
     if (cropping || !canConfirm) return;
     setCropping(true);
     setCropError(null);
-    onConfirm(asking ? { rect, question: trimmedQuestion } : { rect });
+    // A timing hint only (see TutorWorkspace): whether the question they chose
+    // has working in it, so the check can start alongside the analysis.
+    const workLikely = !asking && questions[selected]?.hasWorking === true;
+    onConfirm(asking ? { rect, question: trimmedQuestion } : { rect, workLikely });
   }
 
   useEffect(() => {

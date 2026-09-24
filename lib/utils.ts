@@ -23,3 +23,10 @@ export const IMAGE_KEY = "mindgap:image";
  * re-opens the photo without asking the same question twice.
  */
 export const QUESTION_KEY = "mindgap:question";
+
+/**
+ * sessionStorage flag: detection saw handwritten working in the chosen question,
+ * so the workspace may start the work check in parallel with the analysis.
+ * Read once and cleared, like QUESTION_KEY.
+ */
+export const WORK_HINT_KEY = "mindgap:work-hint";

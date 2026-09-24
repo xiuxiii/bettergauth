@@ -70,6 +70,7 @@ const QuestionDetectionSchema = z.object({
   questions: z.array(
     z.object({
       label: z.string(),
+      hasWorking: z.boolean(),
       x1: z.number(),
       y1: z.number(),
       x2: z.number(),
@@ -231,7 +232,7 @@ Getting the box on the RIGHT question matters more than getting its edges perfec
 
 What counts as a question: one numbered problem together with all of its parts, sub-parts, figures and answer options. Its box must fully contain it with a small margin and must not overlap a neighbouring question.
 
-A question's box must ALSO contain any handwritten working the student has already done for it, usually below or beside the printed question. They often photograph a problem they have already attempted, and work left outside the box is lost. Stop before the next numbered question even when working runs close to it, and never extend a box ABOVE its own printed number: working written above that number belongs to the question before it, not this one.
+A question's box must ALSO contain any handwritten working the student has already done for it, usually below or beside the printed question. They often photograph a problem they have already attempted, and work left outside the box is lost. Stop before the next numbered question even when working runs close to it, and never extend a box ABOVE its own printed number: working written above that number belongs to the question before it, not this one. Set hasWorking true for a question whose box contains the student's own HANDWRITTEN working; printed text, a printed answer or a worked example never counts.
 
 Ignore everything that is not printed exercise content. Photos are taken on a desk, so a calculator, phone, pen, ruler, hand or any other object lying on the page is NEVER a question, and neither is a running header, a page number, a chapter title or a section heading on its own.
 
@@ -771,6 +772,7 @@ function normalizeDetection(
       return {
         label: q.label.trim() || `Question ${i + 1}`,
         rect: { x: left, y: top, w: right - left, h: bottom - top },
+        hasWorking: q.hasWorking === true,
       };
     })
     .filter((q) => q.rect.w > 0.02 && q.rect.h > 0.01);

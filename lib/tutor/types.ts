@@ -80,6 +80,12 @@ export interface DetectedQuestion {
   /** The label printed on the page ("Question 5", "3(b)") or a generated one. */
   label: string;
   rect: NormalizedRect;
+  /**
+   * Whether the student's own handwritten working sits in this question's box.
+   * Only a hint for timing: when true, the workspace starts the work check in
+   * parallel with the analysis instead of after it. Analysis still decides.
+   */
+  hasWorking?: boolean;
 }
 
 /** What the client sends to /api/detect-questions. */

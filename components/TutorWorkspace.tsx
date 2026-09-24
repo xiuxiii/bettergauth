@@ -24,7 +24,7 @@ import {
   recordConceptError,
   resolveMisconception,
 } from "@/lib/tutor/types";
-import { IMAGE_KEY, QUESTION_KEY, uid } from "@/lib/utils";
+import { IMAGE_KEY, QUESTION_KEY, WORK_HINT_KEY, uid } from "@/lib/utils";
 import { safePrefix } from "@/lib/tutor/streamText";
 import { apiFetch, readApiError, readNdjson } from "@/lib/apiClient";
 import {
@@ -82,6 +82,22 @@ type TutorStreamFrame =
 
 /** "notWork": the photo holds no study material at all (dinner, the floor, an
  *  accidental shot) — shown as "Question not detected", not as an error. */
+/**
+ * The problem as sent with a work check started BEFORE the analysis returns.
+ * The check reads the printed question off the same photo it reads the working
+ * from, so it doesn't need the extracted text; it needs something non-empty
+ * that tells it where to look.
+ */
+const PROBLEM_FROM_PHOTO: ProblemAnalysis = {
+  problemText: "The printed question shown in the attached photo — read it from the image.",
+  subject: "Unknown",
+  topic: "",
+  concept: "",
+  confidence: 0,
+  studentWork: { present: true },
+  openingHint: "",
+};
+
 type Phase = "loading" | "ready" | "error" | "empty" | "notWork";
 
 export default function TutorWorkspace() {
@@ -174,11 +190,36 @@ export default function TutorWorkspace() {
   const startedRef = useRef(false);
   // Ask mode's question for this capture, if there is one. Read once at start.
   const questionRef = useRef<string | null>(null);
+  // Detection saw handwritten working in the chosen question: start the work
+  // check alongside the analysis instead of after it. Read once at start.
+  const workHintRef = useRef(false);
 
   // Load the captured image and analyze it.
   const runAnalysis = useCallback(async (dataUrl: string) => {
     setPhase("loading");
     setAnalyzeError(null);
+
+    // When detection already saw handwritten working, the work check doesn't
+    // have to wait for the analysis: the check reads the problem off the same
+    // photo. Measured on the live deploy, analyze (~3.9s) then check-work
+    // (~7.1s) ran back to back; overlapping them saves the analyze time. The
+    // analysis still decides — if it says there is no work (or no problem at
+    // all) the early check is aborted and its result ignored. Never in Ask
+    // mode, where the student's question wins anyway.
+    let early: { promise: Promise<WorkCheck>; controller: AbortController } | null =
+      null;
+    if (workHintRef.current && !questionRef.current) {
+      const controller = new AbortController();
+      const promise = fetchCheck(
+        { imageDataUrl: dataUrl },
+        PROBLEM_FROM_PHOTO,
+        controller.signal,
+      );
+      promise.catch(() => {}); // awaited later, or deliberately dropped
+      early = { promise, controller };
+    }
+    workHintRef.current = false;
+
     try {
       const res = await apiFetch("/api/analyze", {
         method: "POST",
@@ -194,6 +235,7 @@ export default function TutorWorkspace() {
       // recorded to history and no tutor turn is spent. Only an explicit false
       // counts: a missing flag never turns a real problem away.
       if (data.hasStemContent === false) {
+        early?.controller.abort();
         setPhase("notWork");
         return;
       }
@@ -233,9 +275,11 @@ export default function TutorWorkspace() {
       // retry) behaves as if they had submitted it themselves.
       if (data.studentWork?.present) {
         setMessages([]);
-        void sendCheckWork({ imageDataUrl: dataUrl }, data);
+        void sendCheckWork({ imageDataUrl: dataUrl }, data, early?.promise);
         return;
       }
+      // Detection thought there was working; the analysis says not. Drop it.
+      early?.controller.abort();
 
       // Open with an actual hint, not instructions. It comes back on the
       // analysis call, so it costs no extra request and no extra wait — the
@@ -253,6 +297,7 @@ export default function TutorWorkspace() {
         },
       ]);
     } catch (err) {
+      early?.controller.abort();
       setAnalyzeError(err instanceof Error ? err.message : "Analysis failed.");
       setPhase("error");
     }
@@ -328,8 +373,11 @@ export default function TutorWorkspace() {
     try {
       questionRef.current = sessionStorage.getItem(QUESTION_KEY)?.trim() || null;
       sessionStorage.removeItem(QUESTION_KEY);
+      workHintRef.current = sessionStorage.getItem(WORK_HINT_KEY) === "1";
+      sessionStorage.removeItem(WORK_HINT_KEY);
     } catch {
       questionRef.current = null;
+      workHintRef.current = false;
     }
     setImage(stored);
     void runAnalysis(stored);
@@ -541,9 +589,27 @@ export default function TutorWorkspace() {
    * the `analysis` state is still null — and `runAnalysis` is a `[]`-deps
    * callback, so it would close over the first render's value regardless.
    */
+  /** POST an attempt to /api/check-work. No state: safe to start early. */
+  async function fetchCheck(
+    attempt: StudentAttempt,
+    problem: ProblemAnalysis,
+    signal?: AbortSignal,
+  ): Promise<WorkCheck> {
+    const res = await apiFetch("/api/check-work", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ problem, attempt }),
+      signal,
+    });
+    if (!res.ok) throw new Error(await readApiError(res, "Check failed."));
+    return (await res.json()) as WorkCheck;
+  }
+
   async function sendCheckWork(
     attempt: StudentAttempt,
     problem?: ProblemAnalysis,
+    /** A check already in flight (started alongside the analysis). */
+    pending?: Promise<WorkCheck>,
   ) {
     const forProblem = problem ?? analysis;
     if (!forProblem) return;
@@ -551,13 +617,7 @@ export default function TutorWorkspace() {
     setTurnError(null);
     retryRef.current = null;
     try {
-      const res = await apiFetch("/api/check-work", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problem: forProblem, attempt }),
-      });
-      if (!res.ok) throw new Error(await readApiError(res, "Check failed."));
-      const check: WorkCheck = await res.json();
+      const check = await (pending ?? fetchCheck(attempt, forProblem));
       // Fold the diagnosis into memory so it counts toward recurrence /
       // resolution, then refresh the recurring-gap banner.
       memoryRef.current = applyWorkCheckToMemory(

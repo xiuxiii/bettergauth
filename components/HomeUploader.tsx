@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { IMAGE_KEY, QUESTION_KEY } from "@/lib/utils";
+import { IMAGE_KEY, QUESTION_KEY, WORK_HINT_KEY } from "@/lib/utils";
 import type { NormalizedRect } from "@/lib/tutor/types";
 import { cropSourceToJpeg, fileToNormalizedJpeg } from "@/lib/image";
 import { hasPreferences } from "@/lib/preferences";
@@ -48,8 +48,10 @@ export default function HomeUploader() {
   }, [router]);
 
   /** Hand the confirmed crop to the workspace. */
-  function go(dataUrl: string, question?: string) {
+  function go(dataUrl: string, question?: string, workLikely = false) {
     sessionStorage.setItem(IMAGE_KEY, dataUrl);
+    if (workLikely) sessionStorage.setItem(WORK_HINT_KEY, "1");
+    else sessionStorage.removeItem(WORK_HINT_KEY);
     // Always written or cleared together with the image, so a question from an
     // earlier Ask can never ride along with a later ordinary capture.
     if (question) sessionStorage.setItem(QUESTION_KEY, question);
@@ -63,12 +65,16 @@ export default function HomeUploader() {
    * Falls back to the preview if the original somehow isn't around, so a
    * confirm can never dead-end.
    */
-  async function confirmCrop(rect: NormalizedRect, question?: string) {
+  async function confirmCrop(
+    rect: NormalizedRect,
+    question?: string,
+    workLikely = false,
+  ) {
     const preview = pending;
     if (!preview) return;
     setBusy(true);
     try {
-      go(await cropSourceToJpeg(source ?? preview, rect), question);
+      go(await cropSourceToJpeg(source ?? preview, rect), question, workLikely);
       setPending(null);
       setSource(null);
     } catch {
@@ -190,7 +196,9 @@ export default function HomeUploader() {
             setSource(null);
             setScanning(true);
           }}
-          onConfirm={({ rect, question }) => void confirmCrop(rect, question)}
+          onConfirm={({ rect, question, workLikely }) =>
+            void confirmCrop(rect, question, workLikely)
+          }
         />
       )}
     </div>

@@ -120,6 +120,17 @@ beats detection). Only an explicit `false` blocks; a missing field never turns a
 real problem away, and the cropper overlay keeps a "Use this photo anyway" link
 for a faint page misread as empty.
 
+**A photo with working starts the check alongside the analysis, not after.**
+Detection marks each question `hasWorking`; if the chosen one has it, the cropper
+passes a hint (`WORK_HINT_KEY`) and `runAnalysis` fires `/api/check-work` in
+parallel with `/api/analyze`, sending a placeholder problem (`PROBLEM_FROM_PHOTO`)
+since the check reads the printed question off the same photo. The analysis
+still decides: no work, or no problem at all, aborts the early check and ignores
+it; a failed early check retries through the normal path with the real extracted
+problem. Never in Ask mode. Measured with the live timings (analyze ~3.9s, check
+~7.1s): 12.0s to feedback sequentially, 8.0s in parallel. A wrong `hasWorking`
+costs one wasted check call, which is the trade.
+
 **Tutor turns read `prefsRef`, not the `prefs` state.** The opening turns are
 fired from inside `runAnalysis`, a callback created once on mount, so reading
 state there gets the first render's defaults. Measured: with plain state, Ask
