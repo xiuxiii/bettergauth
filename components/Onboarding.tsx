@@ -391,7 +391,7 @@ function PurposeSlide() {
           <li className="animate-rise" style={delay(350)}>v² = u² + 2as</li>
           <li className="animate-rise" style={delay(550)}>
             <span className="highlight-sweep -mx-1 rounded-sm px-1 text-brand-800" style={delay(1100)}>
-              0 = 20² + 2(9.8)s
+              0 = 20² + 2(9.81)s
             </span>
           </li>
           <li className="animate-rise text-slate-500 line-through decoration-slate-400" style={delay(750)}>
@@ -405,7 +405,7 @@ function PurposeSlide() {
           <Crosshair size={18} strokeWidth={1.75} className="mt-0.5 flex-shrink-0 text-brand-600" aria-hidden="true" />
           <p>
             <span className="font-semibold">Here&apos;s the gap:</span> you took up
-            as positive, so gravity is −9.8 m/s², not +9.8.
+            as positive, so gravity is −9.81 m/s², not +9.81.
           </p>
         </div>
       </figure>
