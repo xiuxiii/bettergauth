@@ -12,7 +12,7 @@ import {
 import { rankConcepts, type ConceptProgress } from "@/lib/tutor/progress";
 import { readApiError } from "@/lib/apiClient";
 import { Spinner } from "@/components/States";
-import RichText from "@/components/RichText";
+import RichText, { InlineRichText } from "@/components/RichText";
 
 /**
  * Everything the student has scanned, and what it says about them.
@@ -122,7 +122,7 @@ export default function HistoryView() {
                   <li key={c.concept}>
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="text-sm font-medium text-ink">
-                        {c.concept}
+                        <InlineRichText text={c.concept} />
                       </span>
                       <span className="flex-shrink-0 text-xs tnum text-slate-500">
                         {c.problems} {c.problems === 1 ? "problem" : "problems"}
@@ -130,7 +130,7 @@ export default function HistoryView() {
                     </div>
                     {c.correctModel && (
                       <p className="mt-0.5 text-xs text-slate-500">
-                        {c.correctModel}
+                        <InlineRichText text={c.correctModel} />
                       </p>
                     )}
                   </li>
@@ -177,7 +177,9 @@ export default function HistoryView() {
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-2 text-sm text-ink">
-                        {s.analysis.problemText || "Untitled problem"}
+                        <InlineRichText
+                          text={s.analysis.problemText || "Untitled problem"}
+                        />
                       </p>
                       <p className="mt-0.5 truncate text-xs text-slate-500">
                         {[s.analysis.subject, s.analysis.topic]

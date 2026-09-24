@@ -2,7 +2,7 @@
 
 import { ArrowRight, X } from "lucide-react";
 import type { RecurringGap } from "@/lib/tutor/types";
-import RichText from "@/components/RichText";
+import RichText, { InlineRichText } from "@/components/RichText";
 import { Eyebrow } from "@/components/States";
 
 /**
@@ -42,7 +42,10 @@ export default function RecurringBanner({
           <RichText text={gap.studentBelief} />
         ) : (
           <span>
-            <span className="font-semibold">{gap.concept}</span> has tripped you
+            <span className="font-semibold">
+              <InlineRichText text={gap.concept} />
+            </span>{" "}
+            has tripped you
             up a few times this session.
           </span>
         )}

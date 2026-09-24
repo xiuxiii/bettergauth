@@ -109,6 +109,23 @@ function parseBlocks(text: string): Block[] {
   return blocks;
 }
 
+/**
+ * Model-written text inside a single line or a small label: math and emphasis
+ * rendered, but no block structure and no paragraph spacing.
+ *
+ * RichText wraps everything in `space-y-3.5 leading-7`, which is right for a
+ * tutor turn and far too much for a `text-xs` caption. Rendering those strings
+ * as plain text instead is how literal `$v_x = v\cos\theta$` reached the
+ * History page. Line breaks collapse to spaces, since callers are one-liners.
+ */
+export function InlineRichText({ text }: { text: string }) {
+  const nodes = useMemo(
+    () => renderSegments(text.replace(/\s*\n\s*/g, " ").trim(), true),
+    [text],
+  );
+  return <>{nodes}</>;
+}
+
 export default function RichText({ text }: { text: string }) {
   const blocks = useMemo(() => parseBlocks(text), [text]);
 
@@ -221,7 +238,7 @@ function renderMath(expr: string, display: boolean, key: number) {
 }
 
 /** Split a run of text into math and non-math parts, rendering each. */
-function renderSegments(para: string) {
+function renderSegments(para: string, inline = false) {
   const regex = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
   const out: React.ReactNode[] = [];
   let last = 0;
@@ -234,7 +251,9 @@ function renderSegments(para: string) {
       key += 1000;
     }
     const block = m[1] !== undefined;
-    out.push(renderMath((block ? m[1] : m[2]).trim(), block, key++));
+    // Inline callers get $$…$$ as inline math too: a display block inside a
+    // one-line label or a line-clamped row would break the layout.
+    out.push(renderMath((block ? m[1] : m[2]).trim(), block && !inline, key++));
     last = regex.lastIndex;
   }
   if (last < para.length) {
