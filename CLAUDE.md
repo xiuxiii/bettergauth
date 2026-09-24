@@ -22,8 +22,9 @@ There are no tests. `npx tsc --noEmit && npm run build` is the verification gate
 | `ANTHROPIC_API_KEY` | Required. Without it the provider reports `provider: "none"` at `/api/health`. |
 | `ANTHROPIC_MODEL` | Overrides the `claude-sonnet-5` default. |
 | `DETECTION_MODEL` | Question detection only. Unset = same as `ANTHROPIC_MODEL`. Exists to A/B a faster model (e.g. `claude-haiku-4-5`) on the box-finding call without touching tutoring. |
-| `ACCESS_CODE` | Shared-access gate. **Unset = gate disabled**, so local dev just works. |
-| `ACCESS_SECRET` | Key for the access cookie, which stores an HMAC of the code, never the code (`lib/accessToken.ts`). Unset = the code is the key. Changing this or the code logs everyone out once. |
+| `ACCESS_CODE` | Shared-access gate, a code that never expires. **Gate is off only when this AND `ACCESS_CODES` are unset**, so local dev just works. |
+| `ACCESS_CODES` | Per-person codes with expiries: `maya:2026-10-31, class:never` (date = through end of day UTC, or ISO time, or `never`). Expiry is read from the list on every request, so cancelling/extending applies to people already in. Nothing parses → gate stays **closed**, never open. |
+| `ACCESS_SECRET` | Key for the access cookie, which names a code by an HMAC id and never contains it (`lib/accessToken.ts`). Unset = the key is `ACCESS_CODE`, else derived from the list — so **set it when using `ACCESS_CODES`**, or every list edit logs everyone out. |
 | `RATE_LIMIT_PER_MIN` | Per-IP fixed window, default 30. A burst brake. |
 | `RATE_LIMIT_PER_DAY` | Per-IP 24h cap, default 150 — the real spend ceiling. Counts only admitted requests. In memory per warm instance for now; `lib/rateLimit.ts` has the TODO for Upstash/Vercel KV. |
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |

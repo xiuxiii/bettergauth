@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { ACCESS_COOKIE, constantTimeEqual, expectedToken } from "@/lib/accessToken";
+import { ACCESS_COOKIE, accessConfig, checkCookie } from "@/lib/accessToken";
 
 /**
  * Lightweight shared-access gate. Protects the app and AI routes behind a code
@@ -10,8 +10,8 @@ import { ACCESS_COOKIE, constantTimeEqual, expectedToken } from "@/lib/accessTok
  */
 
 export async function middleware(req: NextRequest) {
-  const code = process.env.ACCESS_CODE?.trim();
-  if (!code) return NextResponse.next(); // gate disabled
+  // Off only when neither ACCESS_CODE nor ACCESS_CODES is set.
+  if (!(await accessConfig()).enabled) return NextResponse.next();
 
   const { pathname } = req.nextUrl;
   // Always reachable: the unlock flow itself and the health check.
@@ -23,21 +23,25 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // The cookie holds an HMAC of the code, never the code (lib/accessToken.ts).
-  const cookie = req.cookies.get(ACCESS_COOKIE)?.value ?? "";
-  if (cookie && constantTimeEqual(cookie, await expectedToken(code))) {
-    return NextResponse.next();
-  }
+  // The cookie names a code without containing it; its expiry is read from the
+  // CURRENT env list (lib/accessToken.ts), so edits apply to people already in.
+  const check = await checkCookie(req.cookies.get(ACCESS_COOKIE)?.value);
+  if (check.ok) return NextResponse.next();
+  const expired = check.reason === "expired";
 
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(
-      { error: "Locked. Enter the access code first." },
+      {
+        error: expired
+          ? "Your access code has expired. Reload and enter a new one."
+          : "Locked. Enter the access code first.",
+      },
       { status: 401 },
     );
   }
   const url = req.nextUrl.clone();
   url.pathname = "/unlock";
-  url.search = "";
+  url.search = expired ? "?expired=1" : "";
   return NextResponse.redirect(url);
 }
 

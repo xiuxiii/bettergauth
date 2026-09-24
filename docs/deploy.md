@@ -41,6 +41,23 @@ Before sharing beyond people you trust:
   a one-field unlock page and must enter the code before anything calls the API.
   Leave it unset and the gate is off. It's a shared code, no accounts/database —
   give friends the code, rotate it by changing the env var.
+- **Or give each person their own code with an expiry date.** Set
+  `ACCESS_CODES` to a list of `code:date` pairs, comma- or line-separated:
+
+  ```
+  ACCESS_CODES=maya2026:2026-10-31, studygroup:2026-12-20, teacher:never
+  ```
+
+  A date means the code works through the end of that day (UTC); a full ISO
+  time like `2026-10-31T17:00:00Z` also works, and `never` never expires. Edit
+  the list and redeploy to add a code, cancel one (delete its line) or extend
+  one (change its date). Those apply to people already logged in too: a
+  cancelled or expired code stops working on their next tap, and they see
+  "your access code expired". Set **`ACCESS_SECRET`** as well (any long random
+  string): without it the cookies are signed with a key made from the codes, so
+  every edit to the list logs everyone out. `ACCESS_CODE` keeps working
+  alongside the list as a code that never expires. If the list has a typo so
+  that no entry parses, the gate stays closed — it never silently opens.
 - **Watch spend** in the Anthropic console and set a billing limit there.
 
 ## Debugging from your phone

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import MindGapMark from "@/components/MindGapMark";
+import { readApiError } from "@/lib/apiClient";
 
 /** One-field unlock: submit the shared access code to get in. */
 export default function UnlockForm() {
@@ -10,6 +11,14 @@ export default function UnlockForm() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Sent here by the middleware when the code they were using has expired.
+  // Read after mount (not useSearchParams) so the page needs no Suspense.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("expired") === "1") {
+      setError("Your access code expired. Enter a new one.");
+    }
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,7 +35,8 @@ export default function UnlockForm() {
         router.replace("/");
         router.refresh();
       } else {
-        setError("Incorrect code.");
+        // The server says which: "Incorrect code." or "That code has expired."
+        setError(await readApiError(res, "Incorrect code."));
         setBusy(false);
       }
     } catch {
