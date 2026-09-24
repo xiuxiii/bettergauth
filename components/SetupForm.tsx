@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { TutorPreferences } from "@/lib/tutor/types";
 import {
@@ -9,16 +10,23 @@ import {
   savePreferences,
 } from "@/lib/preferences";
 import MindGapMark from "@/components/MindGapMark";
+import type { Theme } from "@/lib/theme";
 import {
-  applyTheme,
-  loadTheme,
-  saveTheme,
-  watchSystemTheme,
-  type Theme,
-} from "@/lib/theme";
+  CURRICULUM_OPTIONS,
+  Field,
+  GOAL_OPTIONS,
+  GRADE_OPTIONS,
+  Options,
+  STYLE_OPTIONS,
+  THEME_OPTIONS,
+  gradeValue,
+  useThemeChoice,
+  withGrade,
+} from "@/components/PreferenceFields";
 
 /**
- * First-run (and editable) preferences. Captures a light calibration — grade,
+ * The editable preferences page. First-run visitors get the guided version of
+ * these same questions at /welcome (components/Onboarding.tsx). Captures a light calibration — grade,
  * how much help to lean on, and the goal — that gets folded into the tutor's
  * system prompt. Subject is intentionally not asked (the model detects it).
  */
@@ -28,25 +36,7 @@ export default function SetupForm() {
     () => loadPreferences() ?? DEFAULT_PREFERENCES,
   );
 
-  // Theme is stored separately from preferences (see lib/theme.ts) and starts
-  // at the SSR-safe default: reading storage during render would disagree with
-  // the server markup and trip a hydration mismatch on the selected chip.
-  const [theme, setThemeState] = useState<Theme>("system");
-  useEffect(() => setThemeState(loadTheme()), []);
-
-  // While on "system", follow the OS live rather than waiting for a reload.
-  useEffect(() => {
-    if (theme !== "system") return;
-    return watchSystemTheme(() => applyTheme("system"));
-  }, [theme]);
-
-  // Applied immediately, not on save: a colour choice you cannot see until you
-  // submit the form is a choice you cannot judge.
-  function chooseTheme(next: Theme) {
-    setThemeState(next);
-    applyTheme(next);
-    saveTheme(next);
-  }
+  const [theme, chooseTheme] = useThemeChoice();
 
   function save() {
     savePreferences(prefs);
@@ -73,19 +63,10 @@ export default function SetupForm() {
             hint="Just a light calibration of vocabulary — it won't assume specific courses."
           >
             <Options
-              value={prefs.grade ?? "skip"}
-              onChange={(v) =>
-                setPrefs({ ...prefs, grade: v === "skip" ? null : (v as TutorPreferences["grade"]) })
-              }
+              value={gradeValue(prefs)}
+              onChange={(v) => setPrefs(withGrade(prefs, v))}
               className="grid grid-cols-3 sm:grid-cols-6"
-              options={[
-                { value: "9", label: "9", className: "sm:px-2 sm:text-center" },
-                { value: "10", label: "10", className: "sm:px-2 sm:text-center" },
-                { value: "11", label: "11", className: "sm:px-2 sm:text-center" },
-                { value: "12", label: "12", className: "sm:px-2 sm:text-center" },
-                { value: "other", label: "Other", className: "sm:px-2 sm:text-center" },
-                { value: "skip", label: "Prefer not to say", className: "col-span-3 sm:col-span-2 sm:px-2 sm:text-center" },
-              ]}
+              options={GRADE_OPTIONS}
             />
           </Field>
 
@@ -96,11 +77,7 @@ export default function SetupForm() {
                 setPrefs({ ...prefs, curriculum: v as TutorPreferences["curriculum"] })
               }
               className="grid grid-cols-3"
-              options={[
-                { value: "standard", label: "Standard", className: "text-center" },
-                { value: "ib", label: "IB", className: "text-center" },
-                { value: "ap", label: "AP", className: "text-center" },
-              ]}
+              options={CURRICULUM_OPTIONS}
             />
           </Field>
 
@@ -114,10 +91,7 @@ export default function SetupForm() {
                 setPrefs({ ...prefs, assistanceStyle: v as TutorPreferences["assistanceStyle"] })
               }
               className="grid grid-cols-2"
-              options={[
-                { value: "hint_first", label: "Hints first", sub: "Make me work" },
-                { value: "direct", label: "Direct", sub: "Explain it to me" },
-              ]}
+              options={STYLE_OPTIONS}
             />
           </Field>
 
@@ -126,11 +100,7 @@ export default function SetupForm() {
               value={prefs.goal}
               onChange={(v) => setPrefs({ ...prefs, goal: v as TutorPreferences["goal"] })}
               className="grid grid-cols-3"
-              options={[
-                { value: "both", label: "Both", sub: "Exam-ready + deep" },
-                { value: "understand", label: "Understand", sub: "The why" },
-                { value: "exam", label: "Exam prep", sub: "Drill + traps" },
-              ]}
+              options={GOAL_OPTIONS}
             />
           </Field>
 
@@ -138,11 +108,7 @@ export default function SetupForm() {
             <Options
               value={theme}
               onChange={(v) => chooseTheme(v as Theme)}
-              options={[
-                { value: "system", label: "System", sub: "Match my phone" },
-                { value: "light", label: "Light" },
-                { value: "dark", label: "Dark" },
-              ]}
+              options={THEME_OPTIONS}
             />
           </Field>
         </div>
@@ -152,73 +118,18 @@ export default function SetupForm() {
         <div className="mt-8 max-md:sticky max-md:bottom-0 max-md:-mx-5 max-md:bg-gradient-to-t max-md:from-paper max-md:via-paper max-md:to-transparent max-md:px-5 max-md:pb-[calc(env(safe-area-inset-bottom,0px)+16px)] max-md:pt-6">
           <button
             onClick={save}
-            className="h-14 w-full rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-brand-700 active:scale-[0.98] active:bg-brand-700"
+            className="h-14 w-full rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-accent-deep active:scale-[0.98] active:bg-accent-deep"
           >
             Start tutoring
           </button>
+          <Link
+            href="/welcome"
+            className="mt-3 block text-center text-sm text-slate-500 underline-offset-4 transition hover:text-ink hover:underline"
+          >
+            Replay the welcome tour
+          </Link>
         </div>
       </div>
     </main>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <p className="text-sm font-semibold text-slate-800">{label}</p>
-      {hint && <p className="mb-2 mt-0.5 text-xs text-slate-500">{hint}</p>}
-      <div className="mt-2">{children}</div>
-    </section>
-  );
-}
-
-function Options({
-  value,
-  onChange,
-  options,
-  className = "",
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string; sub?: string; className?: string }[];
-  /** Extra layout classes for the group (e.g. a grid on wider screens). */
-  className?: string;
-}) {
-  return (
-    <div role="radiogroup" className={`gap-2 ${className || "flex flex-wrap"}`}>
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button
-            key={o.value}
-            role="radio"
-            aria-checked={active}
-            onClick={() => onChange(o.value)}
-            className={
-              "min-h-[44px] rounded-md border px-3 py-2 text-left text-sm transition sm:px-4 " +
-              (active
-                ? "border-brand-500 bg-brand-50 text-brand-800"
-                : "border-slate-300 bg-surface text-slate-700 hover:border-brand-400") +
-              (o.className ? ` ${o.className}` : "")
-            }
-          >
-            <span className="block font-medium">{o.label}</span>
-            {o.sub && (
-              <span className={"block text-xs " + (active ? "text-brand-600" : "text-slate-500")}>
-                {o.sub}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
   );
 }

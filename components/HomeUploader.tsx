@@ -19,7 +19,7 @@ import QuestionCropper from "@/components/QuestionCropper";
  * question cropper (find the questions on the page, pick/adjust one, choose a
  * subject). The confirmed crop is stashed in sessionStorage and we route to
  * the workspace where the existing analysis begins.
- * On first run (no saved preferences) it redirects to /setup.
+ * On first run (no saved preferences) it redirects to the /welcome tour.
  */
 export default function HomeUploader() {
   const router = useRouter();
@@ -42,9 +42,9 @@ export default function HomeUploader() {
    */
   const [mode, setMode] = useState<"diagnose" | "ask">("diagnose");
 
-  // First-run gate: send new visitors through setup once.
+  // First-run gate: send new visitors through the welcome tour once.
   useEffect(() => {
-    if (!hasPreferences()) router.replace("/setup");
+    if (!hasPreferences()) router.replace("/welcome");
   }, [router]);
 
   /** Hand the confirmed crop to the workspace. */
