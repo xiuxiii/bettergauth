@@ -4,6 +4,7 @@ import type { ChatMessage, StructuredSolution, WorkCheck } from "@/lib/tutor/typ
 import RichText from "@/components/RichText";
 import SolutionCard from "@/components/SolutionCard";
 import WorkCheckCard from "@/components/WorkCheckCard";
+import type { RevealStep } from "@/lib/tutor/stage";
 import { TutorLabel } from "@/components/States";
 
 /**
@@ -20,6 +21,10 @@ export default function MessageBubble({
   solution,
   similarProblem,
   workCheck,
+  reveal = 0,
+  onReveal,
+  onRetry,
+  busy,
   attemptImage,
   imageOnly,
 }: {
@@ -27,6 +32,11 @@ export default function MessageBubble({
   solution?: StructuredSolution;
   similarProblem?: string;
   workCheck?: WorkCheck;
+  /** How far the attached check is revealed, and how to move it on. */
+  reveal?: RevealStep;
+  onReveal?: (next: RevealStep) => void;
+  onRetry?: () => void;
+  busy?: boolean;
   attemptImage?: string;
   /**
    * The student sent a photo and typed nothing. `message.content` still carries
@@ -64,13 +74,21 @@ export default function MessageBubble({
   return (
     <div className="animate-rise">
       <TutorLabel />
-      <div className="mt-2 max-w-none text-[16px] leading-relaxed text-ink [overflow-wrap:anywhere]">
-        <RichText text={message.content} />
-      </div>
-
-      {workCheck && (
-        <div className="mt-3 animate-pop-in">
-          <WorkCheckCard check={workCheck} />
+      {/* A check's text is its headline, which the card already leads with.
+          The content stays on the message for the model's history only. */}
+      {workCheck ? (
+        <div className="mt-2 animate-pop-in">
+          <WorkCheckCard
+            check={workCheck}
+            reveal={reveal}
+            onReveal={onReveal}
+            onRetry={onRetry}
+            busy={busy}
+          />
+        </div>
+      ) : (
+        <div className="mt-2 max-w-none text-[16px] leading-relaxed text-ink [overflow-wrap:anywhere]">
+          <RichText text={message.content} />
         </div>
       )}
 

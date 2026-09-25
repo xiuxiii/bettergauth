@@ -5,6 +5,7 @@ import { ImagePlus } from "lucide-react";
 import type { StudentAttempt } from "@/lib/tutor/types";
 import { fileToNormalizedJpeg } from "@/lib/image";
 import { Spinner } from "@/components/States";
+import RichText from "@/components/RichText";
 
 const CLOSE_MS = 180;
 /** Drag past this (px), or flick faster than DRAG_VELOCITY (px/ms) for at
@@ -17,38 +18,40 @@ const DRAG_FLICK_MIN_PX = 24;
  * Bottom-sheet composer for "Check My Work". The student photographs their
  * working and submits it for diagnosis.
  *
- * Photo only, deliberately. Nobody types out physics working on a phone — it
- * means transcribing square roots, fractions and exponents into a plain
- * textarea, which is slower than redoing the problem. The typed field went
- * unused, and offering it as the first and largest control implied it was the
- * expected path.
+ * A full attempt is photo only, deliberately. Nobody types out physics working
+ * on a phone — it means transcribing square roots, fractions and exponents
+ * into a plain textarea, which is slower than redoing the problem.
+ *
+ * A RETRY of one flagged step is the exception: that is a single line, short
+ * enough to type, and making someone rephotograph a page to fix one line is
+ * the slower path. So the retry sheet offers a text field as well.
  */
 export default function AttemptComposer({
   busy,
   onSubmit,
   onCancel,
-  mode = "check",
+  retry,
 }: {
   busy: boolean;
   onSubmit: (attempt: StudentAttempt) => void;
   onCancel: () => void;
-  /** "why" reframes the sheet toward diagnosing the student's reasoning. */
-  mode?: "check" | "why";
+  /** Set when retrying the step a check flagged. */
+  retry?: { line: string; locate: string };
 }) {
-  const copy =
-    mode === "why"
-      ? {
-          title: "Why am I wrong?",
-          hint: "Show me your working and your answer — I'll trace your reasoning and find the exact step where it goes wrong.",
-          submit: "Find the gap",
-        }
-      : {
-          title: "Check my work",
-          hint: "Snap your working and your answer — I'll find the first thing worth fixing.",
-          submit: "Check it",
-        };
+  const copy = retry
+    ? {
+        title: "Try that step again",
+        hint: "Type the step again, or snap a photo of your new working.",
+        submit: "Check it",
+      }
+    : {
+        title: "Check my work",
+        hint: "Snap your working and your answer — I'll find the first thing worth fixing.",
+        submit: "Check it",
+      };
   const fileRef = useRef<HTMLInputElement>(null);
   const [image, setImage] = useState<string | null>(null);
+  const [text, setText] = useState("");
   const [readError, setReadError] = useState<string | null>(null);
 
   // Visual only: the sheet slides down and the backdrop fades before unmount,
@@ -68,7 +71,7 @@ export default function AttemptComposer({
     };
   }, []);
 
-  const canSubmit = !!image && !busy;
+  const canSubmit = (!!image || (!!retry && !!text.trim())) && !busy;
 
   function close() {
     if (closing) return;
@@ -127,7 +130,10 @@ export default function AttemptComposer({
 
   function submit() {
     if (!canSubmit) return;
-    onSubmit({ imageDataUrl: image ?? undefined });
+    onSubmit({
+      text: retry && text.trim() ? text.trim() : undefined,
+      imageDataUrl: image ?? undefined,
+    });
   }
 
   // While dragging, the sheet follows the finger with no transition; on release
@@ -186,6 +192,25 @@ export default function AttemptComposer({
         </div>
         <p className="mb-3 text-sm text-slate-500">{copy.hint}</p>
 
+        {retry && (
+          <>
+            {(retry.line || retry.locate) && (
+              <div className="mb-3 rounded-sm border-l-2 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                {retry.line ? <RichText text={retry.line} /> : <RichText text={retry.locate} />}
+              </div>
+            )}
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={2}
+              autoFocus
+              aria-label="Your new step"
+              placeholder="Your new step…"
+              className="mb-3 w-full resize-none rounded-md border border-slate-300 bg-surface px-3.5 py-2 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30"
+            />
+          </>
+        )}
+
         <input
           ref={fileRef}
           type="file"
@@ -221,16 +246,20 @@ export default function AttemptComposer({
             </div>
           </div>
         ) : (
-          /* The only way in, so it is sized and coloured like the action it is
-             rather than the dashed afterthought it used to be next to a
-             textarea. */
+          /* For a full check this is the only way in, so it is sized and
+             coloured like the action it is. On a retry the typed line above
+             leads, and the photo is the alternative. */
           <button
             onClick={() => fileRef.current?.click()}
-            className="flex w-full flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-brand-300 bg-brand-50 px-4 py-7 text-brand-800 transition hover:border-brand-400 hover:bg-brand-100"
+            className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-brand-300 bg-brand-50 px-4 text-brand-800 transition hover:border-brand-400 hover:bg-brand-100 ${retry ? "py-4" : "py-7"}`}
           >
-            <ImagePlus size={26} strokeWidth={1.5} aria-hidden="true" />
-            <span className="text-base font-semibold">Attach a photo of your work</span>
-            <span className="text-xs text-brand-700">Your working and your final answer</span>
+            <ImagePlus size={retry ? 22 : 26} strokeWidth={1.5} aria-hidden="true" />
+            <span className="text-base font-semibold">
+              {retry ? "Or attach a photo" : "Attach a photo of your work"}
+            </span>
+            {!retry && (
+              <span className="text-xs text-brand-700">Your working and your final answer</span>
+            )}
           </button>
         )}
 

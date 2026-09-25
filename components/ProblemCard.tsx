@@ -3,16 +3,27 @@
 import { useState } from "react";
 import { ChevronDown, CircleAlert, PenLine } from "lucide-react";
 import type { ProblemAnalysis } from "@/lib/tutor/types";
-import RichText from "@/components/RichText";
+import RichText, { InlineRichText } from "@/components/RichText";
 import { Eyebrow } from "@/components/States";
 
-/** Shows the uploaded image, the detected problem, and detected subject/topic. */
+/**
+ * Shows the uploaded image, the detected problem, its subject and a safe label
+ * for the idea area.
+ *
+ * The label is written to give nothing away. The key idea, which does, only
+ * appears once the gap is closed or a solution was shown: it used to sit here
+ * from the start as "Key concept", naming the student's exact mistake before
+ * any tutoring.
+ */
 export default function ProblemCard({
   image,
   analysis,
+  showKeyIdea = false,
 }: {
-  image: string;
+  /** Absent for a problem that was typed, or a saved one whose photo is gone. */
+  image?: string | null;
   analysis: ProblemAnalysis;
+  showKeyIdea?: boolean;
 }) {
   const lowConfidence = analysis.confidence < 0.7;
 
@@ -25,20 +36,26 @@ export default function ProblemCard({
 
   return (
     <div className="overflow-hidden rounded-lg border border-hairline bg-surface">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={image}
-        alt="Uploaded problem"
-        className="max-h-56 w-full bg-slate-100 object-contain max-md:max-h-48"
-      />
+      {image && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={image}
+            alt="Uploaded problem"
+            className="max-h-56 w-full bg-slate-100 object-contain max-md:max-h-48"
+          />
+        </>
+      )}
       <div className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
             {analysis.subject}
           </span>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-            {analysis.topic}
-          </span>
+          {(analysis.concept || analysis.topic) && (
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+              <InlineRichText text={analysis.concept || analysis.topic} />
+            </span>
+          )}
           {analysis.studentWork?.present && (
             <span className="inline-flex items-center gap-1 rounded-full bg-success-50 px-2.5 py-1 text-xs font-medium text-success-700">
               <PenLine size={14} strokeWidth={1.75} aria-hidden="true" />
@@ -55,11 +72,11 @@ export default function ProblemCard({
           )}
         </div>
 
-        {analysis.concept && (
-          <div>
-            <Eyebrow className="mb-1">Key concept</Eyebrow>
+        {showKeyIdea && analysis.keyIdea?.trim() && (
+          <div className="animate-fade-in">
+            <Eyebrow className="mb-1">Key idea</Eyebrow>
             <div className="font-serif text-lg leading-snug text-ink">
-              <RichText text={analysis.concept} />
+              <RichText text={analysis.keyIdea} />
             </div>
           </div>
         )}

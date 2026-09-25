@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowRight, ChevronDown, ChevronLeft, Settings2 } from "lucide-react";
 import type {
   ChatMessage,
+  CheckWorkRequest,
   PracticeFocus,
   ProblemAnalysis,
   RecurringGap,
@@ -16,7 +17,13 @@ import type {
   TutorPreferences,
   TutorTurn,
   WorkCheck,
+  WorkError,
 } from "@/lib/tutor/types";
+import {
+  initialReveal,
+  sessionStage,
+  type RevealStep,
+} from "@/lib/tutor/stage";
 import {
   applyWorkCheckToMemory,
   detectRecurring,
@@ -59,6 +66,8 @@ type DisplayMessage = ChatMessage & {
   similarProblem?: string;
   /** Attached to a tutor turn produced by "Check My Work". */
   workCheck?: WorkCheck;
+  /** How far that check has been revealed. Saved, so a reopen shows no more. */
+  reveal?: RevealStep;
   /** Attached to a student turn: a photo of their attempt. */
   attemptImage?: string;
   /** The tutor stopped after one piece and more remains → offer "Continue". */
@@ -128,11 +137,17 @@ export default function TutorWorkspace() {
   // failure look intermittent while quietly never checking the student's work.
   const retryRef = useRef<(() => void) | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
-  const [composerMode, setComposerMode] = useState<"check" | "why">("why");
+  // Set when the composer is retrying a flagged step rather than a new check.
+  const [composerRetry, setComposerRetry] = useState<WorkError | null>(null);
   const [prefs, setPrefs] = useState<TutorPreferences>(DEFAULT_PREFERENCES);
+  // The work check's real progress, from its stream: the model reasoning,
+  // then writing. Null before the first frame.
+  const [checkStage, setCheckStage] = useState<"thinking" | "writing" | null>(
+    null,
+  );
 
-  function openComposer(mode: "check" | "why") {
-    setComposerMode(mode);
+  function openComposer(retry: WorkError | null = null) {
+    setComposerRetry(retry);
     setComposerOpen(true);
   }
 
@@ -222,6 +237,8 @@ export default function TutorWorkspace() {
         { imageDataUrl: dataUrl },
         PROBLEM_FROM_PHOTO,
         controller.signal,
+        undefined,
+        setCheckStage,
       );
       promise.catch(() => {}); // awaited later, or deliberately dropped
       early = { promise, controller };
@@ -571,6 +588,8 @@ export default function TutorWorkspace() {
   function handleCheckWork(attempt: StudentAttempt) {
     if (!analysis || turnBusy) return;
     setComposerOpen(false);
+    const retry = composerRetry;
+    setComposerRetry(null);
 
     // Show the student's attempt in the conversation. Posting it is a separate
     // step so a retry re-sends the attempt without echoing their bubble again.
@@ -589,7 +608,21 @@ export default function TutorWorkspace() {
       imageOnly: !typed,
     };
     setMessages((prev) => [...prev, student]);
-    void sendCheckWork(attempt);
+    void sendCheckWork(
+      attempt,
+      undefined,
+      undefined,
+      retry
+        ? { line: retry.line, locate: retry.locate, category: retry.category }
+        : undefined,
+    );
+  }
+
+  /** Move a check's reveal on. Saved with the transcript by the effect above. */
+  function handleReveal(id: string, next: RevealStep) {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, reveal: next } : m)),
+    );
   }
 
   /**
@@ -608,12 +641,13 @@ export default function TutorWorkspace() {
     attempt: StudentAttempt,
     problem: ProblemAnalysis,
     signal?: AbortSignal,
+    retryOf?: CheckWorkRequest["retryOf"],
     onStage?: (stage: "thinking" | "writing") => void,
   ): Promise<WorkCheck> {
     const res = await apiFetch("/api/check-work", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ problem, attempt }),
+      body: JSON.stringify({ problem, attempt, retryOf }),
       signal,
     });
     if (!res.ok) throw new Error(await readApiError(res, "Check failed."));
@@ -631,14 +665,19 @@ export default function TutorWorkspace() {
     problem?: ProblemAnalysis,
     /** A check already in flight (started alongside the analysis). */
     pending?: Promise<WorkCheck>,
+    /** A second go at a step an earlier check flagged. */
+    retryOf?: CheckWorkRequest["retryOf"],
   ) {
     const forProblem = problem ?? analysis;
     if (!forProblem) return;
     setTurnBusy(true);
     setTurnError(null);
     retryRef.current = null;
+    // An early check may already be reporting progress; keep its stage.
+    if (!pending) setCheckStage(null);
     try {
-      const check = await (pending ?? fetchCheck(attempt, forProblem));
+      const check = await (pending ??
+        fetchCheck(attempt, forProblem, undefined, retryOf, setCheckStage));
       // Fold the diagnosis into memory so it counts toward recurrence /
       // resolution, then refresh the recurring-gap banner.
       memoryRef.current = applyWorkCheckToMemory(
@@ -655,12 +694,18 @@ export default function TutorWorkspace() {
           content: check.headline,
           createdAt: Date.now(),
           workCheck: check,
+          reveal: initialReveal(
+            check,
+            prefsRef.current.assistanceStyle === "direct",
+          ),
         },
       ]);
     } catch (err) {
-      retryRef.current = () => void sendCheckWork(attempt, forProblem);
+      retryRef.current = () =>
+        void sendCheckWork(attempt, forProblem, undefined, retryOf);
       setTurnError(err instanceof Error ? err.message : "Check failed.");
     } finally {
+      setCheckStage(null);
       setTurnBusy(false);
     }
   }
@@ -733,6 +778,8 @@ export default function TutorWorkspace() {
     );
   }
 
+  const stage = sessionStage(messages);
+
   // Offer "Continue" when the last turn was a tutor chunk with more to give.
   const last = messages[messages.length - 1];
   const canContinue =
@@ -752,9 +799,13 @@ export default function TutorWorkspace() {
         />
       )}
 
-      {image && analysis && (
+      {analysis && (
         <div className="animate-rise">
-          <ProblemCard image={image} analysis={analysis} />
+          <ProblemCard
+            image={image}
+            analysis={analysis}
+            showKeyIdea={stage === "resolved"}
+          />
         </div>
       )}
     </>
@@ -805,6 +856,14 @@ export default function TutorWorkspace() {
                   solution={m.solution}
                   similarProblem={m.similarProblem}
                   workCheck={m.workCheck}
+                  reveal={m.reveal}
+                  onReveal={(next) => handleReveal(m.id, next)}
+                  onRetry={
+                    m.workCheck?.firstError
+                      ? () => openComposer(m.workCheck!.firstError!)
+                      : undefined
+                  }
+                  busy={turnBusy}
                   attemptImage={m.attemptImage}
                   imageOnly={m.imageOnly}
                 />
@@ -812,7 +871,15 @@ export default function TutorWorkspace() {
             )}
 
             {turnBusy && !streamingId && (
-              <LoadingState label="Tutor is thinking…" />
+              <LoadingState
+                label={
+                  checkStage === "writing"
+                    ? "Writing it up…"
+                    : checkStage === "thinking"
+                      ? "Checking each step…"
+                      : "Tutor is thinking…"
+                }
+              />
             )}
 
             {/* "Continue" expands into place instead of popping and shifting the list. */}
@@ -864,11 +931,11 @@ export default function TutorWorkspace() {
         {analysis && (
           <ActionBar
             busy={turnBusy}
+            stage={stage}
             onAction={handleAction}
             onAsk={handleAsk}
             onFocus={scrollToBottom}
-            onWhyWrong={() => openComposer("why")}
-            onCheckWork={() => openComposer("check")}
+            onCheckWork={() => openComposer()}
             onPractice={() => handlePractice()}
           />
         )}
@@ -877,9 +944,12 @@ export default function TutorWorkspace() {
       {composerOpen && (
         <AttemptComposer
           busy={turnBusy}
-          mode={composerMode}
+          retry={composerRetry ?? undefined}
           onSubmit={handleCheckWork}
-          onCancel={() => setComposerOpen(false)}
+          onCancel={() => {
+            setComposerOpen(false);
+            setComposerRetry(null);
+          }}
         />
       )}
     </div>
