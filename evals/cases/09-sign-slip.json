@@ -1,0 +1,26 @@
+{
+  "id": "09-sign-slip",
+  "note": "A slip: the sign lost moving a term across.",
+  "problem": "Solve 3x − 7 = 2.",
+  "attempt": {
+    "text": "3x = 2 − 7\n3x = −5\nx = −5/3"
+  },
+  "expect": {
+    "correct": false,
+    "categories": [
+      "arithmetic",
+      "procedural"
+    ],
+    "line": [
+      "2 − 7",
+      "2-7"
+    ]
+  },
+  "finalAnswer": [
+    "x = 3",
+    "x=3"
+  ],
+  "mustNotReveal": [
+    "add 7"
+  ]
+}

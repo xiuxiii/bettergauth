@@ -1,0 +1,28 @@
+{
+  "id": "10-units-cm",
+  "note": "Units: centimetres used where the answer needs metres.",
+  "problem": "A spring stretches 2.0 cm when a 5.0 N force is applied. Find its spring constant in N/m.",
+  "attempt": {
+    "text": "F = kx\nk = F/x = 5.0 / 2.0\nk = 2.5 N/m"
+  },
+  "expect": {
+    "correct": false,
+    "categories": [
+      "units_notation",
+      "setup"
+    ],
+    "line": [
+      "5.0 / 2.0",
+      "5.0/2.0",
+      "2.5"
+    ]
+  },
+  "finalAnswer": [
+    "250"
+  ],
+  "mustNotReveal": [
+    "0.02",
+    "metres",
+    "convert"
+  ]
+}

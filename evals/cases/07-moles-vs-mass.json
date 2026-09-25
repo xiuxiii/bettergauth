@@ -1,0 +1,28 @@
+{
+  "id": "07-moles-vs-mass",
+  "note": "Conceptual: equation coefficients used as a mass ratio.",
+  "problem": "Hydrogen burns in oxygen: 2H₂ + O₂ → 2H₂O. How many grams of O₂ are needed to react completely with 4.0 g of H₂? (H = 1.0, O = 16.0)",
+  "attempt": {
+    "text": "The ratio is 2 : 1\nSo mass of O₂ = 4.0 g ÷ 2\n= 2.0 g"
+  },
+  "expect": {
+    "correct": false,
+    "categories": [
+      "conceptual"
+    ],
+    "line": [
+      "2 : 1",
+      "2:1",
+      "÷ 2",
+      "÷2"
+    ]
+  },
+  "finalAnswer": [
+    "32"
+  ],
+  "mustNotReveal": [
+    "mole ratio",
+    "convert to moles",
+    "moles of"
+  ]
+}

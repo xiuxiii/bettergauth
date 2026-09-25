@@ -40,20 +40,23 @@ changing env (env is read at boot). See `.env.example` and
   first frame. An "Ask a specific question" switch there turns the capture into
   Ask mode. The confirmed crop then enters the normal analysis flow.
 - **Workspace** (`components/TutorWorkspace.tsx`) — shows the uploaded image, the
-  detected problem, subject/topic, and the identified concept, then runs the
-  session. In-session toggles (`SessionToggles`) flip help style and goal
+  detected problem, subject, and a safe label for the concept (the key idea
+  stays hidden until the gap is closed), then runs the session. In-session toggles (`SessionToggles`) flip help style and goal
   mid-problem. Loading / error / empty states throughout.
 - **Chunked tutoring** — conceptual turns deliver ONE small piece, then a
   **Continue** button fetches the next. Free-text follow-ups are always
-  available. The assistance ladder (**Hint → Explain why → Go deeper → Show
-  solution**, plus **Try a similar problem**) are `TutorAction` signals to the
-  one `tutor()` engine.
+  available. The action bar shows at most three chips picked by the session's
+  stage (Go deeper in every stage), with the rest, including **Show
+  solution**, under **More**. Each is a `TutorAction` signal to the one
+  `tutor()` engine.
 - **Structured solution** (`components/SolutionCard.tsx`) — Problem understanding
   → Key concept → Reasoning → Solution → Final answer → Important takeaway.
 - **Check My Work** (`components/AttemptComposer.tsx`, `WorkCheckCard.tsx`) —
-  type or photograph an attempt; the tutor finds the **first meaningful error**,
-  classifies it, and (when the concept is right) keeps the fix to one line
-  instead of a lecture. Via `AIProvider.checkWork` (`/api/check-work`).
+  photograph an attempt; the tutor finds the **first meaningful error** and
+  reveals it a tap at a time: the flagged line and a nudge, then the fix, then
+  the rest of the way (the only place the final answer appears). **Try again**
+  re-checks just that step, typed or photographed. Via
+  `AIProvider.checkWorkStream` (`/api/check-work`, streamed NDJSON).
 - **Practice** (`components/PracticeCard.tsx`) — a fresh problem on the same
   concept with different numbers; the student solves it independently (solution
   withheld until submit), then it's scored across five axes. Via

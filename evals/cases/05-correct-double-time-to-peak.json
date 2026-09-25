@@ -1,0 +1,11 @@
+{
+  "id": "05-correct-double-time-to-peak",
+  "note": "Correct but unconventional: twice the time to the top instead of the full-flight equation.",
+  "problem": "A ball is kicked at 20 m/s at 30° above the horizontal on level ground. How long is it in the air? (g = 9.81 m/s²)",
+  "attempt": {
+    "text": "v_y = 20 sin 30° = 10 m/s\nAt the top v_y = 0, so t_up = 10/9.81 = 1.02 s\nLevel ground, so coming down takes the same time\nt = 2 × 1.02 = 2.04 s"
+  },
+  "expect": {
+    "correct": true
+  }
+}

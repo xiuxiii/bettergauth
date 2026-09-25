@@ -1,0 +1,11 @@
+{
+  "id": "04-correct-completing-square",
+  "note": "Correct but unconventional: completing the square instead of the formula.",
+  "problem": "Solve x² + 6x + 5 = 0.",
+  "attempt": {
+    "text": "x² + 6x = −5\nx² + 6x + 9 = 4\n(x + 3)² = 4\nx + 3 = ±2\nx = −1 or x = −5"
+  },
+  "expect": {
+    "correct": true
+  }
+}

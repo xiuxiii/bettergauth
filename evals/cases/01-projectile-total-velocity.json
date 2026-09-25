@@ -1,0 +1,27 @@
+{
+  "id": "01-projectile-total-velocity",
+  "note": "The classic: the full launch speed where only its vertical component belongs.",
+  "problem": "A ball is kicked at 20 m/s at 30° above the horizontal on level ground. How long is it in the air? (g = 9.81 m/s²)",
+  "attempt": {
+    "text": "t = 2v/g\nt = 2(20)/9.81\nt = 4.08 s"
+  },
+  "expect": {
+    "correct": false,
+    "categories": [
+      "conceptual"
+    ],
+    "line": [
+      "2v/g",
+      "2(20)"
+    ]
+  },
+  "finalAnswer": [
+    "2.04"
+  ],
+  "mustNotReveal": [
+    "vertical",
+    "sin30",
+    "v_y",
+    "component"
+  ]
+}

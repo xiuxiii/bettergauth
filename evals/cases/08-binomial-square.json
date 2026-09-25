@@ -1,0 +1,29 @@
+{
+  "id": "08-binomial-square",
+  "note": "Conceptual: (a + b)² taken as a² + b².",
+  "problem": "Expand and simplify (x + 3)² − x².",
+  "attempt": {
+    "text": "(x + 3)² = x² + 9\nx² + 9 − x² = 9"
+  },
+  "expect": {
+    "correct": false,
+    "categories": [
+      "conceptual",
+      "procedural"
+    ],
+    "line": [
+      "x² + 9",
+      "(x + 3)²"
+    ]
+  },
+  "finalAnswer": [
+    "6x + 9",
+    "6x+9"
+  ],
+  "mustNotReveal": [
+    "2ab",
+    "cross term",
+    "middle term",
+    "6x"
+  ]
+}

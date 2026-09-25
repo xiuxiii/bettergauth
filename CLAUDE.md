@@ -11,9 +11,17 @@ npm run dev      # local dev
 npm run build    # production build (run before every push)
 npm run lint
 npx tsc --noEmit # typecheck
+npm run eval     # check-work evals against a running app (needs a key)
+npm run eval -- --selftest   # the eval scorer on canned responses, no key
 ```
 
-There are no tests. `npx tsc --noEmit && npm run build` is the verification gate.
+There are no unit tests. `npx tsc --noEmit && npm run build` is the verification
+gate. `npm run eval` (`evals/run.mjs`, plain Node) hits the running app's
+`/api/analyze` and `/api/check-work` with the cases in `evals/cases/`, and reports
+verdict accuracy, the **false "you're wrong" rate** (keep it at 0), first-error
+category/line, final-answer leaks before "Show the rest", and label spoilers.
+Pass `--base` for another port. It is how to tune the thinking `effort`. The seed
+cases are typed attempts; real handwriting photos go in `evals/images/`.
 
 ## Environment
 
@@ -176,6 +184,45 @@ fixed tokens: `bg-brand-600` at rest, `hover:`/`active:bg-accent-deep` (#3F44BE,
 7.55:1); destructive buttons `bg-danger-solid` / `hover:bg-danger-deep` (5.55:1 /
 7.36:1). Those are the old light-mode values, so light mode is unchanged. Keep the
 700 steps for on-tint TEXT only.
+
+**The diagnosis is revealed one piece at a time, and the model writes the
+pieces separately.** Check-work returns `headline`, `strength`, and `firstError
+{ line, locate, nudge, diagnosis, fix }`, plus `continueFrom`, and
+`continueFrom` is the ONLY field allowed the final answer. `nudge` and `locate`
+must not contain the fix. The UI never hides part of a sentence: each piece is a
+field, `WorkCheckCard` shows headline → line → nudge, then diagnosis + fix, then
+the rest. The step reached is saved on the message (`reveal`). Direct mode opens
+on the fix. An empty piece is skipped (fail open). There is no `conceptCorrect`
+flag any more: it contradicted the category and recorded misconceptions as
+mastered. `applyWorkCheckToMemory` decides "demonstrated" from the verdict and
+category alone.
+
+**`concept` is a safe label, `keyIdea` is the insight.** `concept` (2-5 words,
+never the method) is shown before any work AND is the key for all concept
+tracking, which is why it must be short and stable across problems. `keyIdea`
+goes to the tutor but is shown only once the session is `resolved`. Stored
+records predate this: every read goes through `normalizeAnalysis` /
+`normalizeWorkCheck` (`lib/tutor/types.ts`), which move an old long `concept`
+into the hidden `keyIdea`. Read a stored record without them and the old
+spoiler goes straight back on screen.
+
+**Chips follow the session stage, and Go deeper is in every stage.**
+`sessionStage` (`lib/tutor/stage.ts`) gives fresh / diagnosed / resolved from
+the transcript; `ActionBar` shows at most three chips for it, with the rest in
+More (Show solution always there). Most students never formally resolve: they
+take a hint, finish on paper and close the app. So nothing useful may be gated
+on `resolved`, only things that would spoil the problem. The table is in
+`docs/tutoring-engine.md` §8.11.
+
+**Thinking is on only where being wrong is costly:** `checkWork`,
+`show_solution`, `evaluatePractice`. `thinkingFor` gives adaptive thinking +
+`effort: "medium"`; `budget_tokens` returns a **400** on Sonnet 5, so don't add
+one back (Haiku is the exception, and rejects `effort`). Those calls stream
+(`messages.stream` + `finalMessage`) to stay clear of HTTP timeouts.
+`/api/check-work` streams NDJSON stage frames from the model's real
+`content_block_start` events, then `{t:"done", check}`. It awaits the first
+event BEFORE returning 200, so an auth or limit failure still gets its real
+status instead of vanishing into the stream.
 
 **The tutor's formatting is prompt-enforced.** `SYSTEM_INSTRUCTIONS` in
 `lib/tutor/engine.ts` and `STYLE_NOTE` in `lib/ai/anthropicProvider.ts` ask for short

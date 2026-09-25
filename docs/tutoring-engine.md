@@ -114,15 +114,25 @@ honouring them is both efficient and honest.
    blocker directly; only ask if the blocker is genuinely ambiguous.
 6. **Uploaded/typed an attempt** → diagnose, then route to the matching rule
    below.
-7. **Wrong principle chosen (strategic)** → `address_misconception` at the
+7. **Asserts a new misconception, in Hints-first mode** → `conceptual_question`.
+   One targeted question or partial step that lets them catch it, then stop;
+   if the next message still misses it, or they ask, explain (rule 9). A claim
+   phrased as a question counts ("but the horizontal speed is also 20,
+   right?"). Never on arithmetic, never in Direct mode.
+8. **Wrong principle chosen (strategic)** → `address_misconception` at the
    recognition level. Highest-value correction.
-8. **Conceptual misconception** → `address_misconception`, then verify.
-9. **Trivial slip** → `let_continue` with a one-clause correction.
-10. **On track and capable** → `let_continue`.
-11. **Genuine bottleneck, no explicit request** → `explain` (apply the
+9. **Conceptual misconception** → `address_misconception`, then verify.
+10. **Trivial slip** → `let_continue` with a one-clause correction.
+11. **On track and capable** → `let_continue`.
+12. **Genuine bottleneck, no explicit request** → `explain` (apply the
     explain-vs-ask test).
-12. **Bottleneck cleared / done** → `consolidate`, then offer a similar problem
+13. **Bottleneck cleared / done** → `consolidate`, then offer a similar problem
     or extension.
+
+Rule 7 and "never withhold" (§12) don't conflict: withholding means gating
+something the student *asked for*, and every request sits above rule 7. An
+unprompted wrong claim asked for nothing, and one try later the tutor explains
+anyway.
 
 ---
 
@@ -310,11 +320,28 @@ hand control back. Depth 0–1.
 ### 8.10 Uploads their own attempted solution
 **Trigger:** an image/text of their work.
 **Behavior:** diagnose — find the **first decisive error** (or confirm correct).
-Classify it (careless / arithmetic / conceptual / strategic), acknowledge what's
-right in one clause, then respond per that class. Focus on the pivotal issue, not
-every cosmetic flaw.
+Classify it by root cause, acknowledge what's right in one line, and hand it
+over **one piece at a time**, each piece its own field from the model:
+
+1. `headline` (where things stand), the flagged `line` quoted, `locate`
+   (where, and what kind of thing is off, never the fix), and one `nudge`
+   question aimed at the gap. Buttons: **Try again** · **Show me the fix**.
+2. `diagnosis` (what their work assumes) and `fix` (the corrected idea, no
+   final answer). Button: **Show the rest**.
+3. `continueFrom`: the rest of the way. The only piece allowed the final
+   answer.
+
+Direct mode opens at step 2; the answer still waits for step 3. An empty piece
+is skipped, never a dead end. **Try again** re-checks just the flagged step
+(`retryOf`), typed or photographed.
+
 **Avoid:** grading line-by-line; leading with what's wrong before what's right;
-fixing downstream symptoms of an upstream cause.
+fixing downstream symptoms of an upstream cause; putting the fix in the nudge,
+or the answer anywhere before step 3. Before flagging anything, rule out a
+valid unconventional method: telling a correct student they're wrong is the
+worst failure.
+
+The examples below are the substance of `diagnosis` + `fix`:
 
 - *Physics:* Work uses $v^2=u^2+2as$ but the acceleration isn't constant
   (variable force). → "Setup's neat, but this is a *strategic* miss: $a$ isn't
@@ -327,6 +354,22 @@ fixing downstream symptoms of an upstream cause.
   belong. → "Equation's balanced correctly. The pivotal error is *conceptual*:
   coefficients are **mole** ratios, not mass ratios — convert to moles first, then
   apply $2:1$."
+
+### 8.11 What the student sees: stages and chips
+The session's stage is a pure function of the transcript
+(`lib/tutor/stage.ts`):
+
+| Stage | When | Chips |
+|---|---|---|
+| fresh | no check yet | Hint · Check my work · Go deeper |
+| diagnosed | latest check found something, rest not revealed | Explain why · Check my work · Go deeper |
+| resolved | correct check, rest revealed, or solution shown | Try a similar one · Go deeper |
+
+At most three chips. Everything else sits in **More**, which always holds
+**Show solution**, **I'm stuck** (an `ask` turn → rule 5) and **Try a similar
+one**. Go deeper is in every stage because most students never formally
+resolve: they take a hint, finish on paper and close the app. "Resolved" only
+unlocks what would spoil the problem, like the key idea on the problem card.
 
 ---
 

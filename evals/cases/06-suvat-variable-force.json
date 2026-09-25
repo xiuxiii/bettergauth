@@ -1,0 +1,28 @@
+{
+  "id": "06-suvat-variable-force",
+  "note": "Wrong principle: constant-acceleration equations under a force that varies with time.",
+  "problem": "A 2.0 kg block starts from rest on a frictionless surface. A horizontal force F = 6t N (t in seconds) acts on it. Find its speed at t = 3.0 s.",
+  "attempt": {
+    "text": "At t = 3 s, F = 18 N\na = F/m = 18/2 = 9 m/s²\nv = u + at = 0 + 9 × 3\nv = 27 m/s"
+  },
+  "expect": {
+    "correct": false,
+    "categories": [
+      "model_selection"
+    ],
+    "line": [
+      "u + at",
+      "u+at",
+      "F/m",
+      "a = 9"
+    ]
+  },
+  "finalAnswer": [
+    "13.5"
+  ],
+  "mustNotReveal": [
+    "integrat",
+    "impulse",
+    "area under"
+  ]
+}
