@@ -209,7 +209,8 @@ spoiler goes straight back on screen.
 **Chips follow the session stage, and Go deeper is in every stage.**
 `sessionStage` (`lib/tutor/stage.ts`) gives fresh / diagnosed / resolved from
 the transcript; `ActionBar` shows at most three chips for it, with the rest in
-More (Show solution always there). Most students never formally resolve: they
+More (Show solution always there). Once a hint has been given (the opening
+nudge counts; `hintGiven`), Explain why replaces Hint in the fresh row. Most students never formally resolve: they
 take a hint, finish on paper and close the app. So nothing useful may be gated
 on `resolved`, only things that would spoil the problem. The table is in
 `docs/tutoring-engine.md` §8.11.

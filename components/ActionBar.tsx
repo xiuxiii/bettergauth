@@ -40,6 +40,13 @@ const ROW: Record<SessionStage, ChipId[]> = {
 };
 
 /**
+ * Fresh, but a hint has been given (the opening nudge counts). The next ask
+ * is usually "why?", so Explain why takes Hint's place; another hint is one
+ * tap away in More.
+ */
+const ROW_AFTER_HINT: ChipId[] = ["explain", "check", "deeper"];
+
+/**
  * Everything else, one tap deeper. Show solution is ALWAYS here: students stay
  * in control and are never locked out of the answer, only not pushed toward it.
  */
@@ -82,6 +89,7 @@ function useShortViewport() {
 export default function ActionBar({
   busy,
   stage,
+  hinted = false,
   onAction,
   onAsk,
   onCheckWork,
@@ -90,6 +98,8 @@ export default function ActionBar({
 }: {
   busy: boolean;
   stage: SessionStage;
+  /** A hint has been given; see ROW_AFTER_HINT. */
+  hinted?: boolean;
   onAction: (action: Exclude<TutorAction, "ask">) => void;
   onAsk: (text: string) => void;
   onCheckWork: () => void;
@@ -127,7 +137,7 @@ export default function ActionBar({
     setMenuOpen(false);
   }, [short, stage]);
 
-  const row = ROW[stage];
+  const row = stage === "fresh" && hinted ? ROW_AFTER_HINT : ROW[stage];
   const rest = MORE_ORDER.filter((id) => !row.includes(id));
   // Short viewports have no chip row, so the menu holds the row's chips too.
   const more = short ? [...row, ...rest] : rest;

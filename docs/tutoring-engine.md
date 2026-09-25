@@ -361,9 +361,14 @@ The session's stage is a pure function of the transcript
 
 | Stage | When | Chips |
 |---|---|---|
-| fresh | no check yet | Hint · Check my work · Go deeper |
+| fresh | no check yet, no hint yet | Hint · Check my work · Go deeper |
+| fresh, after a hint | no check yet; the opener or a tapped Hint has been given | Explain why · Check my work · Go deeper |
 | diagnosed | latest check found something, rest not revealed | Explain why · Check my work · Go deeper |
 | resolved | correct check, rest revealed, or solution shown | Try a similar one · Go deeper |
+
+After a hint the next ask is usually "why?", so Explain why takes Hint's
+place (`hintGiven` in `lib/tutor/stage.ts`). The opening nudge counts, so in
+practice most sessions start on that row.
 
 At most three chips. Everything else sits in **More**, which always holds
 **Show solution**, **I'm stuck** (an `ask` turn → rule 5) and **Try a similar

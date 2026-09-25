@@ -81,3 +81,21 @@ export function sessionStage(messages: readonly StageMessage[]): SessionStage {
   }
   return "fresh";
 }
+
+/** The parts of a transcript message `hintGiven` reads. */
+export interface HintMessage {
+  role?: string;
+  opener?: boolean;
+  action?: string;
+}
+
+/**
+ * Whether the student has had a hint: the opening nudge (itself a hint) or a
+ * tapped Hint. After a hint the natural next ask is "why?", so the chips put
+ * Explain why in the bar and move Hint into More.
+ */
+export function hintGiven(messages: readonly HintMessage[]): boolean {
+  return messages.some(
+    (m) => m.role === "tutor" && (m.opener || m.action === "hint"),
+  );
+}

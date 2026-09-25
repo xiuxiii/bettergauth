@@ -80,7 +80,7 @@ export function OpeningNudge({ text }: { text: string }) {
         <RichText text={text} />
       </div>
       <p className="text-xs text-slate-500">
-        Still stuck? Just ask below, or tap Hint.
+        Still stuck? Just ask below, or tap Explain why.
       </p>
     </div>
   );

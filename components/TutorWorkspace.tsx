@@ -20,6 +20,7 @@ import type {
   WorkError,
 } from "@/lib/tutor/types";
 import {
+  hintGiven,
   initialReveal,
   sessionStage,
   type RevealStep,
@@ -85,6 +86,8 @@ type DisplayMessage = ChatMessage & {
   practiceFor?: ProblemAnalysis;
   /** When set, the practice widget is a targeted retry of this misconception. */
   practiceFocus?: PracticeFocus;
+  /** The tutor action that produced this turn (e.g. "hint"). */
+  action?: TutorAction;
   /** The session's opening nudge, rendered quieter than a real tutor turn. */
   opener?: boolean;
   /** A student turn that is only a photo: `content` is for the model, not the UI. */
@@ -539,7 +542,7 @@ export default function TutorWorkspace() {
           if (i === -1) {
             return [
               ...prev,
-              { id, role: "tutor", createdAt: Date.now(), ...patch },
+              { id, role: "tutor", createdAt: Date.now(), action, ...patch },
             ];
           }
           const next = prev.slice();
@@ -977,6 +980,7 @@ export default function TutorWorkspace() {
           <ActionBar
             busy={turnBusy}
             stage={stage}
+            hinted={hintGiven(messages)}
             onAction={handleAction}
             onAsk={handleAsk}
             onFocus={scrollToBottom}
