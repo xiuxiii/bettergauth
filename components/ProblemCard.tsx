@@ -81,6 +81,14 @@ export default function ProblemCard({
           </div>
         )}
 
+        {/* With no photo (a typed problem), the text IS the problem: show it
+            outright rather than behind a toggle that implies a copy of
+            something already on screen. */}
+        {!image ? (
+          <div className="text-[15px] leading-relaxed text-ink">
+            <RichText text={analysis.problemText} />
+          </div>
+        ) : (
         <div>
           <button
             type="button"
@@ -110,6 +118,7 @@ export default function ProblemCard({
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

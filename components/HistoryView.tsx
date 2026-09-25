@@ -11,6 +11,7 @@ import {
 } from "@/lib/history/db";
 import { rankConcepts, type ConceptProgress } from "@/lib/tutor/progress";
 import { readApiError } from "@/lib/apiClient";
+import { formatRelativeDate } from "@/lib/utils";
 import { Spinner } from "@/components/States";
 import RichText, { InlineRichText } from "@/components/RichText";
 
@@ -186,7 +187,7 @@ export default function HistoryView() {
                           .filter(Boolean)
                           .join(" · ")}
                         {" · "}
-                        {formatDate(s.createdAt)}
+                        {formatRelativeDate(s.createdAt)}
                       </p>
                     </div>
                   </Link>
@@ -240,13 +241,4 @@ export default function HistoryView() {
       )}
     </main>
   );
-}
-
-function formatDate(ms: number): string {
-  const d = new Date(ms);
-  const days = Math.floor((Date.now() - ms) / 86_400_000);
-  if (days === 0) return "Today";
-  if (days === 1) return "Yesterday";
-  if (days < 7) return `${days} days ago`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }

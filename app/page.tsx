@@ -1,5 +1,4 @@
-import type { LucideIcon } from "lucide-react";
-import { CircleCheck, Settings2, Sparkles } from "lucide-react";
+import HomeDashboard from "@/components/HomeDashboard";
 import HomeUploader from "@/components/HomeUploader";
 import MindGapMark from "@/components/MindGapMark";
 import Wordmark from "@/components/Wordmark";
@@ -31,23 +30,11 @@ export default function HomePage() {
           <HomeUploader />
         </div>
 
-        <ul className="mt-8 space-y-3 md:mt-0">
-          <Feature
-            icon={Sparkles}
-            title="Concept-first"
-            body="Focuses on the principle and the why, and skips trivial algebra."
-          />
-          <Feature
-            icon={Settings2}
-            title="Adapts to you"
-            body="Goes deep where you're stuck, moves on where you're solid."
-          />
-          <Feature
-            icon={CircleCheck}
-            title="Answers on demand"
-            body="Ask for a full worked solution whenever you want one."
-          />
-        </ul>
+        {/* Where they left off and what keeps going wrong, from on-device
+            history. Renders nothing for a brand-new student. */}
+        <div className="mt-8 md:mt-0">
+          <HomeDashboard />
+        </div>
       </div>
 
       <footer className="mt-10 text-center text-xs text-slate-500">
@@ -57,27 +44,5 @@ export default function HomePage() {
         </a>
       </footer>
     </main>
-  );
-}
-
-function Feature({
-  icon: Icon,
-  title,
-  body,
-}: {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-}) {
-  return (
-    <li className="flex gap-3 rounded-lg bg-surface px-4 py-3 shadow-card">
-      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-sm bg-brand-50 text-brand-700">
-        <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
-      </span>
-      <div>
-        <p className="text-sm font-semibold text-slate-800">{title}</p>
-        <p className="text-sm text-slate-600">{body}</p>
-      </div>
-    </li>
   );
 }

@@ -465,7 +465,7 @@ function HowSlide() {
 const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Crosshair,
-    title: "Why am I wrong?",
+    title: "Check my work",
     body: "Show your attempt and get the first real mistake, not a lecture.",
   },
   {

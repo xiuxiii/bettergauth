@@ -28,14 +28,17 @@ changing env (env is read at boot). See `.env.example` and
   preferences (grade for loose calibration, hints-vs-direct, goal). Stored in
   `localStorage` and folded into the tutor's system prompt. No subject picker —
   the model detects the subject.
-- **Home** (`app/page.tsx`) — "Take a photo" / "Upload problem". Both open the
+- **Home** (`app/page.tsx`) — "Snap a problem" / "Upload a photo", or type or
+  paste a problem (sent to `/api/analyze` as text). Below: recent sessions and
+  the concepts to work on, each with "Practice this". Both photo paths open the
   **question cropper** (`components/QuestionCropper.tsx`): the questions on the
   page are located (`/api/detect-questions` → `AIProvider.detectQuestions`, with
   a local ink-bounding-box fallback), the most likely one is boxed, and the
   student can switch between detected questions, adjust the box, and confirm.
   The box is seeded instantly from a local ink bounding box and the model's
   detection refines it in the background, so the screen is usable from the
-  first frame. The confirmed crop then enters the normal analysis flow.
+  first frame. An "Ask a specific question" switch there turns the capture into
+  Ask mode. The confirmed crop then enters the normal analysis flow.
 - **Workspace** (`components/TutorWorkspace.tsx`) — shows the uploaded image, the
   detected problem, subject/topic, and the identified concept, then runs the
   session. In-session toggles (`SessionToggles`) flip help style and goal

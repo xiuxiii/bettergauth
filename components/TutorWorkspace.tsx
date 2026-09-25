@@ -33,7 +33,13 @@ import {
   recordConceptError,
   resolveMisconception,
 } from "@/lib/tutor/types";
-import { IMAGE_KEY, QUESTION_KEY, WORK_HINT_KEY, uid } from "@/lib/utils";
+import {
+  IMAGE_KEY,
+  QUESTION_KEY,
+  TEXT_KEY,
+  WORK_HINT_KEY,
+  uid,
+} from "@/lib/utils";
 import { safePrefix } from "@/lib/tutor/streamText";
 import { apiFetch, readApiError, readNdjson } from "@/lib/apiClient";
 import {
@@ -217,8 +223,13 @@ export default function TutorWorkspace() {
   // check alongside the analysis instead of after it. Read once at start.
   const workHintRef = useRef(false);
 
-  // Load the captured image and analyze it.
-  const runAnalysis = useCallback(async (dataUrl: string) => {
+  // What the last analysis was run on, for its "Try again".
+  const inputRef = useRef<{ image?: string; text?: string } | null>(null);
+
+  // Analyze the captured image, or a problem typed on the home screen.
+  const runAnalysis = useCallback(async (input: { image?: string; text?: string }) => {
+    inputRef.current = input;
+    const dataUrl = input.image ?? null;
     setPhase("loading");
     setAnalyzeError(null);
 
@@ -231,7 +242,7 @@ export default function TutorWorkspace() {
     // mode, where the student's question wins anyway.
     let early: { promise: Promise<WorkCheck>; controller: AbortController } | null =
       null;
-    if (workHintRef.current && !questionRef.current) {
+    if (dataUrl && workHintRef.current && !questionRef.current) {
       const controller = new AbortController();
       const promise = fetchCheck(
         { imageDataUrl: dataUrl },
@@ -249,7 +260,7 @@ export default function TutorWorkspace() {
       const res = await apiFetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl }),
+        body: JSON.stringify(dataUrl ? { image: dataUrl } : { text: input.text }),
       });
       if (!res.ok) throw new Error(await readApiError(res, "Analysis failed."));
       const data: ProblemAnalysis = await res.json();
@@ -298,7 +309,7 @@ export default function TutorWorkspace() {
       // already showing the photo with the working in it, and the diagnosis
       // reads that same photo. Everything downstream (memory, recurring gaps,
       // retry) behaves as if they had submitted it themselves.
-      if (data.studentWork?.present) {
+      if (dataUrl && data.studentWork?.present) {
         setMessages([]);
         void sendCheckWork({ imageDataUrl: dataUrl }, data, early?.promise);
         return;
@@ -334,6 +345,7 @@ export default function TutorWorkspace() {
   // memory are already known, and paying for the model again to rebuild what is
   // on disk would be both slow and billable.
   const reopenId = searchParams.get("session");
+  const practiceConcept = searchParams.get("practice");
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -358,7 +370,8 @@ export default function TutorWorkspace() {
         }
         // Records saved before the concept/keyIdea split would otherwise put
         // the old spoiler sentence straight back on the problem card.
-        setAnalysis(normalizeAnalysis(rec.analysis));
+        const analysis = normalizeAnalysis(rec.analysis);
+        setAnalysis(analysis);
         memoryRef.current = rec.memory;
         setRecurring(detectRecurring(rec.memory));
         // Attempt photos are stored as ids, not inline data URLs, so they have
@@ -383,6 +396,26 @@ export default function TutorWorkspace() {
             return msg as DisplayMessage;
           }),
         );
+        // "Practice this" on the home screen: reopen the session the concept
+        // last went wrong in, with a targeted practice problem waiting.
+        if (practiceConcept) {
+          const key = practiceConcept.trim().toLowerCase();
+          const m = rec.memory.misconceptions?.find(
+            (x) => x.concept.trim().toLowerCase() === key && x.status !== "resolved",
+          );
+          restored.push({
+            id: uid("p"),
+            role: "tutor",
+            content: "",
+            createdAt: Date.now(),
+            practiceFor: analysis,
+            practiceFocus: {
+              concept: practiceConcept,
+              studentBelief: m?.studentBelief,
+              correctModel: m?.correctModel,
+            },
+          });
+        }
         setMessages(restored);
         // Keep writing to the same record, so continuing an old session
         // extends it rather than forking a duplicate.
@@ -392,8 +425,18 @@ export default function TutorWorkspace() {
       return;
     }
 
-    const stored =
-      typeof window !== "undefined" ? sessionStorage.getItem(IMAGE_KEY) : null;
+    let stored: string | null = null;
+    let typedText: string | null = null;
+    try {
+      stored = sessionStorage.getItem(IMAGE_KEY);
+      typedText = stored ? null : sessionStorage.getItem(TEXT_KEY)?.trim() || null;
+    } catch {
+      /* blocked storage: nothing was handed over */
+    }
+    if (typedText) {
+      void runAnalysis({ text: typedText });
+      return;
+    }
     if (!stored) {
       setPhase("empty");
       return;
@@ -408,7 +451,9 @@ export default function TutorWorkspace() {
       workHintRef.current = false;
     }
     setImage(stored);
-    void runAnalysis(stored);
+    void runAnalysis({ image: stored });
+    // practiceConcept is read once with the reopen, like reopenId.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runAnalysis, reopenId]);
 
   // Whether the student is parked at the bottom. Tracked from their own
@@ -795,7 +840,7 @@ export default function TutorWorkspace() {
       {phase === "error" && (
         <ErrorState
           message={analyzeError ?? "Could not analyze the problem."}
-          onRetry={() => image && runAnalysis(image)}
+          onRetry={() => inputRef.current && runAnalysis(inputRef.current)}
         />
       )}
 

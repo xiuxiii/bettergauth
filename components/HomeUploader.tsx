@@ -2,23 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { IMAGE_KEY, QUESTION_KEY, WORK_HINT_KEY } from "@/lib/utils";
+import { IMAGE_KEY, QUESTION_KEY, TEXT_KEY, WORK_HINT_KEY } from "@/lib/utils";
 import type { NormalizedRect } from "@/lib/tutor/types";
 import { cropSourceToJpeg, fileToNormalizedJpeg } from "@/lib/image";
 import { hasPreferences } from "@/lib/preferences";
-import { Camera, Clock, MessageCircleQuestion, Upload } from "lucide-react";
+import { ArrowRight, Camera, Upload } from "lucide-react";
 import { ErrorState, Spinner } from "@/components/States";
 import CameraScanner from "@/components/CameraScanner";
 import QuestionCropper from "@/components/QuestionCropper";
 
 /**
- * Home entry point: "Take a photo" opens the in-app camera scanner (a live
- * viewfinder with framing, not the OS camera), and "Upload problem" picks from
- * the library. Both normalize to a right-sized, upright JPEG, then open the
- * question cropper (find the questions on the page, pick/adjust one, choose a
- * subject). The confirmed crop is stashed in sessionStorage and we route to
- * the workspace where the existing analysis begins.
+ * Home entry point. One primary action, "Snap a problem", opens the in-app
+ * camera scanner (a live viewfinder with framing, not the OS camera). Upload
+ * picks from the library. Both normalize to a right-sized, upright JPEG, then
+ * open the question cropper, where the student picks the question and can
+ * switch on Ask mode. The confirmed crop is stashed in sessionStorage and we
+ * route to the workspace where the analysis begins.
+ *
+ * A problem can also be typed or pasted, for the one already on screen in
+ * another app, or a teacher's message.
+ *
  * On first run (no saved preferences) it redirects to the /welcome tour.
  */
 export default function HomeUploader() {
@@ -36,11 +39,7 @@ export default function HomeUploader() {
    */
   const [source, setSource] = useState<File | string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /**
-   * Which button opened the capture. "ask" is Ask mode: frame something and
-   * ask a question about it, rather than have the work diagnosed.
-   */
-  const [mode, setMode] = useState<"diagnose" | "ask">("diagnose");
+  const [typed, setTyped] = useState("");
 
   // First-run gate: send new visitors through the welcome tour once.
   useEffect(() => {
@@ -49,6 +48,7 @@ export default function HomeUploader() {
 
   /** Hand the confirmed crop to the workspace. */
   function go(dataUrl: string, question?: string, workLikely = false) {
+    sessionStorage.removeItem(TEXT_KEY);
     sessionStorage.setItem(IMAGE_KEY, dataUrl);
     if (workLikely) sessionStorage.setItem(WORK_HINT_KEY, "1");
     else sessionStorage.removeItem(WORK_HINT_KEY);
@@ -81,6 +81,23 @@ export default function HomeUploader() {
       setBusy(false);
       setError("Could not crop that photo. Please try again.");
     }
+  }
+
+  /** Hand a typed or pasted problem to the workspace, with no photo. */
+  function goText() {
+    const text = typed.trim();
+    if (!text || busy) return;
+    try {
+      sessionStorage.removeItem(IMAGE_KEY);
+      sessionStorage.removeItem(QUESTION_KEY);
+      sessionStorage.removeItem(WORK_HINT_KEY);
+      sessionStorage.setItem(TEXT_KEY, text);
+    } catch {
+      setError("Could not start that problem. Please try again.");
+      return;
+    }
+    setBusy(true);
+    router.push("/workspace");
   }
 
   async function handleFile(file: File | undefined) {
@@ -118,7 +135,6 @@ export default function HomeUploader() {
         disabled={busy}
         onClick={() => {
           setError(null);
-          setMode("diagnose");
           setScanning(true);
         }}
         className="flex h-14 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-5 text-base font-semibold text-white shadow-raised transition hover:bg-accent-deep active:scale-[0.98] active:bg-accent-deep disabled:bg-brand-300 disabled:text-white/90 disabled:shadow-none"
@@ -128,43 +144,49 @@ export default function HomeUploader() {
         ) : (
           <Camera size={18} strokeWidth={1.75} aria-hidden="true" />
         )}
-        Take a photo
+        Snap a problem
       </button>
 
       <button
         disabled={busy}
-        onClick={() => {
-          setMode("diagnose");
-          uploadRef.current?.click();
-        }}
-        className="flex h-14 w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-surface px-5 text-base font-semibold text-slate-800 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-60"
+        onClick={() => uploadRef.current?.click()}
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-surface px-5 text-[15px] font-semibold text-slate-800 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-60"
       >
         <Upload size={18} strokeWidth={1.75} aria-hidden="true" />
-        Upload problem
+        Upload a photo
       </button>
 
-      {/* Ask mode. Opens the same camera, which already falls back to a file
-          picker when the camera is unavailable or refused. */}
-      <button
-        disabled={busy}
-        onClick={() => {
-          setError(null);
-          setMode("ask");
-          setScanning(true);
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          goText();
         }}
-        className="flex h-14 w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-surface px-5 text-base font-semibold text-slate-800 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-60"
+        className="relative"
       >
-        <MessageCircleQuestion size={18} strokeWidth={1.75} aria-hidden="true" />
-        Ask about a photo
-      </button>
-
-      <Link
-        href="/history"
-        className="flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-ink"
-      >
-        <Clock size={16} strokeWidth={1.75} aria-hidden="true" />
-        Your history
-      </Link>
+        <textarea
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              goText();
+            }
+          }}
+          rows={2}
+          maxLength={4000}
+          aria-label="Type or paste a problem"
+          placeholder="Or type or paste a problem…"
+          className="block w-full resize-none rounded-md border border-slate-300 bg-surface py-2.5 pl-3.5 pr-14 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30"
+        />
+        <button
+          type="submit"
+          disabled={busy || !typed.trim()}
+          aria-label="Start this problem"
+          className="absolute bottom-2 right-2 flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-accent-deep active:scale-[0.98] active:bg-accent-deep disabled:bg-brand-300 disabled:text-white/90"
+        >
+          <ArrowRight size={18} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      </form>
 
       {error && <ErrorState message={error} />}
 
@@ -184,13 +206,12 @@ export default function HomeUploader() {
       {pending && (
         <QuestionCropper
           image={pending}
-          mode={mode}
           onCancel={() => {
             setPending(null);
             setSource(null);
           }}
-          // "Question not detected" → straight back to the camera in the same
-          // mode, rather than dumping them on the home screen to start over.
+          // "Question not detected" → straight back to the camera, rather
+          // than dumping them on the home screen to start over.
           onRetake={() => {
             setPending(null);
             setSource(null);

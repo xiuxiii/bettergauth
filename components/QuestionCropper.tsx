@@ -96,7 +96,10 @@ export default function QuestionCropper({
    *  Falls back to onCancel when the caller has no capture to return to. */
   onRetake?: () => void;
 }) {
-  const asking = mode === "ask";
+  // Ask mode is a switch on this screen, not a separate button on home: it is
+  // the same capture either way, and deciding before seeing the photo was the
+  // wrong moment to ask.
+  const [asking, setAsking] = useState(mode === "ask");
   const [question, setQuestion] = useState("");
   // --- Detection -------------------------------------------------------------
   const [detecting, setDetecting] = useState(true);
@@ -569,6 +572,27 @@ export default function QuestionCropper({
         {cropError && (
           <p className="mb-2 text-center text-sm text-danger-600">{cropError}</p>
         )}
+
+        <label className="mb-3 flex cursor-pointer items-center justify-between gap-3 rounded-md px-1 py-1">
+          <span className="text-sm font-medium text-slate-700">
+            Ask a specific question
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={asking}
+            onClick={() => setAsking((v) => !v)}
+            className={`relative h-7 w-12 flex-shrink-0 rounded-full transition ${
+              asking ? "bg-brand-600" : "bg-slate-300"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-[left] ${
+                asking ? "left-[22px]" : "left-0.5"
+              }`}
+            />
+          </button>
+        </label>
 
         {asking && (
           // Words, not working: a question typed in plain language is quick on

@@ -30,3 +30,19 @@ export const QUESTION_KEY = "mindgap:question";
  * Read once and cleared, like QUESTION_KEY.
  */
 export const WORK_HINT_KEY = "mindgap:work-hint";
+
+/**
+ * sessionStorage key for a problem typed or pasted on the home screen, handed
+ * to the workspace instead of an image. Written with IMAGE_KEY cleared, and
+ * the other way round, so only one of the two is ever waiting.
+ */
+export const TEXT_KEY = "mindgap:text";
+
+/** "Today", "Yesterday", "3 days ago", then a short date. */
+export function formatRelativeDate(ms: number): string {
+  const days = Math.floor((Date.now() - ms) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
