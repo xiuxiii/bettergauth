@@ -548,13 +548,17 @@ Maintain it honestly from evidence:
 
     // Conceptual moves (ask / continue / hint / explain / go_deeper): one small
     // piece + hasMore, so the UI can offer "Continue". Kept short on purpose.
+    const turnThinking = thinkingFor(this.model, TURN_EFFORT);
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 900,
-      thinking: { type: "disabled" },
+      max_tokens: TURN_MAX_TOKENS,
+      thinking: turnThinking.thinking,
       system,
       messages,
-      output_config: { format: zodOutputFormat(TutorChunkSchema) },
+      output_config: {
+        format: zodOutputFormat(TutorChunkSchema),
+        ...(turnThinking.effort ? { effort: turnThinking.effort } : {}),
+      },
     });
     logUsage("tutor:chunk", res);
     const out = required(res.parsed_output, "tutor reply");
@@ -581,13 +585,19 @@ Maintain it honestly from evidence:
   ): AsyncGenerator<TutorStreamEvent, void, unknown> {
     const { system, messages } = this.tutorContext(request);
 
+    // Thinking blocks stream first and carry no text deltas, so the decoder
+    // below skips them; the student sees "Tutor is thinking…" meanwhile.
+    const turnThinking = thinkingFor(this.model, TURN_EFFORT);
     const stream = this.client.messages.stream({
       model: this.model,
-      max_tokens: 900,
-      thinking: { type: "disabled" },
+      max_tokens: TURN_MAX_TOKENS,
+      thinking: turnThinking.thinking,
       system,
       messages,
-      output_config: { format: zodOutputFormat(TutorChunkSchema) },
+      output_config: {
+        format: zodOutputFormat(TutorChunkSchema),
+        ...(turnThinking.effort ? { effort: turnThinking.effort } : {}),
+      },
     });
 
     const decode = createMessageFieldDecoder();
@@ -784,7 +794,7 @@ function preferencesBlock(prefs?: TutorPreferences): string {
   const style =
     prefs.assistanceStyle === "direct"
       ? "Default lean: explain directly rather than making them guess, while still leaving the final connection to them."
-      : "Default lean: hints first. When they ASSERT something that reveals a misconception (including a '…right?' seeking confirmation of a wrong claim), reply with one targeted question or a partial step before explaining, and explain directly once they ask for it or are still stuck after that one try. Anything they explicitly request — why, a hint, the answer, the solution — is honoured at once.";
+      : "Default lean: hints first. When they ASSERT something, first check it against the problem. If it is right, confirm it plainly (and own it if it corrects something you said). If, once checked, it is actually wrong and reveals a misconception (including a '…right?' seeking confirmation of a wrong claim), reply with one targeted question or a partial step before explaining, and explain directly once they ask for it or are still stuck after that one try. Anything they explicitly request — why, a hint, the answer, the solution — is honoured at once.";
   const goal =
     prefs.goal === "exam"
       ? "Emphasis: exam readiness — highlight the exam-relevant reasoning and the traps, while still building real understanding."
@@ -809,8 +819,9 @@ function isHaiku(model: string): boolean {
 
 /**
  * Thinking for the calls where being WRONG is the costly failure: judging a
- * student's work, a full worked solution, and marking practice. Telling a
- * correct student they are wrong is the worst thing this app can do.
+ * student's work, a full worked solution, and marking practice at "medium";
+ * conversational turns at "low" (see TURN_EFFORT). Telling a correct student
+ * they are wrong is the worst thing this app can do.
  *
  * There is no token budget on the default model: on Sonnet 5 `budget_tokens`
  * is removed and returns a 400, and adaptive thinking with an effort level is
@@ -821,17 +832,39 @@ function isHaiku(model: string): boolean {
  * `display: "omitted"` because nothing here ever shows the reasoning — it is
  * still done and billed, just not shipped over the wire.
  */
-function thinkingFor(model: string): {
+function thinkingFor(
+  model: string,
+  effort: "low" | "medium" = "medium",
+): {
   thinking: Anthropic.ThinkingConfigParam;
-  effort?: "medium";
+  effort?: "low" | "medium";
 } {
   if (isHaiku(model)) {
     return {
-      thinking: { type: "enabled", budget_tokens: 4000, display: "omitted" },
+      thinking: {
+        type: "enabled",
+        budget_tokens: effort === "low" ? 2000 : 4000,
+        display: "omitted",
+      },
     };
   }
-  return { thinking: { type: "adaptive", display: "omitted" }, effort: "medium" };
+  return { thinking: { type: "adaptive", display: "omitted" }, effort };
 }
+
+/**
+ * Conversational turns (hint, explain, a typed reply) think at LOW effort.
+ * They used to run with thinking off, and a tutor reading slopes off a graph
+ * and doing arithmetic in one pass handed a student a slope that failed its
+ * own check, then caved when the student disputed it. Adaptive thinking lets
+ * the model skip it on "sure, what's next?" and use it when there is maths.
+ */
+const TURN_EFFORT = "low" as const;
+
+/**
+ * Room for low-effort thinking plus a one-piece reply and the memory blob.
+ * The reply's own length is held down by the chunking rule in the prompt.
+ */
+const TURN_MAX_TOKENS = 8000;
 
 /**
  * Room for thinking plus the structured answer. Streaming requests don't hit

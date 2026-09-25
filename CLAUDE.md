@@ -216,8 +216,12 @@ on `resolved`, only things that would spoil the problem. The table is in
 `docs/tutoring-engine.md` §8.11.
 
 **Thinking is on only where being wrong is costly:** `checkWork`,
-`show_solution`, `evaluatePractice`. `thinkingFor` gives adaptive thinking +
-`effort: "medium"`; `budget_tokens` returns a **400** on Sonnet 5, so don't add
+`show_solution`, `evaluatePractice` at `effort: "medium"`, and the
+conversational turns (`tutor` / `tutorStream`: hint, explain, a typed reply) at
+`"low"` (`TURN_EFFORT`). Those turns ran thinking-off and did graph reading and
+arithmetic in one pass: a tutor handed out a slope that failed its own check,
+then caved when the student disputed it. Analyze, detect, practice generation
+and the progress summary stay thinking-off. `thinkingFor` gives adaptive thinking; `budget_tokens` returns a **400** on Sonnet 5, so don't add
 one back (Haiku is the exception, and rejects `effort`). Those calls stream
 (`messages.stream` + `finalMessage`) to stay clear of HTTP timeouts.
 `/api/check-work` streams NDJSON stage frames from the model's real
