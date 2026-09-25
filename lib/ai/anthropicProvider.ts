@@ -374,7 +374,17 @@ export class AnthropicProvider implements AIProvider {
     });
     logUsage("detectQuestions", res);
     const out = required(res.parsed_output, "question detection");
-    return normalizeDetection(out, request.width, request.height);
+    return {
+      ...normalizeDetection(out, request.width, request.height),
+      // The route strips this unless the client asked for it.
+      debug: {
+        model: this.detectionModel,
+        width: request.width,
+        height: request.height,
+        raw: out.questions.map(({ label, x1, y1, x2, y2 }) => ({ label, x1, y1, x2, y2 })),
+        primaryIndex: out.primaryIndex,
+      },
+    };
   }
 
   async summarizeProgress(request: ProgressRequest): Promise<string> {

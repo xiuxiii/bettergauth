@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type {
   DetectedQuestion,
+  DetectionDebug,
   NormalizedRect,
   QuestionDetection,
 } from "@/lib/tutor/types";
@@ -121,6 +122,17 @@ export default function QuestionCropper({
   // spend a full analysis on it.
   const [notWork, setNotWork] = useState(false);
 
+  // `?debug=boxes`: outline every detected box and show the model's raw pixel
+  // output, to tell a coordinate-space bug (every box off by one factor) from
+  // the model misplacing boxes (scattered errors). Read once, client-only.
+  const [debugBoxes] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("debug") === "boxes",
+  );
+  const [debugInfo, setDebugInfo] = useState<DetectionDebug | null>(null);
+  const [debugSent, setDebugSent] = useState<{ w: number; h: number } | null>(null);
+
   // Phase 1: seed a real box immediately, with no network.
   //
   // This is the whole point of the screen's timing. Detection takes seconds,
@@ -161,7 +173,7 @@ export default function QuestionCropper({
     async function detect() {
       let result: QuestionDetection | null = null;
       try {
-        if (lastDetection && lastDetection.image === image) {
+        if (!debugBoxes && lastDetection && lastDetection.image === image) {
           // Re-entering the cropper with the same photo: the effect is keyed on
           // `image`, so without this every back-and-forth re-paid the call.
           result = lastDetection.result;
@@ -169,6 +181,7 @@ export default function QuestionCropper({
           // Detection gets its own, smaller image — and the dimensions that go
           // with THAT image, since the boxes come back in its pixel space.
           const shrunk = await imageForDetection(image);
+          if (debugBoxes) setDebugSent({ w: shrunk.width, h: shrunk.height });
           const res = await fetch("/api/detect-questions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -176,12 +189,14 @@ export default function QuestionCropper({
               image: shrunk.image,
               width: shrunk.width,
               height: shrunk.height,
+              ...(debugBoxes ? { debug: true } : {}),
             }),
             signal: controller.signal,
           });
           if (res.ok) {
             result = (await res.json()) as QuestionDetection;
             lastDetection = { image, result };
+            if (debugBoxes) setDebugInfo(result.debug ?? null);
           }
         }
       } catch {
@@ -468,7 +483,40 @@ export default function QuestionCropper({
               <Corner handle="se" onStart={startDrag} active={cornersActive} className="-bottom-[22px] -right-[22px] cursor-nwse-resize" />
             </div>
             </div>
+
+            {debugBoxes && (
+              <div
+                className="pointer-events-none absolute"
+                style={{ left: fit.x, top: fit.y, width: fit.w, height: fit.h }}
+              >
+                {questions.map((q, i) => (
+                  <div
+                    key={`dbg-${i}`}
+                    className="absolute border border-amber-400"
+                    style={{
+                      left: q.rect.x * fit.w,
+                      top: q.rect.y * fit.h,
+                      width: q.rect.w * fit.w,
+                      height: q.rect.h * fit.h,
+                    }}
+                  >
+                    <span className="absolute left-0 top-0 bg-amber-400 px-1 font-mono text-[10px] leading-4 text-black">
+                      {shortLabel(q.label)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
+        )}
+
+        {debugBoxes && (
+          <DebugPanel
+            info={debugInfo}
+            sent={debugSent}
+            preview={img}
+            detecting={detecting}
+          />
         )}
 
         {notWork && (
@@ -695,6 +743,50 @@ function Corner({
           active ? "animate-corner-pulse" : ""
         }`}
       />
+    </div>
+  );
+}
+
+/** The raw detection numbers for the `?debug=boxes` view. */
+function DebugPanel({
+  info,
+  sent,
+  preview,
+  detecting,
+}: {
+  info: DetectionDebug | null;
+  sent: { w: number; h: number } | null;
+  preview: { w: number; h: number };
+  detecting: boolean;
+}) {
+  const r = (n: number) => Math.round(n);
+  return (
+    <div className="absolute inset-x-2 top-2 z-20 max-h-[45%] overflow-auto rounded-sm bg-black/80 p-2 font-mono text-[10px] leading-4 text-white">
+      <p>
+        preview {preview.w}×{preview.h} · sent {sent ? `${sent.w}×${sent.h}` : "?"}
+      </p>
+      {!info ? (
+        <p>{detecting ? "detecting…" : "no debug data (detection failed or cached)"}</p>
+      ) : (
+        <>
+          <p>
+            model {info.model} · told {info.width}×{info.height} · primary {info.primaryIndex}
+          </p>
+          {info.raw.map((b, i) => {
+            const out =
+              Math.min(b.x1, b.x2) < 0 ||
+              Math.min(b.y1, b.y2) < 0 ||
+              Math.max(b.x1, b.x2) > info.width ||
+              Math.max(b.y1, b.y2) > info.height;
+            return (
+              <p key={i} className={out ? "text-red-400" : undefined}>
+                {b.label}: {r(b.x1)},{r(b.y1)} → {r(b.x2)},{r(b.y2)}
+                {out ? "  OUT OF BOUNDS" : ""}
+              </p>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }

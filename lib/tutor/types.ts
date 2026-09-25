@@ -150,6 +150,21 @@ export interface QuestionDetection {
   questions: DetectedQuestion[];
   /** Index into `questions` of the most likely intended question. */
   primaryIndex: number;
+  /**
+   * Only when the client asks (`debug: true`, from `?debug=boxes`): what the
+   * model actually returned, before normalizing, so a misplaced box can be
+   * traced to a coordinate-space bug or to the model misreading the page.
+   */
+  debug?: DetectionDebug;
+}
+
+export interface DetectionDebug {
+  model: string;
+  /** The image size the model was told, and the coordinates' bounds. */
+  width: number;
+  height: number;
+  raw: { label: string; x1: number; y1: number; x2: number; y2: number }[];
+  primaryIndex: number;
 }
 
 export type Role = "student" | "tutor";
