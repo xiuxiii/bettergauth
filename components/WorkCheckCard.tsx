@@ -21,7 +21,7 @@ const CATEGORY_LABEL: Record<ErrorCategory, string> = {
  * so the UI itself reflects "don't nitpick when the reasoning is right".
  */
 export default function WorkCheckCard({ check }: { check: WorkCheck }) {
-  const { verdict, strengths, firstError, continueFrom } = check;
+  const { verdict, headline, strength, firstError, continueFrom } = check;
 
   const significant = firstError?.severity === "significant";
 
@@ -37,7 +37,10 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
       <Header verdict={verdict} />
 
       <div className="space-y-3 p-4">
-        {/* What's right — always shown first. */}
+        <div className="text-[15px] leading-relaxed text-ink">
+          <RichText text={headline} />
+        </div>
+        {strength && (
         <div className="flex gap-2">
           <Check
             size={18}
@@ -46,9 +49,10 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
             aria-hidden="true"
           />
           <div className="text-[15px] leading-relaxed text-slate-700">
-            <RichText text={strengths} />
+            <RichText text={strength} />
           </div>
         </div>
+        )}
 
         {firstError && (
           <div
@@ -64,18 +68,13 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
                 category={firstError.category}
                 significant={significant}
               />
-              {firstError.conceptCorrect && (
-                <span className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-medium text-success-700">
-                  concept is right
-                </span>
-              )}
             </div>
 
             <div className={`mb-1 text-xs ${significant ? "text-danger-700" : "text-slate-500"}`}>
-              <RichText text={`at ${firstError.location}`} />
+              <RichText text={firstError.locate} />
             </div>
             <div className={`text-[15px] leading-relaxed ${significant ? "text-danger-800" : "text-ink"}`}>
-              <RichText text={firstError.explanation} />
+              <RichText text={firstError.diagnosis} />
             </div>
             <div
               className={`mt-2 border-t pt-2 text-[15px] leading-relaxed ${
@@ -84,7 +83,7 @@ export default function WorkCheckCard({ check }: { check: WorkCheck }) {
             >
               <span className="font-semibold">Fix: </span>
               <span className="inline">
-                <RichText text={firstError.correction} />
+                <RichText text={firstError.fix} />
               </span>
             </div>
           </div>

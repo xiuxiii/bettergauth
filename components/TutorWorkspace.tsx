@@ -21,6 +21,8 @@ import {
   applyWorkCheckToMemory,
   detectRecurring,
   emptySessionMemory,
+  normalizeAnalysis,
+  normalizeWorkCheck,
   recordConceptError,
   resolveMisconception,
 } from "@/lib/tutor/types";
@@ -78,6 +80,12 @@ type DisplayMessage = ChatMessage & {
 type TutorStreamFrame =
   | { t: "delta"; v: string }
   | { t: "done"; turn: TutorTurn }
+  | { t: "error"; message: string };
+
+/** One NDJSON frame from the streaming /api/check-work response. */
+type CheckStreamFrame =
+  | { t: "stage"; stage: "thinking" | "writing" }
+  | { t: "done"; check: WorkCheck }
   | { t: "error"; message: string };
 
 /** "notWork": the photo holds no study material at all (dinner, the floor, an
@@ -331,7 +339,9 @@ export default function TutorWorkspace() {
             }
           }
         }
-        setAnalysis(rec.analysis);
+        // Records saved before the concept/keyIdea split would otherwise put
+        // the old spoiler sentence straight back on the problem card.
+        setAnalysis(normalizeAnalysis(rec.analysis));
         memoryRef.current = rec.memory;
         setRecurring(detectRecurring(rec.memory));
         // Attempt photos are stored as ids, not inline data URLs, so they have
@@ -342,6 +352,7 @@ export default function TutorWorkspace() {
             const msg = { ...m } as unknown as DisplayMessage & {
               attemptImageId?: string;
             };
+            if (msg.workCheck) msg.workCheck = normalizeWorkCheck(msg.workCheck);
             if (msg.attemptImageId) {
               const blob = await getImage(msg.attemptImageId);
               if (blob) {
@@ -589,11 +600,15 @@ export default function TutorWorkspace() {
    * the `analysis` state is still null — and `runAnalysis` is a `[]`-deps
    * callback, so it would close over the first render's value regardless.
    */
-  /** POST an attempt to /api/check-work. No state: safe to start early. */
+  /**
+   * POST an attempt to /api/check-work and read its NDJSON stream. Touches no
+   * state itself, so it is safe to start early; progress goes to `onStage`.
+   */
   async function fetchCheck(
     attempt: StudentAttempt,
     problem: ProblemAnalysis,
     signal?: AbortSignal,
+    onStage?: (stage: "thinking" | "writing") => void,
   ): Promise<WorkCheck> {
     const res = await apiFetch("/api/check-work", {
       method: "POST",
@@ -602,7 +617,13 @@ export default function TutorWorkspace() {
       signal,
     });
     if (!res.ok) throw new Error(await readApiError(res, "Check failed."));
-    return (await res.json()) as WorkCheck;
+    for await (const frame of readNdjson<CheckStreamFrame>(res)) {
+      if (frame.t === "stage") onStage?.(frame.stage);
+      else if (frame.t === "done") return frame.check;
+      else if (frame.t === "error") throw new Error(frame.message);
+    }
+    // The connection dropped before the result arrived.
+    throw new Error("The check was cut off. Please try again.");
   }
 
   async function sendCheckWork(
@@ -631,7 +652,7 @@ export default function TutorWorkspace() {
         {
           id: uid("t"),
           role: "tutor",
-          content: check.summary,
+          content: check.headline,
           createdAt: Date.now(),
           workCheck: check,
         },

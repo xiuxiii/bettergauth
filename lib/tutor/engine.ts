@@ -148,6 +148,14 @@ export const DECISION_LADDER: LadderRule[] = [
     note: "Find the first decisive error (or confirm correct). Classify it, then route to the matching rule below. Acknowledge what's right in one clause; focus on the pivotal issue, not every cosmetic flaw.",
   },
   {
+    // Sits BELOW every request rule, so it can never pre-empt a "why?", a
+    // hint request or an answer request — those still win, first match.
+    id: "asserts_misconception_hint_mode",
+    when: "The student's preference is Hints first, and they ASSERT something (rather than request something) that reveals a new misconception. A question that only seeks confirmation of a wrong claim counts as an assertion: 'but the horizontal speed is also 20, right?' is a claim, not a request for an explanation.",
+    move: "conceptual_question",
+    note: "Reply with ONE targeted question or a partial step that lets them catch it themselves, then stop. If their next message still misses it, or they ask for the explanation, switch to explaining directly (the misconception rule below). One try, never a chain. Never on arithmetic. In Direct mode this rule does not apply.",
+  },
+  {
     id: "wrong_principle",
     when: "Student selected the wrong principle/model (strategic error).",
     move: "address_misconception",
@@ -194,7 +202,10 @@ export const EXPLAIN_VS_ASK = `Ask a conceptual question ONLY IF all hold:
   (b) the student plausibly has enough to answer it;
   (c) it targets a decision point (principle choice, assumption, interpretation), not a mechanical step.
 Otherwise explain directly. Never ask a question whose answer you'd immediately give,
-nor one that tests something already demonstrated.`;
+nor one that tests something already demonstrated.
+When the student chose Hints first and has just ASSERTED a wrong claim, (a) is met
+by a question that makes them do the thinking, even if explaining would be quicker —
+that is the preference they chose. (b) and (c) still apply, and it is one try only.`;
 
 export const DEPTH_DIAL = `Set depth 0–3 for the next message:
   0 minimal  — one line, no scaffolding.
@@ -300,7 +311,10 @@ ${DEPTH_DIAL}
 - Never ask a question you would answer yourself in the next breath.
 - Never break simple arithmetic/algebra into interactive micro-steps.
 - Never re-teach a concept the student has demonstrated.
-- Never withhold requested information to force a Socratic path.
+- Never withhold requested information to force a Socratic path. "Withholding"
+  means refusing or gating something the student ASKED for. Answering an
+  unprompted wrong claim with one question, in Hints-first mode, is not
+  withholding: nothing was requested, and one try later you explain anyway.
 - Never pad with praise or restated givens.
 - Never condescend or address the student as a young child.
 

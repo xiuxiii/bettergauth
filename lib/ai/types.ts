@@ -1,6 +1,7 @@
 import type {
   AnalyzeRequest,
   CheckWorkRequest,
+  CheckWorkStreamEvent,
   DetectQuestionsRequest,
   EvaluatePracticeRequest,
   GeneratePracticeRequest,
@@ -79,6 +80,14 @@ export interface AIProvider {
    * not merely whether the final answer is wrong.
    */
   checkWork(request: CheckWorkRequest): Promise<WorkCheck>;
+
+  /**
+   * The same diagnosis, streamed: progress stages while the model reasons,
+   * then exactly one `done` carrying the validated result.
+   */
+  checkWorkStream(
+    request: CheckWorkRequest,
+  ): AsyncGenerator<CheckWorkStreamEvent, void, unknown>;
 
   /**
    * Practice mode — generate a fresh problem testing the same concept as the

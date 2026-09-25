@@ -23,11 +23,26 @@ export interface ProblemAnalysis {
   /** A finer-grained topic, e.g. "Conservation of energy". */
   topic: string;
   /**
-   * Concept identification: the single governing concept/principle the problem
-   * hinges on (may equal or refine `topic`). This is the target of the
-   * "concept identification" capability and seeds the tutoring session.
+   * A SAFE label for the idea area, 2-5 words — "Projectile time of flight" —
+   * shown on the problem card before the student has worked anything.
+   *
+   * It must never name the method or the fix. It used to be the full governing
+   * insight ("…using the vertical component of initial velocity"), which put
+   * the student's exact error on screen before any tutoring.
+   *
+   * It is also the KEY for all concept tracking: memory errors, misconceptions
+   * and `demonstrated`, and from those the History ranking, RecurringBanner and
+   * targeted practice. A short stable label is what lets the same gap match
+   * across two different problems; a long insight sentence almost never did.
    */
   concept: string;
+  /**
+   * The governing insight the problem hinges on. Given to the tutor, but shown
+   * to the student only once the gap is resolved or a solution was requested.
+   * Optional because records saved before the split don't have it — read them
+   * through `normalizeAnalysis`.
+   */
+  keyIdea?: string;
   /** 0..1 confidence that the detection is correct. */
   confidence: number;
   /**
@@ -60,7 +75,27 @@ export interface ProblemAnalysis {
  */
 export interface AnalyzeRequest {
   /** `data:<mediaType>;base64,<data>` URL of the problem photo/upload. */
-  imageDataUrl: string;
+  imageDataUrl?: string;
+  /** A problem typed or pasted instead of photographed. One of the two is set. */
+  problemText?: string;
+}
+
+/**
+ * Bring an analysis from any era up to the current shape.
+ *
+ * Records saved before the concept/keyIdea split carry the full insight in
+ * `concept` — exactly the spoiler the split exists to hide. So when `keyIdea`
+ * is missing, the old `concept` moves into the hidden `keyIdea` and the
+ * broader `topic` becomes the visible label. Old memory entries keep their old
+ * long keys; they just won't merge with new short labels, and nothing breaks.
+ */
+export function normalizeAnalysis(a: ProblemAnalysis): ProblemAnalysis {
+  if (typeof a.keyIdea === "string") return a;
+  return {
+    ...a,
+    keyIdea: a.concept,
+    concept: a.topic?.trim() || "This problem",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -335,13 +370,22 @@ export function applyWorkCheckToMemory(
   };
 
   const err = check.firstError;
-  const conceptSound = check.verdict === "correct" || (!!err && err.conceptCorrect);
+  // What counts as the concept being sound is decided HERE, from the verdict
+  // and the category — not from a flag the model sets alongside the category.
+  // That flag once came back "concept is right" on a components error tagged
+  // "setup", and recorded the student's misconception as mastered.
+  //
+  // A clean verdict (including a correct retry) demonstrates the concept. So
+  // does a pure slip: an arithmetic or units error made while applying the
+  // right idea is not evidence against the idea.
+  const pureSlip =
+    !!err && (err.category === "arithmetic" || err.category === "units_notation");
+  const conceptSound = check.verdict === "correct" || pureSlip;
 
   if (err && c) {
     next.errors.push({ type: mapCategory(err.category), concept: c });
     if (
       err.severity === "significant" &&
-      !err.conceptCorrect &&
       (err.category === "conceptual" || err.category === "model_selection")
     ) {
       const open = next.misconceptions.find(
@@ -351,8 +395,8 @@ export function applyWorkCheckToMemory(
       else
         next.misconceptions.push({
           concept: c,
-          studentBelief: err.explanation,
-          correctModel: err.correction,
+          studentBelief: err.diagnosis,
+          correctModel: err.fix,
           status: "confirmed",
         });
     }
@@ -505,41 +549,96 @@ export type ErrorCategory =
 
 export type CheckVerdict = "correct" | "partially_correct" | "error_found";
 
-/** The single first meaningful error in the student's attempt. */
+/**
+ * The single first meaningful error, split into the pieces the student reveals
+ * one tap at a time.
+ *
+ * Each field is written to stand on its own. The old contract asked for
+ * `explanation` + `correction` as prose meant to be read in full, so the only
+ * way to stage it was to hide parts of a block that gave everything away in its
+ * first sentence.
+ */
 export interface WorkError {
   category: ErrorCategory;
   /**
    * "significant" = teach it (conceptual, model_selection, setup usually).
    * "minor" = correct it in a clause and move on (arithmetic, units, most
-   * procedural). Drives how much the UI/tutor dwells on it.
+   * procedural).
    */
   severity: "minor" | "significant";
-  /** Which step/line the first error is at (not the final answer). */
-  location: string;
-  /** Concise statement of what went wrong. May contain $math$. */
-  explanation: string;
-  /** The fix, and for significant errors WHY the right approach is right. */
-  correction: string;
-  /**
-   * True when the underlying concept/principle was sound. When true the tutor
-   * must NOT nitpick — it acknowledges the reasoning and keeps the correction
-   * brief.
-   */
-  conceptCorrect: boolean;
+  /** The flagged line quoted as the student wrote it; "" when illegible. */
+  line: string;
+  /** Where the error is and what kind — never the fix. */
+  locate: string;
+  /** ONE question aimed at the gap. Must not contain the fix. */
+  nudge: string;
+  /** What the student's work assumes. Hidden until the fix is revealed. */
+  diagnosis: string;
+  /** The corrected idea/step. Must NOT contain the final answer. */
+  fix: string;
 }
 
-/** The structured diagnosis of a student's attempt. */
+/**
+ * The structured diagnosis of a student's attempt.
+ *
+ * There is deliberately no "concept was right" flag any more. It contradicted
+ * the category often enough (a components error tagged "setup" + "concept is
+ * right") that the student saw two verdicts — and it fed memory, where it
+ * recorded exactly that misconception as DEMONSTRATED.
+ */
 export interface WorkCheck {
   verdict: CheckVerdict;
-  /** One line on what the student did right (always present). */
-  strengths: string;
-  /** The first meaningful error. Absent only when verdict === "correct". */
+  /** One sentence. No fix, no answer. */
+  headline: string;
+  /** One short line on what the student did right; may be empty. */
+  strength: string;
+  /** The first meaningful error. Absent when verdict === "correct". */
   firstError?: WorkError;
-  /** How to proceed from the corrected point. */
+  /** The rest of the way from the corrected point — the ONLY field that may
+   *  contain the final answer. */
   continueFrom: string;
-  /** Short overall message, shown as the tutor's reply text. */
-  summary: string;
 }
+
+/**
+ * Bring a stored check from any era up to the current shape.
+ *
+ * Checks saved before the step-by-step reveal carry `strengths`, `summary`
+ * and an error with `location` / `explanation` / `correction`. Those map onto
+ * the new pieces; the ones that never existed (`line`, `nudge`) come back
+ * empty, and the card skips empty pieces, so an old record still reaches
+ * every step it has.
+ */
+export function normalizeWorkCheck(raw: unknown): WorkCheck {
+  const c = (raw ?? {}) as Record<string, unknown>;
+  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  const e = c.firstError as Record<string, unknown> | null | undefined;
+  const verdict: CheckVerdict =
+    c.verdict === "correct" || c.verdict === "partially_correct"
+      ? c.verdict
+      : "error_found";
+  return {
+    verdict,
+    headline: s(c.headline) || s(c.summary),
+    strength: s(c.strength) || s(c.strengths),
+    firstError: e
+      ? {
+          category: (e.category as ErrorCategory) ?? "conceptual",
+          severity: e.severity === "minor" ? "minor" : "significant",
+          line: s(e.line),
+          locate: s(e.locate) || s(e.location),
+          nudge: s(e.nudge),
+          diagnosis: s(e.diagnosis) || s(e.explanation),
+          fix: s(e.fix) || s(e.correction),
+        }
+      : undefined,
+    continueFrom: s(c.continueFrom),
+  };
+}
+
+/** Progress frames streamed by /api/check-work, then exactly one result. */
+export type CheckWorkStreamEvent =
+  | { type: "stage"; stage: "thinking" | "writing" }
+  | { type: "done"; check: WorkCheck };
 
 /** The student's attempted solution — typed text and/or a photo of their work. */
 export interface StudentAttempt {
@@ -553,6 +652,15 @@ export interface StudentAttempt {
 export interface CheckWorkRequest {
   problem: ProblemAnalysis;
   attempt: StudentAttempt;
+  /**
+   * Set when this is a second go at a step already flagged, so the check
+   * judges that step first instead of re-diagnosing the whole problem.
+   */
+  retryOf?: {
+    line: string;
+    locate: string;
+    category: ErrorCategory;
+  };
 }
 
 // ---------------------------------------------------------------------------

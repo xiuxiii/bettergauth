@@ -8,6 +8,7 @@ import type { AIProvider } from "@/lib/ai/types";
 import type {
   AnalyzeRequest,
   CheckWorkRequest,
+  CheckWorkStreamEvent,
   DetectQuestionsRequest,
   EvaluatePracticeRequest,
   GeneratePracticeRequest,
@@ -23,7 +24,8 @@ import type {
   TutorRequest,
   WorkCheck,
 } from "@/lib/tutor/types";
-import { emptySessionMemory } from "@/lib/tutor/types";
+import { emptySessionMemory,
+  normalizeAnalysis } from "@/lib/tutor/types";
 import { SYSTEM_INSTRUCTIONS } from "@/lib/tutor/engine";
 import { createMessageFieldDecoder } from "@/lib/tutor/streamText";
 
@@ -85,7 +87,10 @@ const ProblemAnalysisSchema = z.object({
   problemText: z.string(),
   subject: SubjectSchema,
   topic: z.string(),
+  /** Safe label, shown before any work. Also the concept-tracking key. */
   concept: z.string(),
+  /** The insight. Hidden from the student until the gap is resolved. */
+  keyIdea: z.string(),
   confidence: z.number(),
   /**
    * Whether the photo already contains the student's own handwritten attempt.
@@ -162,18 +167,24 @@ const WorkErrorSchema = z.object({
     "units_notation",
   ]),
   severity: z.enum(["minor", "significant"]),
-  location: z.string(),
-  explanation: z.string(),
-  correction: z.string(),
-  conceptCorrect: z.boolean(),
+  line: z.string(),
+  locate: z.string(),
+  nudge: z.string(),
+  diagnosis: z.string(),
+  fix: z.string(),
 });
 
+/**
+ * Field order is the reveal order. Each piece is its own field, written to
+ * stand alone, so the UI shows one per tap instead of hiding parts of prose
+ * that gave everything away in its first sentence.
+ */
 const WorkCheckSchema = z.object({
   verdict: z.enum(["correct", "partially_correct", "error_found"]),
-  strengths: z.string(),
+  headline: z.string(),
+  strength: z.string(),
   firstError: WorkErrorSchema.nullable(),
   continueFrom: z.string(),
-  summary: z.string(),
 });
 
 const PracticeProblemSchema = z.object({
@@ -246,7 +257,11 @@ const ANALYZE_SYSTEM = `You extract a single high-school STEM problem from a pho
 
 ${STEM_CONTENT_NOTE} If it is false, leave the other fields empty or minimal; nothing downstream will read them.
 
-Read the problem exactly as written (including all parts), identify the subject, a specific topic, and the single governing concept/principle the problem hinges on. Set confidence in 0..1 for how sure the extraction+classification is.
+Read the problem exactly as written (including all parts), identify the subject and a specific topic. Set confidence in 0..1 for how sure the extraction+classification is.
+
+Two fields describe the idea, and they are shown at very different times:
+- \`concept\` is shown on screen BEFORE the student has worked anything, so it must not give anything away. 2 to 5 words naming the idea AREA, like a textbook section title: "Friction on an incline", "Limiting reagent", "Chain rule". Never the method, never which quantity to use, never the fix. "Friction using the normal force mg cos θ" is WRONG: that is the answer to the most common mistake. Use the same wording you would for any other problem on this idea, because it is also how this student's gaps are grouped across problems.
+- \`keyIdea\` is the governing insight the problem hinges on, one sentence ("On an incline the normal force is only the perpendicular part of the weight, so friction is μmg cos θ."). It is kept hidden until the student has closed the gap or asked for the solution, so state it plainly.
 
 The photo often ALSO contains the student's own handwritten attempt, because they
 photograph problems they have already worked on. Separate the two:
@@ -257,17 +272,42 @@ photograph problems they have already worked on. Separate the two:
 \`openingHint\` is the first thing the student reads, so make it worth reading:
 ONE short sentence that points at where to start, and nothing else. Name the move
 or the thing to notice, never the answer and never the full method. "Every root
-divides 6, so start there." or "Resolve the weight along the incline first." Talk
+divides 6, so start there." or "Resolve the weight along the incline first." Never
+state the keyIdea: the hint points them toward it, it does not hand it over. Talk
 like a person: contractions, "you", no preamble, no sign-off, no restating the
 question, no mention of buttons or what the app can do. If the photo already
 contains the student's working, still write it, but aimed at the next step from
 where they are. ${MATH_NOTE}`;
 
 const CHECKWORK_SYSTEM = `You are an expert STEM tutor diagnosing a student's attempt.
-Trace the student's OWN reasoning and find the FIRST point where it diverges from correct reasoning — not just a wrong final answer. Diagnose that divergence in terms of THEIR mental model: what their work assumes or treats as true, and why that is the real problem. Do NOT replace their reasoning with a fresh solution of your own. When their approach is internally consistent but rests on a wrong assumption, say exactly that — e.g. "your calculation is consistent with using the total velocity, but this equation needs the vertical component $v_y$". Classify the error by category and severity. If the underlying concept/method is right, say so and keep any arithmetic/notation correction to one line — do NOT nitpick. If the attempt is actually correct, set verdict "correct", leave firstError null, and say why their reasoning holds. Always name briefly what the student did right and how to continue from the corrected point.
+
+Trace the student's OWN reasoning and find the FIRST point where it diverges from correct reasoning — not just a wrong final answer. Diagnose it in terms of THEIR mental model: what their work assumes or treats as true. Do not replace their reasoning with a fresh solution of your own.
+
+The worst thing you can do is tell a correct student they are wrong. Before flagging anything, check whether their approach is a valid alternative: an unconventional method that is sound (completing the square instead of the formula, doubling the time to the top instead of using the full-flight equation, a different but valid sign convention) is CORRECT. If you cannot point to a specific line that is actually wrong, the verdict is "correct".
+
+The student reveals your diagnosis one piece at a time, so each field must stand on its own and must not leak the next one:
+- headline: ONE sentence on where things stand. No fix, no answer. "Your setup holds until the friction step."
+- strength: one short line on what is genuinely right. Empty if nothing is. Never praise for its own sake.
+- firstError.line: the flagged line quoted exactly as they wrote it, e.g. "f = μmg". Empty string if you cannot read it.
+- firstError.locate: WHERE the error is and WHAT KIND of thing is off, never the fix. "Line 3: something's off with which force the friction depends on." Do not name the correct quantity.
+- firstError.nudge: ONE question that would let them find it themselves. It must not contain the correction, the right quantity or the right formula. "On a slope, what is the surface actually pushing back against?"
+- firstError.diagnosis: what their work assumes, in their terms. "Your working treats the block as if it sat on flat ground, so the normal force is its full weight."
+- firstError.fix: the corrected idea or step, stated plainly. It must NOT contain the final numeric answer.
+- continueFrom: the remaining steps from the corrected point to the end. This is the ONLY field that may contain the final answer. For a correct attempt, say briefly why their reasoning holds.
+
+Category — pick the one that names the ROOT cause:
+- conceptual: a wrong model of a quantity or idea. Using a whole vector where a component belongs, treating equilibrium as equal amounts, thinking constant velocity needs a net force.
+- model_selection: the wrong principle or equation for the situation, e.g. constant-acceleration equations when the acceleration varies.
+- setup: the right principle and the right model, but the problem translated into equations wrongly, e.g. a value copied wrong or a missing term.
+- procedural: a step of an otherwise right method executed wrongly.
+- arithmetic: a number or algebra slip. Severity minor.
+- units_notation: units, significant figures or notation only. Severity minor.
+If the concept is sound and the slip is minor, keep every field short. Do not nitpick.
+
+If the message says this is a RETRY of a flagged step, judge that step first. If it is now right and nothing after it breaks, the verdict is "correct" and the headline says so.
 
 You are reading their ACTUAL HANDWRITING off a photo, so read it carefully and honestly:
-- Diagnose only steps you can genuinely see. NEVER invent a line that would explain their answer, and never fill in a step they did not write. If something is illegible, say that line is hard to read and ask what it says, rather than guessing.
+- Diagnose only steps you can genuinely see. NEVER invent a line that would explain their answer, and never fill in a step they did not write. If something is illegible, leave line empty and say in locate that the line is hard to read.
 - Printed text on the page is not theirs. Textbooks print the answer next to the question, e.g. "(ans: 42.4 N)", and that is the book talking, not the student. Never treat a printed answer, worked example or answer key as a step they wrote, and never reverse-engineer working to reach it.
 - The photo may also catch working for a NEIGHBOURING question. Use only what belongs to the stated problem.
 - Units here are almost always N, m, s, kg, J or degrees. A mark after a force value that looks like V or Y is nearly always N; a scrawled greek letter next to an angle is nearly always theta.
@@ -381,10 +421,15 @@ export class AnthropicProvider implements AIProvider {
       messages: [
         {
           role: "user",
-          content: [
-            imageBlock(request.imageDataUrl),
-            { type: "text", text: "Extract and classify this problem." },
-          ],
+          // A typed or pasted problem has no photo, and so nothing else on the
+          // page: its hasStemContent is still asked (someone can paste
+          // "hello"), and studentWork will simply be false.
+          content: request.imageDataUrl
+            ? [
+                imageBlock(request.imageDataUrl),
+                { type: "text", text: "Extract and classify this problem." },
+              ]
+            : `Extract and classify this problem, typed by the student:\n\n${request.problemText ?? ""}`,
         },
       ],
       output_config: { format: zodOutputFormat(ProblemAnalysisSchema) },
@@ -409,6 +454,8 @@ export class AnthropicProvider implements AIProvider {
     // every turn/problem/user (prompt caching, ~90% cheaper on the cached
     // prefix), while the small per-problem block stays uncached.
     const memory = request.memory ?? emptySessionMemory();
+    // A session reopened from history may predate the concept/keyIdea split.
+    const problem = normalizeAnalysis(request.problem);
     const system: Anthropic.TextBlockParam[] = [
       {
         type: "text",
@@ -417,7 +464,7 @@ export class AnthropicProvider implements AIProvider {
       },
       {
         type: "text",
-        text: `# Current problem\n${request.problem.problemText}\nSubject: ${request.problem.subject}. Topic: ${request.problem.topic}. Governing concept: ${request.problem.concept}.${preferencesBlock(request.preferences)}`,
+        text: `# Current problem\n${problem.problemText}\nSubject: ${problem.subject}. Topic: ${problem.topic}. Concept: ${problem.concept}.${problem.keyIdea ? `\nKey idea (for you, not the student — never state it outright until they have closed the gap themselves or asked for the solution): ${problem.keyIdea}` : ""}${preferencesBlock(request.preferences)}`,
       },
       {
         type: "text",
@@ -454,14 +501,22 @@ Maintain it honestly from evidence:
     const { memory, system, messages } = this.tutorContext(request);
 
     if (request.action === "show_solution") {
-      const res = await this.client.messages.parse({
-        model: this.model,
-        max_tokens: 1500,
-        thinking: { type: "disabled" },
-        system,
-        messages,
-        output_config: { format: zodOutputFormat(TutorSolutionSchema) },
-      });
+      // A worked solution the student will copy from has to be right: thinking
+      // on, and streamed only to stay clear of request timeouts.
+      const { thinking, effort } = thinkingFor(this.model);
+      const res = await this.client.messages
+        .stream({
+          model: this.model,
+          max_tokens: THINKING_MAX_TOKENS,
+          thinking,
+          system,
+          messages,
+          output_config: {
+            format: zodOutputFormat(TutorSolutionSchema),
+            ...(effort ? { effort } : {}),
+          },
+        })
+        .finalMessage();
       logUsage("tutor:solution", res);
       const out = required(res.parsed_output, "solution");
       return { message: out.message, solution: out.solution, memory };
@@ -545,26 +600,72 @@ Maintain it honestly from evidence:
     };
   }
 
-  async checkWork(request: CheckWorkRequest): Promise<WorkCheck> {
-    const res = await this.client.messages.parse({
+  /**
+   * Diagnose an attempt, streaming progress while the model thinks.
+   *
+   * Thinking makes this slower, so the student sees real stages — driven by
+   * the stream's own content_block_start events, not a timer — and then one
+   * validated result.
+   */
+  async *checkWorkStream(
+    request: CheckWorkRequest,
+  ): AsyncGenerator<CheckWorkStreamEvent, void, unknown> {
+    const { thinking, effort } = thinkingFor(this.model);
+    const retry = request.retryOf
+      ? `\n\nThis is a RETRY. Earlier I got this step wrong — ${request.retryOf.locate}${request.retryOf.line ? ` (I had written: ${request.retryOf.line})` : ""}. Judge that step first.`
+      : "";
+
+    const stream = this.client.messages.stream({
       model: this.model,
-      max_tokens: 1200,
-      thinking: { type: "disabled" },
+      max_tokens: THINKING_MAX_TOKENS,
+      thinking,
       system: CHECKWORK_SYSTEM,
       messages: [
         {
           role: "user",
           content: attemptContent(
-            `Problem:\n${request.problem.problemText}\n\nMy attempt:\n${request.attempt.text ?? "(see image)"}`,
+            `Problem:\n${request.problem.problemText}\n\nMy attempt:\n${request.attempt.text ?? "(see image)"}${retry}`,
             request.attempt.imageDataUrl,
           ),
         },
       ],
-      output_config: { format: zodOutputFormat(WorkCheckSchema) },
+      output_config: {
+        format: zodOutputFormat(WorkCheckSchema),
+        ...(effort ? { effort } : {}),
+      },
     });
-    logUsage("checkWork", res);
-    const out = required(res.parsed_output, "work check");
-    return { ...out, firstError: out.firstError ?? undefined };
+
+    let stage: "thinking" | "writing" | null = null;
+    for await (const event of stream) {
+      if (event.type !== "content_block_start") continue;
+      const kind = event.content_block.type;
+      const next =
+        kind === "thinking" || kind === "redacted_thinking"
+          ? "thinking"
+          : kind === "text"
+            ? "writing"
+            : null;
+      if (next && next !== stage) {
+        stage = next;
+        yield { type: "stage", stage: next };
+      }
+    }
+
+    const final = await stream.finalMessage();
+    logUsage("checkWork", final);
+    const out = required(final.parsed_output, "work check");
+    yield {
+      type: "done",
+      check: { ...out, firstError: out.firstError ?? undefined },
+    };
+  }
+
+  /** The same diagnosis without the progress frames, for non-streaming callers. */
+  async checkWork(request: CheckWorkRequest): Promise<WorkCheck> {
+    for await (const event of this.checkWorkStream(request)) {
+      if (event.type === "done") return event.check;
+    }
+    throw new Error("The work check ended without a result.");
   }
 
   async generatePractice(
@@ -578,7 +679,7 @@ Maintain it honestly from evidence:
       messages: [
         {
           role: "user",
-          content: `Original problem:\n${request.problem.problemText}\nSubject: ${request.problem.subject}. Concept: ${request.problem.concept}.\n\n${
+          content: `Original problem:\n${request.problem.problemText}\nSubject: ${request.problem.subject}. Concept: ${request.problem.concept}.${request.problem.keyIdea ? ` Key idea: ${request.problem.keyIdea}.` : ""}\n\n${
             request.focus
               ? `The student has a RECURRING misconception on "${request.focus.concept}": ${request.focus.studentBelief ?? "they keep applying it incorrectly"}.${request.focus.correctModel ? ` The correct model: ${request.focus.correctModel}.` : ""}\nEngineer ONE problem that specifically probes this: it must be solvable correctly ONLY by applying the correct model, so that this exact misconception would lead to a wrong answer. Keep it at matching difficulty and do NOT hint at the misconception in the problem text.`
               : "Generate one similar practice problem."
@@ -595,26 +696,33 @@ Maintain it honestly from evidence:
     request: EvaluatePracticeRequest,
   ): Promise<PracticeEvaluation> {
     const hasAttempt = !!(request.attempt.text?.trim() || request.attempt.imageDataUrl);
-    const res = await this.client.messages.parse({
-      model: this.model,
-      max_tokens: 1800,
-      thinking: { type: "disabled" },
-      system: EVALUATE_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: attemptContent(
-            `Practice problem:\n${request.practice.problemText}\nConcept: ${request.practice.concept}.\n\n${
-              hasAttempt
-                ? `My attempt:\n${request.attempt.text ?? "(see image)"}`
-                : "I'd like to see the worked solution without attempting."
-            }`,
-            request.attempt.imageDataUrl,
-          ),
+    // Marking: the same "don't call a right answer wrong" stakes as checkWork.
+    const { thinking, effort } = thinkingFor(this.model);
+    const res = await this.client.messages
+      .stream({
+        model: this.model,
+        max_tokens: THINKING_MAX_TOKENS,
+        thinking,
+        system: EVALUATE_SYSTEM,
+        messages: [
+          {
+            role: "user",
+            content: attemptContent(
+              `Practice problem:\n${request.practice.problemText}\nConcept: ${request.practice.concept}.\n\n${
+                hasAttempt
+                  ? `My attempt:\n${request.attempt.text ?? "(see image)"}`
+                  : "I'd like to see the worked solution without attempting."
+              }`,
+              request.attempt.imageDataUrl,
+            ),
+          },
+        ],
+        output_config: {
+          format: zodOutputFormat(PracticeEvaluationSchema),
+          ...(effort ? { effort } : {}),
         },
-      ],
-      output_config: { format: zodOutputFormat(PracticeEvaluationSchema) },
-    });
+      })
+      .finalMessage();
     logUsage("evaluatePractice", res);
     return required(res.parsed_output, "practice evaluation");
   }
@@ -666,7 +774,7 @@ function preferencesBlock(prefs?: TutorPreferences): string {
   const style =
     prefs.assistanceStyle === "direct"
       ? "Default lean: explain directly rather than making them guess, while still leaving the final connection to them."
-      : "Default lean: hints first — make the student do the thinking; only explain outright when a hint won't unblock them.";
+      : "Default lean: hints first. When they ASSERT something that reveals a misconception (including a '…right?' seeking confirmation of a wrong claim), reply with one targeted question or a partial step before explaining, and explain directly once they ask for it or are still stuck after that one try. Anything they explicitly request — why, a hint, the answer, the solution — is honoured at once.";
   const goal =
     prefs.goal === "exam"
       ? "Emphasis: exam readiness — highlight the exam-relevant reasoning and the traps, while still building real understanding."
@@ -688,6 +796,39 @@ function preferencesBlock(prefs?: TutorPreferences): string {
 function isHaiku(model: string): boolean {
   return model.toLowerCase().includes("haiku");
 }
+
+/**
+ * Thinking for the calls where being WRONG is the costly failure: judging a
+ * student's work, a full worked solution, and marking practice. Telling a
+ * correct student they are wrong is the worst thing this app can do.
+ *
+ * There is no token budget on the default model: on Sonnet 5 `budget_tokens`
+ * is removed and returns a 400, and adaptive thinking with an effort level is
+ * the only way on. "medium" is the modest setting; `npm run eval` is how to
+ * tell whether it should move. Haiku (only reachable by overriding the model)
+ * still takes a budget and rejects `effort`, so it gets the older shape.
+ *
+ * `display: "omitted"` because nothing here ever shows the reasoning — it is
+ * still done and billed, just not shipped over the wire.
+ */
+function thinkingFor(model: string): {
+  thinking: Anthropic.ThinkingConfigParam;
+  effort?: "medium";
+} {
+  if (isHaiku(model)) {
+    return {
+      thinking: { type: "enabled", budget_tokens: 4000, display: "omitted" },
+    };
+  }
+  return { thinking: { type: "adaptive", display: "omitted" }, effort: "medium" };
+}
+
+/**
+ * Room for thinking plus the structured answer. Streaming requests don't hit
+ * the HTTP timeouts a large non-streaming max_tokens can, which is why every
+ * thinking call below streams.
+ */
+const THINKING_MAX_TOKENS = 16000;
 
 /**
  * Log token usage for one call when DEBUG_TOKENS is set. Shows whether prompt
