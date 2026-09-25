@@ -37,7 +37,8 @@ cases are typed attempts; real handwriting photos go in `evals/images/`.
 | `RATE_LIMIT_PER_DAY` | Per-IP 24h cap, default 150 — the real spend ceiling. Counts only admitted requests. In memory per warm instance for now; `lib/rateLimit.ts` has the TODO for Upstash/Vercel KV. |
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |
 | `DEBUG_TOKENS` | Logs per-call token usage, including whether prompt caching is hitting. |
-| `AI_PROVIDER` | Defaults to `anthropic`, the only implemented provider. Any other value throws at startup. |
+| `AI_PROVIDER` | `anthropic` (default) or `deepseek`. Any other value throws on the first AI call. Only the selected provider's key is read, so both can be set. |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | A reserved slot: `lib/ai/deepseekProvider.ts` is a stub whose every method throws `ProviderNotImplementedError`, which `lib/apiError.ts` reports as a 501 `provider_not_implemented`. `/api/health` shows `implemented: false`. DeepSeek's API is text-only, so the image methods will need a fallback when it is written. |
 
 Vercel applies env vars **at build time** — after adding one, redeploy or it won't
 be picked up.

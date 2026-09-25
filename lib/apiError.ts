@@ -106,6 +106,16 @@ function classify(err: unknown): Classified | null {
     };
   }
 
+  // A reserved provider slot (ProviderNotImplementedError in lib/ai/types.ts).
+  if (bodyType === "not_implemented_error") {
+    return {
+      status: 501,
+      code: "provider_not_implemented",
+      message:
+        "The selected AI provider isn't wired up yet. Set AI_PROVIDER back to anthropic on the server.",
+    };
+  }
+
   if (status === 401 || bodyType === "authentication_error") {
     return {
       status: 503,

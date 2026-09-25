@@ -184,6 +184,20 @@ The real provider is **implemented and wired**, not a stub:
 That's the entire configuration surface. No authentication, database, payment, or
 other infrastructure is required or added. Confirm it's live at `/api/health`.
 
+## DeepSeek (slot reserved, not implemented)
+
+`AI_PROVIDER=deepseek` selects `lib/ai/deepseekProvider.ts`, configured by
+`DEEPSEEK_API_KEY` (required), `DEEPSEEK_MODEL` (default `deepseek-chat`) and
+`DEEPSEEK_BASE_URL` (default `https://api.deepseek.com`). The factory, config and
+`/api/health` reporting are in place; every method throws
+`ProviderNotImplementedError`, surfaced to the client as a 501 with code
+`provider_not_implemented`. Unset `AI_PROVIDER` to go back to Anthropic.
+
+Open decisions before implementing it (also listed in the file's header):
+DeepSeek's OpenAI-compatible API vs. its Anthropic-compatible endpoint
+(`/anthropic`), a vision fallback since its API models are text-only, and how
+`deepseek-reasoner` maps onto the calls that use thinking here.
+
 ## Tuning notes (optional)
 
 - Latency/cost: calls default to Opus 5 with high effort + adaptive thinking. If

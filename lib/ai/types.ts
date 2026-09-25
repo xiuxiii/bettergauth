@@ -106,3 +106,19 @@ export interface AIProvider {
     request: EvaluatePracticeRequest,
   ): Promise<PracticeEvaluation>;
 }
+
+/**
+ * Thrown by a provider slot that is reserved but not wired up yet (today:
+ * DeepSeek). Shaped like an upstream API error — numeric `status`, string
+ * `type` — so `classify` in lib/apiError.ts reports it as a 501 with a clear
+ * "switch AI_PROVIDER back" message instead of a generic "Please try again".
+ */
+export class ProviderNotImplementedError extends Error {
+  readonly status = 501;
+  readonly type = "not_implemented_error";
+
+  constructor(provider: string, method: string) {
+    super(`The "${provider}" provider does not implement ${method}() yet.`);
+    this.name = "ProviderNotImplementedError";
+  }
+}
