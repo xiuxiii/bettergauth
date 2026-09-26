@@ -2,21 +2,9 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
-import type {
-  CheckWorkRequest,
-  ErrorCategory,
-} from "@/lib/tutor/types";
+import { CheckWorkRequestSchema, parseBody } from "@/lib/api/schemas";
 
 export const runtime = "nodejs";
-
-const CATEGORIES: ErrorCategory[] = [
-  "conceptual",
-  "model_selection",
-  "setup",
-  "procedural",
-  "arithmetic",
-  "units_notation",
-];
 
 /**
  * POST /api/check-work
@@ -33,30 +21,14 @@ export async function POST(req: Request) {
   if (limited) return limited;
 
   try {
-    const body = (await req.json().catch(() => null)) as CheckWorkRequest | null;
-
-    const hasAttempt =
-      !!body?.attempt &&
-      (typeof body.attempt.text === "string" ||
-        typeof body.attempt.imageDataUrl === "string");
-
-    if (!body?.problem?.problemText || !hasAttempt) {
-      return NextResponse.json(
-        { error: "A problem and an attempted solution are required." },
-        { status: 400 },
-      );
-    }
-
-    // Rebuilt field by field: this is client text heading into a prompt.
-    const r = body.retryOf;
-    const retryOf =
-      r && typeof r.locate === "string" && CATEGORIES.includes(r.category)
-        ? {
-            locate: r.locate.slice(0, 300),
-            line: typeof r.line === "string" ? r.line.slice(0, 300) : "",
-            category: r.category,
-          }
-        : undefined;
+    const parsed = await parseBody(
+      req,
+      CheckWorkRequestSchema,
+      "A problem and an attempted solution are required.",
+    );
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
+    const retryOf = body.retryOf;
 
     const events = getProvider().checkWorkStream({
       problem: body.problem,

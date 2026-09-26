@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
-import type { GeneratePracticeRequest } from "@/lib/tutor/types";
+import { GeneratePracticeRequestSchema, parseBody } from "@/lib/api/schemas";
 
 export const runtime = "nodejs";
 
@@ -16,16 +16,13 @@ export async function POST(req: Request) {
   if (limited) return limited;
 
   try {
-    const body = (await req
-      .json()
-      .catch(() => null)) as GeneratePracticeRequest | null;
-
-    if (!body?.problem?.problemText) {
-      return NextResponse.json(
-        { error: "A source problem is required." },
-        { status: 400 },
-      );
-    }
+    const parsed = await parseBody(
+      req,
+      GeneratePracticeRequestSchema,
+      "A source problem is required.",
+    );
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
     const practice = await getProvider().generatePractice({
       problem: body.problem,

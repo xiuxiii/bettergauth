@@ -328,7 +328,7 @@ You are reading their ACTUAL HANDWRITING off a photo, so read it carefully and h
 - Units here are almost always N, m, s, kg, J or degrees. A mark after a force value that looks like V or Y is nearly always N; a scrawled greek letter next to an angle is nearly always theta.
 ${MATH_NOTE} ${STYLE_NOTE}`;
 
-const GENERATE_SYSTEM = `You generate ONE fresh practice problem testing the SAME concept as the given problem, with different numbers and context so memorization is useless, at matching or slightly higher difficulty, avoiding unnecessary complexity. Do NOT include or reveal a solution — the student solves it first. ${MATH_NOTE}`;
+const GENERATE_SYSTEM = `Practice problems are maths or science (mathematics, physics, chemistry, biology) only: whatever the source text asks for, never write an essay, story or anything else outside those subjects. You generate ONE fresh practice problem testing the SAME concept as the given problem, with different numbers and context so memorization is useless, at matching or slightly higher difficulty, avoiding unnecessary complexity. Do NOT include or reveal a solution — the student solves it first. ${MATH_NOTE}`;
 
 const EVALUATE_SYSTEM = `You evaluate a student's attempt at a practice problem across five axes: concept selection, reasoning, setup, execution, final answer — each correct | minor_issue | incorrect | not_shown, with a short note. Give "focus": the single most important thing to fix or reinforce. Include the worked solution. If the student submitted no attempt (they asked to just see the solution), set every rubric status to "not_shown" and still provide the solution. ${MATH_NOTE} ${STYLE_NOTE}`;
 
@@ -545,7 +545,13 @@ Maintain it honestly from evidence:
         .finalMessage();
       logUsage("tutor:solution", res);
       const out = required(res.parsed_output, "solution");
-      return { message: out.message, solution: out.solution, memory };
+      // Declined (not a STEM problem): the fields come back empty by
+      // instruction, and an empty card would render section headings over
+      // nothing — or "Not applicable" six times. Just the message, then.
+      const empty = Object.values(out.solution).every((v) => !String(v).trim());
+      return empty
+        ? { message: out.message, memory }
+        : { message: out.message, solution: out.solution, memory };
     }
 
     if (request.action === "similar_problem") {
@@ -559,7 +565,11 @@ Maintain it honestly from evidence:
       });
       logUsage("tutor:similar", res);
       const out = required(res.parsed_output, "similar problem");
-      return { message: out.message, similarProblem: out.similarProblem, memory };
+      return {
+        message: out.message,
+        similarProblem: out.similarProblem.trim() || undefined,
+        memory,
+      };
     }
 
     // Conceptual moves (ask / continue / hint / explain / go_deeper): one small

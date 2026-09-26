@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
-import type { EvaluatePracticeRequest } from "@/lib/tutor/types";
+import { EvaluatePracticeRequestSchema, parseBody } from "@/lib/api/schemas";
 
 export const runtime = "nodejs";
 
@@ -18,16 +18,13 @@ export async function POST(req: Request) {
   if (limited) return limited;
 
   try {
-    const body = (await req
-      .json()
-      .catch(() => null)) as EvaluatePracticeRequest | null;
-
-    if (!body?.practice?.problemText || !body.attempt) {
-      return NextResponse.json(
-        { error: "A practice problem and an attempt are required." },
-        { status: 400 },
-      );
-    }
+    const parsed = await parseBody(
+      req,
+      EvaluatePracticeRequestSchema,
+      "A practice problem and an attempt are required.",
+    );
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
     const evaluation = await getProvider().evaluatePractice({
       practice: body.practice,
