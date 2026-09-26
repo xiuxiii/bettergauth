@@ -9,6 +9,7 @@ import type {
   QuestionDetection,
 } from "@/lib/tutor/types";
 import { detectContentRectNormalized, imageForDetection } from "@/lib/image";
+import { apiFetch } from "@/lib/apiClient";
 import { Spinner } from "@/components/States";
 
 type Handle = "move" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
@@ -189,7 +190,7 @@ export default function QuestionCropper({
           // with THAT image, since the boxes come back in its pixel space.
           const shrunk = await imageForDetection(image);
           if (debugBoxes) setDebugSent({ w: shrunk.width, h: shrunk.height });
-          const res = await fetch("/api/detect-questions", {
+          const res = await apiFetch("/api/detect-questions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

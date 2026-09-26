@@ -12,7 +12,7 @@ import type {
 } from "@/lib/tutor/types";
 import { practiceResolved } from "@/lib/tutor/types";
 import { fileToNormalizedJpeg } from "@/lib/image";
-import { readApiError } from "@/lib/apiClient";
+import { apiFetch, readApiError } from "@/lib/apiClient";
 import RichText from "@/components/RichText";
 import SolutionCard from "@/components/SolutionCard";
 import { CircleAlert, CircleCheck, CircleX, ImagePlus, Sparkles } from "lucide-react";
@@ -78,7 +78,7 @@ export default function PracticeCard({
     setPhase("generating");
     setError(null);
     try {
-      const res = await fetch("/api/practice/generate", {
+      const res = await apiFetch("/api/practice/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ problem: source, focus }),
@@ -115,7 +115,7 @@ export default function PracticeCard({
     setPhase("evaluating");
     setError(null);
     try {
-      const res = await fetch("/api/practice/evaluate", {
+      const res = await apiFetch("/api/practice/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ practice: problem, attempt }),
