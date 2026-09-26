@@ -3,6 +3,7 @@ import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
 import { debugAllowed } from "@/lib/debugAccess";
+import { IMAGE_DATA_URL, UNSUPPORTED_IMAGE } from "@/lib/api/schemas";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,9 @@ export async function POST(req: Request) {
         { error: "A page image (data URL) is required." },
         { status: 400 },
       );
+    }
+    if (!IMAGE_DATA_URL.test(image)) {
+      return NextResponse.json({ error: UNSUPPORTED_IMAGE }, { status: 400 });
     }
     if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
       return NextResponse.json(

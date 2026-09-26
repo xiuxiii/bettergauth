@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
+import { IMAGE_DATA_URL, UNSUPPORTED_IMAGE } from "@/lib/api/schemas";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,11 @@ export async function POST(req: Request) {
     // A photo, or a problem typed / pasted on the home screen. Text is capped
     // because it goes straight into a prompt; a real problem fits easily.
     const hasImage = typeof image === "string" && image.startsWith("data:image/");
+    // An image of a type the model can't read (an SVG, say) is the client's
+    // mistake: a 400 with a reason, not a 500 when the model's API refuses it.
+    if (hasImage && !IMAGE_DATA_URL.test(image)) {
+      return NextResponse.json({ error: UNSUPPORTED_IMAGE }, { status: 400 });
+    }
     if (!hasImage && !text) {
       return NextResponse.json(
         { error: "A problem photo or the problem's text is required." },

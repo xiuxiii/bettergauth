@@ -95,12 +95,27 @@ export const MemorySchema = z.object({
   bottleneck: text(600).catch(""),
 });
 
-export const ImageDataUrlSchema = z.string().max(IMAGE_CHARS);
+/**
+ * A photo as the model accepts it: JPEG, PNG, WebP or GIF, base64. Anything
+ * else (an SVG, a PDF, a malformed URL) is a 400 here rather than a 500 when
+ * the model's API rejects it.
+ */
+export const IMAGE_DATA_URL = /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=\s]+$/;
+export const ImageDataUrlSchema = z.string().max(IMAGE_CHARS).regex(IMAGE_DATA_URL);
+export const UNSUPPORTED_IMAGE =
+  "That file type isn't supported. Send a photo (JPEG or PNG).";
 
+/** An attempt as sent; may be empty (practice's "show me the solution"). */
 export const AttemptSchema = z.object({
   text: text(8000).optional(),
   imageDataUrl: ImageDataUrlSchema.optional(),
 });
+
+/** An attempt that has something in it to check: text or a photo. */
+export const NonEmptyAttemptSchema = AttemptSchema.refine(
+  (a) => !!a.text?.trim() || !!a.imageDataUrl,
+  { message: "empty attempt" },
+);
 
 export const TutorRequestSchema = z.object({
   problem: ProblemSchema,
@@ -122,7 +137,9 @@ export const TutorRequestSchema = z.object({
 
 export const CheckWorkRequestSchema = z.object({
   problem: ProblemSchema,
-  attempt: AttemptSchema,
+  // An empty attempt used to run a full (thinking) check and invent a
+  // "no attempt" error. There is nothing to check, so it's a 400.
+  attempt: NonEmptyAttemptSchema,
   retryOf: z
     .object({
       line: text(300).default(""),
