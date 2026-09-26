@@ -55,7 +55,7 @@ import ProblemCard from "@/components/ProblemCard";
 import MessageBubble from "@/components/MessageBubble";
 import ActionBar from "@/components/ActionBar";
 import AttemptComposer from "@/components/AttemptComposer";
-import PracticeCard from "@/components/PracticeCard";
+import PracticeCard, { type PracticeState } from "@/components/PracticeCard";
 import SessionToggles from "@/components/SessionToggles";
 import RecurringBanner from "@/components/RecurringBanner";
 import Wordmark from "@/components/Wordmark";
@@ -86,6 +86,8 @@ type DisplayMessage = ChatMessage & {
   practiceFor?: ProblemAnalysis;
   /** When set, the practice widget is a targeted retry of this misconception. */
   practiceFocus?: PracticeFocus;
+  /** The practice widget's own progress, saved so a reopen can restore it. */
+  practiceState?: PracticeState;
   /** The tutor action that produced this turn (e.g. "hint"). */
   action?: TutorAction;
   /** The session's opening nudge, rendered quieter than a real tutor turn. */
@@ -125,6 +127,20 @@ const PROBLEM_FROM_PHOTO: ProblemAnalysis = {
 };
 
 type Phase = "loading" | "ready" | "error" | "empty" | "notWork";
+
+/**
+ * Whether the transcript already holds a practice card for `concept` that the
+ * student hasn't finished. A finished card is one with a saved evaluation.
+ */
+function hasOpenPractice(messages: readonly DisplayMessage[], concept: string) {
+  const key = concept.trim().toLowerCase();
+  return messages.some(
+    (m) =>
+      m.practiceFor &&
+      m.practiceFocus?.concept.trim().toLowerCase() === key &&
+      !m.practiceState?.evaluation,
+  );
+}
 
 export default function TutorWorkspace() {
   const router = useRouter();
@@ -400,8 +416,10 @@ export default function TutorWorkspace() {
           }),
         );
         // "Practice this" on the home screen: reopen the session the concept
-        // last went wrong in, with a targeted practice problem waiting.
-        if (practiceConcept) {
+        // last went wrong in, with a targeted practice problem waiting. Only
+        // if there isn't one open for that concept already: the link used to
+        // add a card, and a paid generate call, on every load of the URL.
+        if (practiceConcept && !hasOpenPractice(restored, practiceConcept)) {
           const key = practiceConcept.trim().toLowerCase();
           const m = rec.memory.misconceptions?.find(
             (x) => x.concept.trim().toLowerCase() === key && x.status !== "resolved",
@@ -424,6 +442,10 @@ export default function TutorWorkspace() {
         // extends it rather than forking a duplicate.
         recordIdRef.current = rec.id;
         setPhase("ready");
+        // The practice request is spent; a reload must not repeat it.
+        if (practiceConcept) {
+          router.replace(`/workspace?session=${encodeURIComponent(rec.id)}`);
+        }
       })();
       return;
     }

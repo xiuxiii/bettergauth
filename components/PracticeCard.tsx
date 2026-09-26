@@ -20,6 +20,12 @@ import { ErrorState, Eyebrow, LoadingState } from "@/components/States";
 
 type Phase = "generating" | "gen_error" | "solving" | "evaluating" | "done";
 
+/** What a practice card has reached, saved on its transcript message. */
+export interface PracticeState {
+  problem?: PracticeProblem;
+  evaluation?: PracticeEvaluation;
+}
+
 /**
  * Self-contained "practice one like this" widget. It generates a fresh problem
  * on the same concept, lets the student solve it INDEPENDENTLY (the solution is
