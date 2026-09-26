@@ -36,7 +36,7 @@ paid calls through the rate limiter: set `EVAL_BYPASS_TOKEN` on both sides.
 
 | Var | Effect |
 |---|---|
-| `ANTHROPIC_API_KEY` | Required. Without it the provider reports `provider: "none"` at `/api/health`. |
+| `ANTHROPIC_API_KEY` | Required. Without it `/api/health` reports `ok: false` (and `provider: "none"` in its details). |
 | `ANTHROPIC_MODEL` | Overrides the `claude-sonnet-5` default. |
 | `DETECTION_MODEL` | Question detection only. Unset = same as `ANTHROPIC_MODEL`. Exists to A/B a faster model (e.g. `claude-haiku-4-5`) on the box-finding call without touching tutoring. |
 | `ACCESS_CODE` | Shared-access gate, a code that never expires. **Gate is off only when this AND `ACCESS_CODES` are unset**, so local dev just works. |
@@ -45,7 +45,7 @@ paid calls through the rate limiter: set `EVAL_BYPASS_TOKEN` on both sides.
 | `RATE_LIMIT_PER_MIN` | Per-IP fixed window, default 30. A burst brake. |
 | `RATE_LIMIT_PER_DAY` | Per-IP 24h cap, default 150 — the real spend ceiling. Counts only admitted requests. In memory per warm instance for now; `lib/rateLimit.ts` has the TODO for Upstash/Vercel KV. |
 | `EVAL_BYPASS_TOKEN` | Lets `npm run eval` skip the rate limiter: requests whose `x-eval-bypass` header matches it aren't counted. Unset (the default, and production unless you set it) = the header is ignored. Set the same value in the runner's env. |
-| `DEBUG_CODE` | Unlocks debug detail in production: `?debug=boxes&code=<it>` in the cropper (raw detection output). Unset = never in production; always on outside production (`lib/debugAccess.ts`). |
+| `DEBUG_CODE` | Unlocks debug detail in production: `?debug=boxes&code=<it>` in the cropper (raw detection output), and the provider/model details on `/api/health?code=<it>` (publicly it returns only `{ ok }`). Unset = never in production; always on outside production (`lib/debugAccess.ts`). |
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |
 | `DEBUG_TOKENS` | Logs per-call token usage, including whether prompt caching is hitting. |
 | `AI_PROVIDER` | Defaults to `anthropic`, the only implemented provider. Any other value throws at startup. |

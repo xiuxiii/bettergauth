@@ -79,6 +79,17 @@ async function externalise<T extends LiveMessage>(
 }
 
 /**
+ * Carry on recording a reopened session. Its attempt photos were resolved back
+ * to data URLs for display; registering which id each came from means the
+ * next save reuses those ids instead of storing every photo again — which it
+ * did on every reopen, leaking a copy into IndexedDB each time.
+ */
+export function resumeSession(knownImages: Iterable<[dataUrl: string, id: string]>): void {
+  imageIds.clear();
+  for (const [dataUrl, id] of knownImages) imageIds.set(dataUrl, id);
+}
+
+/**
  * Begin recording. Returns the record id, or null when storage is unavailable —
  * callers treat null as "history is off" and carry on.
  */

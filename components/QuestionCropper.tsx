@@ -10,6 +10,7 @@ import type {
 } from "@/lib/tutor/types";
 import { detectContentRectNormalized, imageForDetection } from "@/lib/image";
 import { apiFetch } from "@/lib/apiClient";
+import { enterSends } from "@/lib/utils";
 import { Spinner } from "@/components/States";
 
 type Handle = "move" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
@@ -663,14 +664,13 @@ export default function QuestionCropper({
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (enterSends(e)) {
                 e.preventDefault();
                 confirm();
               }
             }}
             rows={2}
             maxLength={500}
-            enterKeyHint="send"
             aria-label="Your question"
             placeholder="e.g. Why is the tension equal to Fg here?"
             className="mb-3 w-full resize-none rounded-md border border-slate-300 bg-paper px-3.5 py-2.5 text-base leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-400"

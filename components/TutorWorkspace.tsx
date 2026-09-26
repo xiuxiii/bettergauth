@@ -49,7 +49,7 @@ import {
   loadPreferences,
   savePreferences,
 } from "@/lib/preferences";
-import { saveProgress, startSession } from "@/lib/history/record";
+import { resumeSession, saveProgress, startSession } from "@/lib/history/record";
 import { getImage, getSession } from "@/lib/history/db";
 import { blobToDataUrl } from "@/lib/image";
 import ProblemCard from "@/components/ProblemCard";
@@ -425,6 +425,8 @@ export default function TutorWorkspace() {
         // Attempt photos are stored as ids, not inline data URLs, so they have
         // to be resolved back or the student's own working vanishes from the
         // transcript they just reopened.
+        // Every photo resolved from an id, so the next save can reuse the id.
+        const knownImages: [string, string][] = [];
         const restored = await Promise.all(
           rec.messages.map(async (m) => {
             const msg = { ...m } as unknown as DisplayMessage & {
@@ -439,12 +441,11 @@ export default function TutorWorkspace() {
               const blob = await getImage(practicePhotoId);
               if (blob) {
                 try {
+                  const dataUrl = await blobToDataUrl(blob);
+                  knownImages.push([dataUrl, practicePhotoId]);
                   msg.practiceState = {
                     ...msg.practiceState,
-                    attempt: {
-                      ...msg.practiceState.attempt,
-                      imageDataUrl: await blobToDataUrl(blob),
-                    },
+                    attempt: { ...msg.practiceState.attempt, imageDataUrl: dataUrl },
                   };
                 } catch {
                   /* the evaluation still stands without the photo */
@@ -456,6 +457,7 @@ export default function TutorWorkspace() {
               if (blob) {
                 try {
                   msg.attemptImage = await blobToDataUrl(blob);
+                  knownImages.push([msg.attemptImage, msg.attemptImageId]);
                 } catch {
                   /* leave the bubble without its photo */
                 }
@@ -489,6 +491,7 @@ export default function TutorWorkspace() {
         setMessages(restored);
         // Keep writing to the same record, so continuing an old session
         // extends it rather than forking a duplicate.
+        resumeSession(knownImages);
         recordIdRef.current = rec.id;
         setPhase("ready");
         // The practice request is spent; a reload must not repeat it.

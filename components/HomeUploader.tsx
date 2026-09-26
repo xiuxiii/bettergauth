@@ -2,10 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IMAGE_KEY, QUESTION_KEY, TEXT_KEY, WORK_HINT_KEY } from "@/lib/utils";
+import {
+  IMAGE_KEY,
+  QUESTION_KEY,
+  TEXT_KEY,
+  WORK_HINT_KEY,
+  enterSends,
+} from "@/lib/utils";
 import type { NormalizedRect } from "@/lib/tutor/types";
 import { cropSourceToJpeg, fileToNormalizedJpeg } from "@/lib/image";
-import { hasPreferences } from "@/lib/preferences";
+import { hasPreferences, storageAvailable } from "@/lib/preferences";
 import { ArrowRight, Camera, Upload } from "lucide-react";
 import { ErrorState, Spinner } from "@/components/States";
 import CameraScanner from "@/components/CameraScanner";
@@ -41,9 +47,11 @@ export default function HomeUploader() {
   const [error, setError] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
 
-  // First-run gate: send new visitors through the welcome tour once.
+  // First-run gate: send new visitors through the welcome tour once. Only
+  // when storage works — otherwise finishing the tour can't be remembered and
+  // the gate would loop; those students get the defaults instead.
   useEffect(() => {
-    if (!hasPreferences()) router.replace("/welcome");
+    if (storageAvailable() && !hasPreferences()) router.replace("/welcome");
   }, [router]);
 
   /** Hand the confirmed crop to the workspace. */
@@ -167,7 +175,7 @@ export default function HomeUploader() {
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (enterSends(e)) {
               e.preventDefault();
               goText();
             }
