@@ -333,6 +333,22 @@ export default function TutorWorkspace() {
         void sendCheckWork({ imageDataUrl: dataUrl }, data, early?.promise);
         return;
       }
+      // Typed working: there is no photo for the check to read, so the
+      // analysis hands the working back separately. Show it as theirs (the
+      // problem card holds only the question) and check it straight away.
+      const typedWork = !dataUrl ? data.attemptText?.trim() : "";
+      if (typedWork && data.studentWork?.present) {
+        setMessages([
+          {
+            id: uid("s"),
+            role: "student",
+            content: typedWork,
+            createdAt: Date.now(),
+          },
+        ]);
+        void sendCheckWork({ text: typedWork }, data);
+        return;
+      }
       // Detection thought there was working; the analysis says not. Drop it.
       early?.controller.abort();
 

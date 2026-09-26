@@ -101,6 +101,8 @@ const ProblemAnalysisSchema = z.object({
   studentWork: z.object({
     present: z.boolean(),
   }),
+  /** Typed input only: the student's own working, verbatim. "" for photos. */
+  attemptText: z.string(),
   /** The session's opening nudge. Free: it rides along on this same call. */
   openingHint: z.string(),
 });
@@ -267,7 +269,8 @@ The photo often ALSO contains the student's own handwritten attempt, because the
 photograph problems they have already worked on. Separate the two:
 - \`problemText\` is the PRINTED question ONLY. Never fold handwriting into it. This text is shown to the tutor as the problem itself every turn, so a student's wrong working leaking into it would be read as part of the question.
 - Set \`studentWork.present\` true ONLY for HANDWRITTEN working that is this student's own attempt at this problem. Printed text never counts: a worked example, a textbook solution, an answer key or the question's own printed answer options are all part of the page, not an attempt. Stray doodles, labels on a diagram, and a lone underlined final answer with no reasoning are not an attempt either.
-- Do NOT transcribe the working. Only say whether it is there; something else reads it.
+- For a PHOTO, do NOT transcribe the working. Only say whether it is there; something else reads it. Leave \`attemptText\` empty.
+- For TYPED input, the student sometimes types their own working after the question ("My work: 5x = 18 + 3 …"). Then \`problemText\` is the question alone, \`studentWork.present\` is true, and \`attemptText\` is their working copied VERBATIM — every step exactly as typed, nothing fixed or added. With no working typed, \`attemptText\` is empty.
 
 \`openingHint\` is the first thing the student reads, so make it worth reading:
 ONE short sentence that points at where to start, and nothing else. Name the move

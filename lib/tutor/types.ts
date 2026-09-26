@@ -60,6 +60,13 @@ export interface ProblemAnalysis {
     present: boolean;
   };
   /**
+   * TYPED input only: the student's own working, copied verbatim out of what
+   * they typed and kept out of `problemText`. A typed attempt has no photo for
+   * the check to read, so this is what gets checked. Empty for photos, where
+   * the transcription problem above still applies.
+   */
+  attemptText?: string;
+  /**
    * One short sentence pointing at where to start, shown as the session's first
    * message. It rides along on the analysis call, so the student gets a real
    * hint with no extra wait and no extra request — rather than a paragraph
