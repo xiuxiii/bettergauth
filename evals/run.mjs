@@ -91,6 +91,7 @@ for (const c of cases) {
       r.missed && "missed error",
       r.answerLeaks.length && `answer leaked in ${r.answerLeaks.join(", ")}`,
       r.labelSpoilers.length && `label "${r.label}" reveals ${r.labelSpoilers.join(", ")}`,
+      r.headlineLeak?.length && `headline gives away: ${r.headlineLeak.join(", ")}`,
     ].filter(Boolean);
     console.log(
       `${mark(r.verdictRight)} ${c.id.padEnd(31)} ${r.verdict.padEnd(17)} cat ${mark(r.categoryRight)} line ${mark(r.lineRight)}  ${(r.ms / 1000).toFixed(1)}s${notes.length ? "  ← " + notes.join("; ") : ""}`,
@@ -110,6 +111,7 @@ First-error category ${s.categoryMatch}
 First-error line     ${s.lineMatch}
 Answer leaks         ${s.answerLeaks} case(s)   (final answer before "Show the rest")
 Label spoilers       ${s.labelSpoilers} case(s)   (concept label names the method)
+Headline leaks       ${s.headlineLeaks} case(s)   (headline says what's wrong, not just where)
 ${s.failedToRun ? `\n${s.failedToRun} case(s) failed to run.` : ""}`);
 
 if (JSON_OUT) {
@@ -161,6 +163,17 @@ function selftest() {
   ]);
   t("summary: 1 of 2 correct attempts flagged → 50% false alarms", s.falseAlarmRate === "50%");
   t("summary: failed runs are counted, not scored", s.failedToRun === 1 && s.verdictAccuracy === "67%");
+
+  // A6: the headline may say where the problem is, never what it is.
+  const fallCase = { id: "f", problem: "A ball is dropped from 20 m. How fast is it going at the ground?", expect: { correct: false } };
+  const fallErr = { category: "conceptual", severity: "significant", line: "v = 9.8 × 20", locate: "Line 2: which quantity goes with g", nudge: "What does the 20 stand for?", diagnosis: "Your work treats the drop distance as if it were the fall time.", fix: "Use v² = 2gh, or find the time first." };
+  r = scoreCase(fallCase, { verdict: "error_found", headline: "Your working holds until line 2, where a distance gets used as if it were a time.", strength: "", firstError: fallErr, continueFrom: "" });
+  t("headline naming the mistake is a leak (distance, time)", r.headlineLeak.includes("distance") && r.headlineLeak.includes("time"));
+  r = scoreCase(fallCase, { verdict: "error_found", headline: "Your working holds until line 2.", strength: "", firstError: fallErr, continueFrom: "" });
+  t("headline saying only where is clean", r.headlineLeak.length === 0);
+  r = scoreCase(fallCase, { verdict: "error_found", headline: "Your ball-drop setup holds until line 2.", strength: "", firstError: { ...fallErr, diagnosis: "The ball's drop is treated as a time." }, continueFrom: "" });
+  t("the problem's own words don't count as a leak", r.headlineLeak.length === 0);
+  t("summary counts headline leaks", summarize([scoreCase(fallCase, { verdict: "error_found", headline: "Line 2 uses a distance as a time.", strength: "", firstError: fallErr, continueFrom: "" })]).headlineLeaks === 1);
 
   let failed = 0;
   for (const [name, cond] of checks) {
