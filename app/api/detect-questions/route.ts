@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
+import { debugAllowed } from "@/lib/debugAccess";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/detect-questions
- * Body: { image: string, width: number, height: number, debug?: true }
+ * Body: { image: string, width: number, height: number,
+ *         debug?: true, debugCode?: string }
  *   image          — data URL of the full photographed page
  *   width, height  — that image's pixel dimensions; the model is asked for
  *                    boxes in absolute pixels and they are converted back here
@@ -47,9 +49,14 @@ export async function POST(req: Request) {
       width,
       height,
     });
-    // The raw model output rides along only for the ?debug=boxes view.
+    // The raw model output rides along only for the ?debug=boxes view, and
+    // only where debugging is allowed (see debugAllowed).
     const { debug, ...result } = detection;
-    return NextResponse.json(body?.debug === true ? { ...result, debug } : result);
+    const wantsDebug = body?.debug === true;
+    const allowed = wantsDebug && debugAllowed(body?.debugCode);
+    return NextResponse.json(
+      allowed ? { ...result, debug } : wantsDebug ? { ...result, debugDenied: true } : result,
+    );
   } catch (err) {
     return errorResponse(err, "Could not detect questions in the photo.");
   }

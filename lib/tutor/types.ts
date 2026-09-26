@@ -165,6 +165,8 @@ export interface QuestionDetection {
    * traced to a coordinate-space bug or to the model misreading the page.
    */
   debug?: DetectionDebug;
+  /** The client asked for `debug` but the server doesn't allow it here. */
+  debugDenied?: boolean;
 }
 
 export interface DetectionDebug {

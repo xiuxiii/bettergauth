@@ -130,7 +130,14 @@ export default function QuestionCropper({
       typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).get("debug") === "boxes",
   );
+  // In production the server also wants its DEBUG_CODE: `?debug=boxes&code=…`.
+  const [debugCode] = useState(() =>
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("code") ?? undefined
+      : undefined,
+  );
   const [debugInfo, setDebugInfo] = useState<DetectionDebug | null>(null);
+  const [debugDenied, setDebugDenied] = useState(false);
   const [debugSent, setDebugSent] = useState<{ w: number; h: number } | null>(null);
 
   // Phase 1: seed a real box immediately, with no network.
@@ -189,14 +196,17 @@ export default function QuestionCropper({
               image: shrunk.image,
               width: shrunk.width,
               height: shrunk.height,
-              ...(debugBoxes ? { debug: true } : {}),
+              ...(debugBoxes ? { debug: true, debugCode } : {}),
             }),
             signal: controller.signal,
           });
           if (res.ok) {
             result = (await res.json()) as QuestionDetection;
             lastDetection = { image, result };
-            if (debugBoxes) setDebugInfo(result.debug ?? null);
+            if (debugBoxes) {
+              setDebugInfo(result.debug ?? null);
+              setDebugDenied(!!result.debugDenied);
+            }
           }
         }
       } catch {
@@ -484,7 +494,7 @@ export default function QuestionCropper({
             </div>
             </div>
 
-            {debugBoxes && (
+            {debugBoxes && debugInfo && (
               <div
                 className="pointer-events-none absolute"
                 style={{ left: fit.x, top: fit.y, width: fit.w, height: fit.h }}
@@ -513,6 +523,7 @@ export default function QuestionCropper({
         {debugBoxes && (
           <DebugPanel
             info={debugInfo}
+            denied={debugDenied}
             sent={debugSent}
             preview={img}
             detecting={detecting}
@@ -750,11 +761,13 @@ function Corner({
 /** The raw detection numbers for the `?debug=boxes` view. */
 function DebugPanel({
   info,
+  denied,
   sent,
   preview,
   detecting,
 }: {
   info: DetectionDebug | null;
+  denied: boolean;
   sent: { w: number; h: number } | null;
   preview: { w: number; h: number };
   detecting: boolean;
@@ -765,7 +778,9 @@ function DebugPanel({
       <p>
         preview {preview.w}×{preview.h} · sent {sent ? `${sent.w}×${sent.h}` : "?"}
       </p>
-      {!info ? (
+      {denied ? (
+        <p>debug not allowed: add &amp;code=… (the server&apos;s DEBUG_CODE)</p>
+      ) : !info ? (
         <p>{detecting ? "detecting…" : "no debug data (detection failed or cached)"}</p>
       ) : (
         <>
