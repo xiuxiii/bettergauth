@@ -48,6 +48,7 @@ export default function PracticeCard({
   onResolved,
   saved,
   onChange,
+  onSettled,
 }: {
   source: ProblemAnalysis;
   /** When set, this is a targeted retry of a recurring misconception. */
@@ -58,6 +59,8 @@ export default function PracticeCard({
   saved?: PracticeState;
   /** Reports progress worth saving (the problem, then the evaluation). */
   onChange?: (state: PracticeState) => void;
+  /** Generation finished, with a problem or an error: the parent unlocks. */
+  onSettled?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>(
     saved?.evaluation ? "done" : saved?.problem ? "solving" : "generating",
@@ -88,6 +91,8 @@ export default function PracticeCard({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed.");
       setPhase("gen_error");
+    } finally {
+      onSettled?.();
     }
   }, [source, focus]);
 
@@ -96,7 +101,10 @@ export default function PracticeCard({
     startedRef.current = true;
     // A restored card already has its problem: generating again would bill a
     // call and swap the problem the student was working on.
-    if (saved?.problem) return;
+    if (saved?.problem) {
+      onSettled?.();
+      return;
+    }
     void generate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generate]);

@@ -876,8 +876,17 @@ export default function TutorWorkspace() {
     }
   }
 
+  // A practice card is on its way: set synchronously, so a double tap (two
+  // clicks in one tick, before any re-render) can't add a second card and a
+  // second paid generate call. Cleared once the new card has its problem, or
+  // gave up.
+  const practicePendingRef = useRef(false);
+  const [practicePending, setPracticePending] = useState(false);
+
   function handlePractice(focus?: PracticeFocus) {
-    if (!analysis || turnBusy) return;
+    if (!analysis || turnBusy || practicePendingRef.current) return;
+    practicePendingRef.current = true;
+    setPracticePending(true);
     // Append a self-contained practice widget; it generates and evaluates on
     // its own via /api/practice/*. A focus makes it a targeted retry.
     setMessages((prev) => [
@@ -1023,6 +1032,10 @@ export default function TutorWorkspace() {
                     onResolved={handlePracticeResolved}
                     saved={m.practiceState}
                     onChange={(state) => savePracticeState(m.id, state)}
+                    onSettled={() => {
+                      practicePendingRef.current = false;
+                      setPracticePending(false);
+                    }}
                   />
                 </div>
               ) : m.opener ? (
@@ -1108,7 +1121,7 @@ export default function TutorWorkspace() {
 
         {analysis && (
           <ActionBar
-            busy={turnBusy}
+            busy={turnBusy || practicePending}
             stage={stage}
             hinted={hintGiven(messages)}
             onAction={handleAction}
