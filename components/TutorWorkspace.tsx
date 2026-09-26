@@ -310,7 +310,13 @@ export default function TutorWorkspace() {
       // must never block or break the tutoring itself.
       void startSession(data, dataUrl).then((id) => {
         recordIdRef.current = id;
-        if (id) bumpRecord();
+        if (!id) return;
+        bumpRecord();
+        // From here the session lives in history. Point the URL at it, so a
+        // reload or revisit reopens it — instead of re-running the paid
+        // analysis on a handoff that is already spent, and filing a second
+        // copy of the same problem.
+        router.replace(`/workspace?session=${encodeURIComponent(id)}`);
       });
 
       // Ask mode: they asked something specific, so answer that. It wins over
@@ -473,30 +479,34 @@ export default function TutorWorkspace() {
       return;
     }
 
+    // The handoff from home is read once and cleared at once: every key, so a
+    // reload can't replay it (another paid analysis, another history record).
+    // After the analysis the URL names the saved session, which is what a
+    // reload reopens.
     let stored: string | null = null;
     let typedText: string | null = null;
     try {
       stored = sessionStorage.getItem(IMAGE_KEY);
       typedText = stored ? null : sessionStorage.getItem(TEXT_KEY)?.trim() || null;
+      questionRef.current = sessionStorage.getItem(QUESTION_KEY)?.trim() || null;
+      workHintRef.current = sessionStorage.getItem(WORK_HINT_KEY) === "1";
+      for (const key of [IMAGE_KEY, TEXT_KEY, QUESTION_KEY, WORK_HINT_KEY]) {
+        sessionStorage.removeItem(key);
+      }
     } catch {
       /* blocked storage: nothing was handed over */
+      questionRef.current = null;
+      workHintRef.current = false;
     }
     if (typedText) {
+      questionRef.current = null;
+      workHintRef.current = false;
       void runAnalysis({ text: typedText });
       return;
     }
     if (!stored) {
       setPhase("empty");
       return;
-    }
-    try {
-      questionRef.current = sessionStorage.getItem(QUESTION_KEY)?.trim() || null;
-      sessionStorage.removeItem(QUESTION_KEY);
-      workHintRef.current = sessionStorage.getItem(WORK_HINT_KEY) === "1";
-      sessionStorage.removeItem(WORK_HINT_KEY);
-    } catch {
-      questionRef.current = null;
-      workHintRef.current = false;
     }
     setImage(stored);
     void runAnalysis({ image: stored });
