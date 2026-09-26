@@ -27,6 +27,7 @@ import type {
 import { emptySessionMemory,
   normalizeAnalysis } from "@/lib/tutor/types";
 import { SYSTEM_INSTRUCTIONS } from "@/lib/tutor/engine";
+import { ALL_CONCEPTS, conceptsFor } from "@/lib/tutor/concepts";
 import { createMessageFieldDecoder } from "@/lib/tutor/streamText";
 
 /**
@@ -117,11 +118,14 @@ const StructuredSolutionSchema = z.object({
 });
 
 /** The tutor's compact cross-turn memory (mirrors SessionMemory). */
+/** The canonical gap labels (lib/tutor/concepts.ts), so memory merges. */
+const ConceptSchema = z.enum(ALL_CONCEPTS);
+
 const SessionMemorySchema = z.object({
-  demonstrated: z.array(z.string()),
+  demonstrated: z.array(ConceptSchema),
   misconceptions: z.array(
     z.object({
-      concept: z.string(),
+      concept: ConceptSchema,
       studentBelief: z.string(),
       correctModel: z.string(),
       status: z.enum(["suspected", "confirmed", "resolving", "resolved"]),
@@ -138,7 +142,7 @@ const SessionMemorySchema = z.object({
         "conceptual",
         "strategic",
       ]),
-      concept: z.string(),
+      concept: ConceptSchema,
     }),
   ),
   bottleneck: z.string(),
@@ -187,6 +191,7 @@ const WorkCheckSchema = z.object({
   strength: z.string(),
   firstError: WorkErrorSchema.nullable(),
   continueFrom: z.string(),
+  concept: ConceptSchema,
 });
 
 const PracticeProblemSchema = z.object({
@@ -306,6 +311,8 @@ Category — pick the one that names the ROOT cause:
 - arithmetic: a number or algebra slip. Severity minor.
 - units_notation: units, significant figures or notation only. Severity minor.
 If the concept is sound and the slip is minor, keep every field short. Do not nitpick.
+
+concept: ONE label, copied exactly from the list in the message, naming the idea the attempt hinges on. For an error it is the idea the FIRST error is about, not the problem's chapter: a height used as a time in a free-fall problem is "Variables and symbols"; the whole speed used where a component belongs is "Vector components". For a correct attempt it is the main idea the attempt got right. Use the same label every time the same gap appears, so it adds up across problems.
 
 If the message says this is a RETRY of a flagged step, judge that step first. If it is now right and nothing after it breaks, the verdict is "correct" and the headline says so.
 
@@ -487,6 +494,7 @@ ${JSON.stringify(memory)}
 
 Maintain it honestly from evidence:
 - Add a concept to \`demonstrated\` once the student has PROVEN they know it — never re-explain those.
+- Every concept in memory is one label copied exactly from this list, naming the idea a mistake is ABOUT (not the problem's chapter), so the same gap merges across problems: ${conceptsFor(problem.subject).join("; ")}.
 - Log each classified mistake in \`errors\` with the concept it belongs to.
 - Record a wrong mental model in \`misconceptions\`; advance status suspected → confirmed → resolving → resolved as you address it and re-verify it stuck.
 - Set \`bottleneck\` to the single thing blocking progress right now ("" if none).
@@ -647,7 +655,7 @@ Maintain it honestly from evidence:
         {
           role: "user",
           content: attemptContent(
-            `Problem:\n${request.problem.problemText}\n\nMy attempt:\n${request.attempt.text ?? "(see image)"}${retry}`,
+            `Problem:\n${request.problem.problemText}\n\nMy attempt:\n${request.attempt.text ?? "(see image)"}${retry}\n\nConcept labels to choose from: ${conceptsFor(request.problem.subject).join("; ")}.`,
             request.attempt.imageDataUrl,
           ),
         },

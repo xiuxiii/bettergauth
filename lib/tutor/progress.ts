@@ -16,6 +16,7 @@
  * Deterministic and free. The AI write-up is a separate, opt-in call.
  */
 
+import { canonicalConcept } from "@/lib/tutor/concepts";
 import type {
   RememberedError,
   RememberedMisconception,
@@ -62,6 +63,10 @@ export function rankConcepts(sessions: ProgressInput[]): ConceptProgress[] {
       if (d.trim()) demonstrated.add(norm(d));
     }
   }
+  // Only the canonical gap labels (lib/tutor/concepts.ts) are ranked. Older
+  // records carry free-text concepts, one gap under several names or the
+  // problem's topic in place of the mistake; they can't be merged reliably,
+  // so they no longer count rather than showing up as duplicates.
 
   const byConcept = new Map<
     string,
@@ -76,7 +81,7 @@ export function rankConcepts(sessions: ProgressInput[]): ConceptProgress[] {
 
   sessions.forEach((s, i) => {
     for (const e of s.memory.errors ?? []) {
-      const display = e.concept?.trim();
+      const display = canonicalConcept(e.concept);
       if (!display) continue;
       const key = norm(display);
       if (demonstrated.has(key)) continue;

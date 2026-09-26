@@ -1,6 +1,8 @@
 // Domain types shared across UI, tutoring logic, and the AI provider layer.
 // Kept provider-agnostic on purpose so a real model can be swapped in later.
 
+import { canonicalConcept } from "@/lib/tutor/concepts";
+
 export type Subject =
   | "Physics"
   | "Chemistry"
@@ -372,7 +374,7 @@ function mapCategory(cat: ErrorCategory): RememberedError["type"] {
  * recurrence, don't-re-teach, and resolution — the check-work path runs through
  * a separate endpoint that doesn't round-trip memory, so we merge its already
  * structured result in on the client (no extra model tokens):
- *  - log the classified error against the problem's concept;
+ *  - log the classified error against the check's canonical concept;
  *  - on a significant conceptual/strategic error, record/confirm a misconception;
  *  - when the attempt's concept is sound, mark it demonstrated and RESOLVE any
  *    open misconception on it (this clears a recurring flag — a retry that stuck).
@@ -380,9 +382,13 @@ function mapCategory(cat: ErrorCategory): RememberedError["type"] {
 export function applyWorkCheckToMemory(
   memory: SessionMemory,
   check: WorkCheck,
-  concept: string,
+  fallbackConcept: string,
 ): SessionMemory {
-  const c = concept.trim();
+  // Keyed on the check's own canonical label: the gap it found, not the
+  // problem's topic. The fallback covers older checks, and only counts when it
+  // is itself a canonical label — a free-text topic would never merge.
+  const c =
+    canonicalConcept(check.concept) ?? canonicalConcept(fallbackConcept) ?? "";
   const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
   const next: SessionMemory = {
     demonstrated: [...memory.demonstrated],
@@ -619,6 +625,13 @@ export interface WorkCheck {
   /** The rest of the way from the corrected point — the ONLY field that may
    *  contain the final answer. */
   continueFrom: string;
+  /**
+   * The canonical label (lib/tutor/concepts.ts) for the idea the attempt
+   * hinges on — for an error, the idea the FIRST error is about. This, not
+   * the problem's own concept, is what the gap is tracked under, so the same
+   * mistake merges across problems. Absent on checks saved before it existed.
+   */
+  concept?: string;
 }
 
 /**
@@ -654,6 +667,7 @@ export function normalizeWorkCheck(raw: unknown): WorkCheck {
         }
       : undefined,
     continueFrom: s(c.continueFrom),
+    concept: s(c.concept) || undefined,
   };
 }
 
