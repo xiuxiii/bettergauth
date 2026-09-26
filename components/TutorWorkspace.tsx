@@ -431,6 +431,26 @@ export default function TutorWorkspace() {
               attemptImageId?: string;
             };
             if (msg.workCheck) msg.workCheck = normalizeWorkCheck(msg.workCheck);
+            // A practice card's attempt photo is stored by id, like any other.
+            const practicePhotoId = (
+              msg.practiceState?.attempt as { imageId?: string } | undefined
+            )?.imageId;
+            if (practicePhotoId && msg.practiceState?.attempt) {
+              const blob = await getImage(practicePhotoId);
+              if (blob) {
+                try {
+                  msg.practiceState = {
+                    ...msg.practiceState,
+                    attempt: {
+                      ...msg.practiceState.attempt,
+                      imageDataUrl: await blobToDataUrl(blob),
+                    },
+                  };
+                } catch {
+                  /* the evaluation still stands without the photo */
+                }
+              }
+            }
             if (msg.attemptImageId) {
               const blob = await getImage(msg.attemptImageId);
               if (blob) {
@@ -753,6 +773,15 @@ export default function TutorWorkspace() {
     bumpRecord();
   }
 
+  /** Save a practice card's progress on its message (persisted with it). */
+  function savePracticeState(id: string, state: PracticeState) {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id ? { ...m, practiceState: { ...m.practiceState, ...state } } : m,
+      ),
+    );
+  }
+
   /** Move a check's reveal on. Saved with the transcript by the effect above. */
   function handleReveal(id: string, next: RevealStep) {
     setMessages((prev) =>
@@ -992,6 +1021,8 @@ export default function TutorWorkspace() {
                     source={m.practiceFor}
                     focus={m.practiceFocus}
                     onResolved={handlePracticeResolved}
+                    saved={m.practiceState}
+                    onChange={(state) => savePracticeState(m.id, state)}
                   />
                 </div>
               ) : m.opener ? (

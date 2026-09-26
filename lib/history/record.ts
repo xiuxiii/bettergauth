@@ -31,6 +31,8 @@ import {
 export interface LiveMessage {
   id: string;
   attemptImage?: string;
+  /** A practice card's saved progress; its attempt photo is externalised too. */
+  practiceState?: { attempt?: { imageDataUrl?: string } };
 }
 
 /**
@@ -61,6 +63,15 @@ async function externalise<T extends LiveMessage>(
       if (typeof attemptImage === "string") {
         const id = await storeImage(attemptImage);
         if (id) stored.attemptImageId = id;
+      }
+      // A practice attempt photo, same treatment: an id, never the data URL.
+      const practicePhoto = m.practiceState?.attempt?.imageDataUrl;
+      if (typeof practicePhoto === "string") {
+        const id = await storeImage(practicePhoto);
+        const attempt: Record<string, unknown> = { ...m.practiceState!.attempt };
+        delete attempt.imageDataUrl;
+        if (id) attempt.imageId = id;
+        stored.practiceState = { ...m.practiceState, attempt };
       }
       return stored;
     }),
