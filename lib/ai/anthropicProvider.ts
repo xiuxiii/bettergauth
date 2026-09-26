@@ -65,7 +65,7 @@ const SubjectSchema = z.enum([
  * analysis and then failing. Defined by content, not by a printed question
  * number: in Ask mode the photo is often just a diagram, and that must pass.
  */
-const STEM_CONTENT_NOTE = `First decide hasStemContent: does this photo contain ANY study material at all — printed or handwritten text, an equation or expression, a diagram, graph, table, or worked steps? A photo of food, a room, a person, a pet, a screen showing something unrelated, a blank page, or a blurred accidental shot does NOT: set hasStemContent false. When in doubt (faint pencil, a partial page, an unusual diagram), set it TRUE — wrongly turning away a real problem is worse than analyzing a poor photo.`;
+const STEM_CONTENT_NOTE = `First decide hasStemContent: is there a maths or science problem here — mathematics, physics, chemistry or biology? That means an equation or expression, a diagram, graph or table, worked steps, or a question in one of those subjects. The same rule applies whether the input is a photo or typed text. It is FALSE for: a photo of food, a room, a person, a pet, a screen showing something unrelated, a blank page or a blurred accidental shot; homework in any other subject (an essay, a book report, history, a language exercise); and requests that aren't a problem at all (write me something, chat). When a PHOTO is merely hard to read (faint pencil, a partial page, an unusual diagram), set it TRUE — wrongly turning away a real problem is worse than analyzing a poor photo. Doubt about the SUBJECT is not that kind of doubt: an essay prompt is not STEM however it is phrased.`;
 
 const QuestionDetectionSchema = z.object({
   hasStemContent: z.boolean(),
@@ -445,7 +445,7 @@ export class AnthropicProvider implements AIProvider {
       output_config: { format: zodOutputFormat(ProblemAnalysisSchema) },
     });
     logUsage("analyze", res);
-    return required(res.parsed_output, "problem analysis");
+    return guardNotStem(required(res.parsed_output, "problem analysis"));
   }
 
   /**
@@ -967,6 +967,24 @@ function normalizeDetection(
       ? raw.primaryIndex
       : 0;
   return { hasStemContent, questions, primaryIndex };
+}
+
+/**
+ * Server-side backstop for the not-STEM gate. The model has been seen to answer
+ * an essay request with hasStemContent TRUE while labelling it subject
+ * "Unknown", topic "Not applicable" — it knew, and said so in the wrong field.
+ * Those two together mean there is nothing to tutor, whatever the flag says.
+ */
+function guardNotStem(a: ProblemAnalysis): ProblemAnalysis {
+  const notApplicable = /not applicable|^n\/?a$|not a stem|not stem|^none$/i;
+  if (
+    a.hasStemContent !== false &&
+    a.subject === "Unknown" &&
+    (notApplicable.test(a.topic.trim()) || notApplicable.test(a.concept.trim()))
+  ) {
+    return { ...a, hasStemContent: false };
+  }
+  return a;
 }
 
 /** Assert the model returned a validly-parsed structured object. */

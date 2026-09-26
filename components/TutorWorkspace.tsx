@@ -828,21 +828,30 @@ export default function TutorWorkspace() {
     );
   }
 
-  // The photo had nothing to tutor. The same words the cropper uses, centred,
-  // with one way forward — not the red error card, because nothing failed:
-  // the photo just wasn't of work.
+  // Nothing to tutor. The same words the cropper uses, centred, with one way
+  // forward — not the red error card, because nothing failed: the input just
+  // wasn't a maths or science problem. Nothing was saved to history.
   if (phase === "notWork") {
+    const typed = !!inputRef.current?.text;
     return (
       <CenteredShell>
         <EmptyState
-          title="Question not detected"
-          hint="Please try again with the problem in frame."
+          title={
+            typed
+              ? "That doesn't look like a maths or science problem"
+              : "Question not detected"
+          }
+          hint={
+            typed
+              ? "MindGap helps with maths, physics, chemistry and biology. Type or snap one of those."
+              : "Please try again with the problem in frame."
+          }
         />
         <Link
           href="/"
           className="mt-4 inline-flex h-11 items-center rounded-md bg-brand-600 px-4 text-sm font-semibold text-white shadow-raised transition hover:bg-accent-deep active:scale-[0.98] active:bg-accent-deep"
         >
-          Take another photo
+          {typed ? "Back to home" : "Take another photo"}
         </Link>
       </CenteredShell>
     );
