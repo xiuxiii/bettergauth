@@ -108,6 +108,7 @@ export function scoreCase(c, check, analysis) {
     answerLeaks: [],
     labelSpoilers: [],
     headlineLeak: headlineLeak(check, c.problem),
+    strayQuotes: strayQuotes(check),
     kind: "check",
   };
 
@@ -143,6 +144,19 @@ export function scoreCase(c, check, analysis) {
     }
   }
   return r;
+}
+
+/** Fields ending in a quote mark left dangling after the sentence's end. */
+export function strayQuotes(check) {
+  const e = check?.firstError ?? {};
+  const fields = {
+    headline: check?.headline, strength: check?.strength, continueFrom: check?.continueFrom,
+    "firstError.locate": e.locate, "firstError.nudge": e.nudge,
+    "firstError.diagnosis": e.diagnosis, "firstError.fix": e.fix,
+  };
+  return Object.entries(fields)
+    .filter(([, v]) => /[.!?…)]\s*['"‘’“”`]+$/u.test(String(v ?? "").trim()))
+    .map(([k]) => k);
 }
 
 /** A not-homework input must be turned away by the analysis. */
@@ -190,6 +204,7 @@ export function summarize(results) {
     answerLeaks: ok.filter((r) => r.answerLeaks.length).length,
     labelSpoilers: ok.filter((r) => r.labelSpoilers.length).length,
     headlineLeaks: ok.filter((r) => r.headlineLeak?.length).length,
+    strayQuotes: ok.filter((r) => r.strayQuotes?.length).length,
     notStemTurnedAway: `${notStem.filter((r) => r.turnedAway).length}/${notStem.length}`,
     tutorPassed: `${tutor.filter((r) => r.passed).length}/${tutor.length}`,
   };

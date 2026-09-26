@@ -24,8 +24,11 @@ import type {
   TutorRequest,
   WorkCheck,
 } from "@/lib/tutor/types";
-import { emptySessionMemory,
-  normalizeAnalysis } from "@/lib/tutor/types";
+import {
+  emptySessionMemory,
+  normalizeAnalysis,
+  normalizeWorkCheck,
+} from "@/lib/tutor/types";
 import { SYSTEM_INSTRUCTIONS } from "@/lib/tutor/engine";
 import { ALL_CONCEPTS, conceptsFor } from "@/lib/tutor/concepts";
 import { createMessageFieldDecoder } from "@/lib/tutor/streamText";
@@ -697,10 +700,10 @@ Maintain it honestly from evidence:
     const final = await stream.finalMessage();
     logUsage("checkWork", final);
     const out = required(final.parsed_output, "work check");
-    yield {
-      type: "done",
-      check: { ...out, firstError: out.firstError ?? undefined },
-    };
+    // Every fresh check goes through the same clean-up as a stored one (a
+    // stray trailing quote, a null firstError), so the UI never sees raw
+    // model output.
+    yield { type: "done", check: normalizeWorkCheck(out) };
   }
 
   /** The same diagnosis without the progress frames, for non-streaming callers. */

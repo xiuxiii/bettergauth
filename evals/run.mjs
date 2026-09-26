@@ -25,7 +25,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { scoreCase, scoreNotStem, scoreTutor, summarize } from "./score.mjs";
+import { scoreCase, scoreNotStem, scoreTutor, strayQuotes, summarize } from "./score.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -147,6 +147,7 @@ for (const c of cases) {
       r.answerLeaks.length && `answer leaked in ${r.answerLeaks.join(", ")}`,
       r.labelSpoilers.length && `label "${r.label}" reveals ${r.labelSpoilers.join(", ")}`,
       r.headlineLeak?.length && `headline gives away: ${r.headlineLeak.join(", ")}`,
+      r.strayQuotes?.length && `stray quote in ${r.strayQuotes.join(", ")}`,
     ].filter(Boolean);
     console.log(
       `${mark(r.verdictRight)} ${c.id.padEnd(31)} ${r.verdict.padEnd(17)} cat ${mark(r.categoryRight)} line ${mark(r.lineRight)}  ${(r.ms / 1000).toFixed(1)}s${notes.length ? "  ← " + notes.join("; ") : ""}`,
@@ -167,6 +168,7 @@ First-error line     ${s.lineMatch}
 Answer leaks         ${s.answerLeaks} case(s)   (final answer before "Show the rest")
 Label spoilers       ${s.labelSpoilers} case(s)   (concept label names the method)
 Headline leaks       ${s.headlineLeaks} case(s)   (headline says what's wrong, not just where)
+Stray quotes         ${s.strayQuotes} case(s)   (a field ending in a dangling ' or ")
 Not-homework         ${s.notStemTurnedAway} turned away
 Tutor replies        ${s.tutorPassed} passed
 ${s.failedToRun ? `\n${s.failedToRun} case(s) failed to run.` : ""}`);
@@ -230,6 +232,10 @@ function selftest() {
   t("headline saying only where is clean", r.headlineLeak.length === 0);
   r = scoreCase(fallCase, { verdict: "error_found", headline: "Your ball-drop setup holds until line 2.", strength: "", firstError: { ...fallErr, diagnosis: "The ball's drop is treated as a time." }, continueFrom: "" });
   t("the problem's own words don't count as a leak", r.headlineLeak.length === 0);
+  // A8: a dangling quote after the sentence's end is counted.
+  t("stray trailing quote is counted", strayQuotes({ ...good, firstError: { ...good.firstError, fix: "Find t first, before using v = gt.'" } }).includes("firstError.fix"));
+  t("a real closing quote mid-field isn't", strayQuotes({ ...good, headline: 'It says "use g", then stops.' }).length === 0);
+
   // A7: the not-homework and tutor-reply kinds.
   t("not-homework turned away passes", scoreNotStem({ id: "n" }, { hasStemContent: false }).turnedAway);
   t("not-homework tutored fails", !scoreNotStem({ id: "n" }, { hasStemContent: true }).turnedAway);

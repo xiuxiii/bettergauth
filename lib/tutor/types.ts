@@ -667,7 +667,7 @@ export interface WorkCheck {
  */
 export function normalizeWorkCheck(raw: unknown): WorkCheck {
   const c = (raw ?? {}) as Record<string, unknown>;
-  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  const s = (v: unknown) => (typeof v === "string" ? trimStrayQuote(v) : "");
   const e = c.firstError as Record<string, unknown> | null | undefined;
   const verdict: CheckVerdict =
     c.verdict === "correct" || c.verdict === "partially_correct"
@@ -691,6 +691,15 @@ export function normalizeWorkCheck(raw: unknown): WorkCheck {
     continueFrom: s(c.continueFrom),
     concept: s(c.concept) || undefined,
   };
+}
+
+/**
+ * Drop a quote mark left dangling after a sentence's end: the model has ended
+ * a fix with "…before using v = gt.'". Only trailing quotes straight after end
+ * punctuation go, so a quote that closes a real quotation mid-text is kept.
+ */
+export function trimStrayQuote(text: string): string {
+  return text.trim().replace(/([.!?…)])\s*['"‘’“”`]+$/u, "$1");
 }
 
 /** Progress frames streamed by /api/check-work, then exactly one result. */

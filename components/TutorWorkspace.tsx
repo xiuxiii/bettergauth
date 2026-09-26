@@ -801,8 +801,10 @@ export default function TutorWorkspace() {
     // An early check may already be reporting progress; keep its stage.
     if (!pending) setCheckStage(null);
     try {
-      const check = await (pending ??
-        fetchCheck(attempt, forProblem, undefined, retryOf, setCheckStage));
+      const check = normalizeWorkCheck(
+        await (pending ??
+          fetchCheck(attempt, forProblem, undefined, retryOf, setCheckStage)),
+      );
       // Fold the diagnosis into memory so it counts toward recurrence /
       // resolution, then refresh the recurring-gap banner.
       memoryRef.current = applyWorkCheckToMemory(
@@ -949,7 +951,8 @@ export default function TutorWorkspace() {
     <div className="mx-auto flex h-dvh w-full max-w-md animate-rise flex-col bg-slate-50 md:grid md:max-w-6xl md:grid-cols-[minmax(320px,400px)_1fr] md:grid-rows-[auto_minmax(0,1fr)] md:gap-0">
       <TopBar
         onBack={() => router.push("/")}
-        topic={analysis?.topic}
+        // The same label as the problem card's tag, not a second, longer one.
+        topic={analysis ? analysis.concept || analysis.topic : undefined}
         prefs={prefs}
         onPrefsChange={updatePrefs}
         prefsDisabled={turnBusy}
