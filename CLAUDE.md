@@ -11,12 +11,16 @@ npm run dev      # local dev
 npm run build    # production build (run before every push)
 npm run lint
 npx tsc --noEmit # typecheck
+npm test         # unit tests for pure lib/ logic (node:test, no deps)
 npm run eval     # check-work evals against a running app (needs a key)
 npm run eval -- --selftest   # the eval scorer on canned responses, no key
 ```
 
-There are no unit tests. `npx tsc --noEmit && npm run build` is the verification
-gate. `npm run eval` (`evals/run.mjs`, plain Node) hits the running app's
+`npx tsc --noEmit && npm run build && npm test && node evals/run.mjs --selftest` is
+the verification gate. `npm test` covers pure logic only (`tests/*.test.mjs`
+import TypeScript through `tests/importTs.mjs`, which transpiles with the
+project's own `typescript`); keep testable rules in React-free files like
+`lib/richText.ts`. `npm run eval` (`evals/run.mjs`, plain Node) hits the running app's
 `/api/analyze` and `/api/check-work` with the cases in `evals/cases/`, and reports
 verdict accuracy, the **false "you're wrong" rate** (keep it at 0), first-error
 category/line, final-answer leaks before "Show the rest", and label spoilers.
