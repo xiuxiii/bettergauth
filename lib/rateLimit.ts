@@ -119,3 +119,38 @@ export function rateLimited(req: Request): NextResponse | null {
   day.count++;
   return null;
 }
+
+/**
+ * Guess limit for the access gate. Only FAILED codes count, per client key:
+ * after UNLOCK_MAX_FAILS wrong codes in UNLOCK_WINDOW_MS, /api/unlock answers
+ * 429 until the window ends. Before this, codes could be guessed as fast as
+ * requests could be sent. A correct code clears the count.
+ */
+const UNLOCK_MAX_FAILS = 10;
+const UNLOCK_WINDOW_MS = 15 * 60_000;
+const unlockFails = new Map<string, Bucket>();
+
+/** A 429 when this client has used up its wrong guesses, else null. */
+export function unlockLocked(req: Request): NextResponse | null {
+  const now = Date.now();
+  prune(unlockFails, now);
+  const b = unlockFails.get(clientKey(req));
+  if (!b || now >= b.resetAt || b.count < UNLOCK_MAX_FAILS) return null;
+  const minutes = Math.max(1, Math.ceil((b.resetAt - now) / 60_000));
+  return tooMany(
+    `Too many wrong codes. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+    b.resetAt,
+    now,
+  );
+}
+
+/** Count a wrong code against this client. */
+export function noteUnlockFailure(req: Request): void {
+  const now = Date.now();
+  bucket(unlockFails, clientKey(req), now, UNLOCK_WINDOW_MS).count++;
+}
+
+/** A correct code: start this client's count over. */
+export function clearUnlockFailures(req: Request): void {
+  unlockFails.delete(clientKey(req));
+}
