@@ -32,6 +32,7 @@ import {
   normalizeAnalysis,
   normalizeWorkCheck,
   recordConceptError,
+  resolveGaps,
   resolveMisconception,
 } from "@/lib/tutor/types";
 import {
@@ -90,6 +91,8 @@ type DisplayMessage = ChatMessage & {
   practiceState?: PracticeState;
   /** The tutor action that produced this turn (e.g. "hint"). */
   action?: TutorAction;
+  /** This turn confirmed the student solved it in the chat. */
+  resolved?: boolean;
   /** The session's opening nudge, rendered quieter than a real tutor turn. */
   opener?: boolean;
   /** A student turn that is only a photo: `content` is for the model, not the UI. */
@@ -148,6 +151,10 @@ export default function TutorWorkspace() {
   const [image, setImage] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<ProblemAnalysis | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  // The committed transcript, for callbacks that outlive the render they were
+  // created in (a streamed turn finishing seconds later).
+  const messagesRef = useRef<DisplayMessage[]>([]);
+  messagesRef.current = messages;
   const [phase, setPhase] = useState<Phase>("loading");
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [turnBusy, setTurnBusy] = useState(false);
@@ -599,7 +606,9 @@ export default function TutorWorkspace() {
           solution: turn.solution,
           similarProblem: turn.similarProblem,
           hasMore: turn.hasMore,
+          resolved: turn.resolved || undefined,
         });
+        if (turn.resolved) markSolvedInChat();
       };
 
       // show_solution / similar_problem still answer with one JSON body.
@@ -702,6 +711,36 @@ export default function TutorWorkspace() {
         ? { line: retry.line, locate: retry.locate, category: retry.category }
         : undefined,
     );
+  }
+
+  /**
+   * The tutor confirmed the student solved it in the chat. Move everything on
+   * as if they had revealed it: the latest check shows the rest, and its gap
+   * (plus any misconception still open this session) is closed in memory, so
+   * "Concepts to work on" stops listing what they just fixed. The stage reads
+   * the turn's `resolved` flag, which is what shows the key idea and the
+   * resolved chips.
+   */
+  function markSolvedInChat() {
+    setMessages((prev) => {
+      const i = prev.map((m) => !!m.workCheck).lastIndexOf(true);
+      if (i === -1) return prev;
+      const next = prev.slice();
+      next[i] = { ...next[i], reveal: 2 };
+      return next;
+    });
+    // The updater above runs lazily, so the check's concept is read from the
+    // latest committed transcript instead.
+    const latest = [...messagesRef.current].reverse().find((m) => m.workCheck);
+    const open = memoryRef.current.misconceptions
+      .filter((m) => m.status !== "resolved")
+      .map((m) => m.concept);
+    memoryRef.current = resolveGaps(memoryRef.current, [
+      latest?.workCheck?.concept,
+      ...open,
+    ]);
+    setRecurring(detectRecurring(memoryRef.current));
+    bumpRecord();
   }
 
   /** Move a check's reveal on. Saved with the transcript by the effect above. */

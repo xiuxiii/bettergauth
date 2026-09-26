@@ -466,6 +466,22 @@ export function resolveMisconception(
   return next;
 }
 
+/**
+ * Close gaps the student has just fixed: each concept becomes demonstrated and
+ * any open misconception on it resolved. Used when the tutor confirms a fix in
+ * the chat, so "Concepts to work on" stops listing what they already solved.
+ */
+export function resolveGaps(
+  memory: SessionMemory,
+  concepts: readonly (string | undefined)[],
+): SessionMemory {
+  let next = memory;
+  for (const c of concepts) {
+    if (c?.trim()) next = resolveMisconception(next, c);
+  }
+  return next;
+}
+
 /** Record another failed attempt at a concept (a targeted retry that missed). */
 export function recordConceptError(
   memory: SessionMemory,
@@ -524,6 +540,12 @@ export interface TutorTurn {
    * conceptual moves (ask / continue / hint / explain / go_deeper).
    */
   hasMore?: boolean;
+  /**
+   * The student has just solved the problem or fixed the flagged step in the
+   * chat, and the tutor checked and confirmed it. The client then treats the
+   * session as resolved: the check's rest is revealed and the gap is closed.
+   */
+  resolved?: boolean;
   /**
    * The tutor's updated cross-turn memory. The conceptual moves return a freshly
    * updated one; other moves pass the incoming memory back unchanged. The client

@@ -152,6 +152,8 @@ const SessionMemorySchema = z.object({
 const TutorChunkSchema = z.object({
   message: z.string(),
   hasMore: z.boolean(),
+  /** The student has just solved it / fixed the flagged step, confirmed. */
+  resolved: z.boolean(),
   memory: SessionMemorySchema,
 });
 const TutorSolutionSchema = z.object({
@@ -573,7 +575,12 @@ Maintain it honestly from evidence:
     });
     logUsage("tutor:chunk", res);
     const out = required(res.parsed_output, "tutor reply");
-    return { message: out.message, hasMore: out.hasMore, memory: out.memory };
+    return {
+      message: out.message,
+      hasMore: out.hasMore,
+      resolved: out.resolved,
+      memory: out.memory,
+    };
   }
 
   /**
@@ -627,7 +634,12 @@ Maintain it honestly from evidence:
     const out = required(final.parsed_output, "tutor reply");
     yield {
       type: "done",
-      turn: { message: out.message, hasMore: out.hasMore, memory: out.memory },
+      turn: {
+        message: out.message,
+        hasMore: out.hasMore,
+        resolved: out.resolved,
+        memory: out.memory,
+      },
     };
   }
 
