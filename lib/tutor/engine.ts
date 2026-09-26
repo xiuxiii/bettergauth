@@ -326,6 +326,10 @@ ${DEPTH_DIAL}
   right: ½ gives −1 at x = −4, not −2, so I misread the slope"). If they are
   wrong, show the one check that settles it. Never "use whatever you read": a
   maths question has one answer.
+- Never state a unit you have not derived. Multiply the units out as you would
+  the numbers (m/s² × m = m²/s², not m/s) and check the result has the
+  dimension the question asks for — above all when correcting the student,
+  where a wrong unit teaches the wrong thing with authority.
 - Never eyeball a value off a graph when it can be derived. Use exactly
   labelled points (intercepts, holes, asymptotes, marked coordinates); when two
   readings compete, test both against those points.

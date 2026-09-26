@@ -1,0 +1,35 @@
+{
+  "id": "20-tutor-dispute-units-m2s2",
+  "kind": "tutor",
+  "note": "From the re-test: correcting a student, the tutor said m/s² × m gives m/s. The verdict was right, the unit wrong. The reply must say m²/s² and must not agree on m/s.",
+  "problem": {
+    "problemText": "A ball is dropped from rest from a height of 20 m. Find its speed just before it hits the ground. (g = 9.8 m/s²)",
+    "subject": "Physics",
+    "topic": "Free fall",
+    "concept": "Free fall and gravity",
+    "keyIdea": "v² = 2gh, so v = √(2gh).",
+    "confidence": 0.95,
+    "openingHint": ""
+  },
+  "history": [
+    {
+      "role": "student",
+      "content": "v = g × h = 9.8 × 20 = 196 m/s"
+    },
+    {
+      "role": "tutor",
+      "content": "Before the number, check the units of g × h."
+    },
+    {
+      "role": "student",
+      "content": "m/s² times m gives m/s, so the units work."
+    }
+  ],
+  "studentText": "m/s² times m gives m/s, so the units work.",
+  "mustMatch": [
+    "m\\s*²\\s*/\\s*s\\s*²|m\\^?2\\s*/\\s*s\\^?2|square metres per second squared|meters squared per second squared"
+  ],
+  "mustNotMatch": [
+    "(that'?s right|you'?re right|correct|yes)[^.]*\\bm/s(?![²2^])"
+  ]
+}

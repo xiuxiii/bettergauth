@@ -467,6 +467,8 @@ demonstrated, and the trivial algebra was never interrogated.
   claims against the givens; if the student is right, say so and name the
   tutor's mistake; if not, show the one check that settles it.
 - Eyeballing a value off a graph that exact labelled points determine.
+- Stating a unit without deriving it (m/s² × m is m²/s², not m/s), worst of
+  all inside a correction.
 
 ---
 
