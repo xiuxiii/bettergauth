@@ -9,15 +9,23 @@
  *   npm run eval -- --json out.json  also write the per-case results
  *   npm run eval -- --selftest       check the scorer itself; no app, no key
  *
- * Each case runs /api/analyze on the problem text (for the label spoiler
- * check), then /api/check-work on the attempt. Plain Node, no dependencies.
- * Cases live in evals/cases/*.json; see evals/score.mjs for the format.
+ * A check case runs /api/analyze, then /api/check-work — on the typed text,
+ * or on a photo exactly as the app does (analyze the photo, check the same
+ * photo). notStem cases run analyze only; tutor cases run one /api/tutor turn.
+ * Plain Node, no dependencies. Cases live in evals/cases/*.json; see
+ * evals/score.mjs for the format. The photos are rendered by
+ * evals/make-images.mjs and committed.
+ *
+ * Every case is several paid calls through the app's rate limiter. Set
+ * EVAL_BYPASS_TOKEN to the same value here and on the server to skip the
+ * limiter for these requests; with it unset on the server, the header is
+ * ignored.
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { scoreCase, summarize } from "./score.mjs";
+import { scoreCase, scoreNotStem, scoreTutor, summarize } from "./score.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -43,7 +51,12 @@ const cases = fs
   .map((f) => JSON.parse(fs.readFileSync(path.join(HERE, "cases", f), "utf8")))
   .filter((c) => !ONLY || c.id.includes(ONLY));
 
-const headers = { "Content-Type": "application/json", ...(COOKIE ? { Cookie: COOKIE } : {}) };
+const BYPASS = process.env.EVAL_BYPASS_TOKEN;
+const headers = {
+  "Content-Type": "application/json",
+  ...(COOKIE ? { Cookie: COOKIE } : {}),
+  ...(BYPASS ? { "x-eval-bypass": BYPASS } : {}),
+};
 
 async function post(route, body) {
   const res = await fetch(`${BASE}${route}`, { method: "POST", headers, body: JSON.stringify(body) });
@@ -68,12 +81,41 @@ function imageDataUrl(rel) {
   return `data:${type};base64,${buf.toString("base64")}`;
 }
 
+/** /api/tutor streams NDJSON for conversational turns: deltas, then done. */
+function lastTurn(ndjson) {
+  for (const line of ndjson.split("\n").filter(Boolean)) {
+    const f = JSON.parse(line);
+    if (f.t === "done") return f.turn;
+    if (f.t === "error") throw new Error(`tutor: ${f.message}`);
+  }
+  throw new Error("tutor: stream ended without a result");
+}
+
 async function runCase(c) {
   const t0 = Date.now();
-  const analysis = JSON.parse(await post("/api/analyze", { text: c.problem }));
-  const attempt = c.attempt.image
-    ? { imageDataUrl: imageDataUrl(c.attempt.image) }
-    : { text: c.attempt.text };
+  if (c.kind === "tutor") {
+    const turn = lastTurn(
+      await post("/api/tutor", {
+        problem: c.problem,
+        history: c.history.map((m, i) => ({ id: `h${i}`, createdAt: i, ...m })),
+        action: c.action ?? "ask",
+        studentText: c.studentText,
+      }),
+    );
+    return { ...scoreTutor(c, turn.message), ms: Date.now() - t0, reply: turn.message };
+  }
+  const photo = c.image ? imageDataUrl(c.image) : null;
+  const analysis = JSON.parse(
+    await post("/api/analyze", photo ? { image: photo } : { text: c.text ?? c.problem }),
+  );
+  if (c.kind === "notStem") {
+    return { ...scoreNotStem(c, analysis), ms: Date.now() - t0 };
+  }
+  const attempt = photo
+    ? { imageDataUrl: photo }
+    : c.attempt.image
+      ? { imageDataUrl: imageDataUrl(c.attempt.image) }
+      : { text: c.attempt.text };
   const check = lastCheck(await post("/api/check-work", { problem: analysis, attempt }));
   return { ...scoreCase(c, check, analysis), ms: Date.now() - t0, check, label: analysis.concept };
 }
@@ -86,6 +128,19 @@ for (const c of cases) {
   try {
     const r = await runCase(c);
     results.push(r);
+    const secs = `${(r.ms / 1000).toFixed(1)}s`;
+    if (r.kind === "notStem") {
+      console.log(`${mark(r.turnedAway)} ${c.id.padEnd(31)} ${r.turnedAway ? "turned away" : "TUTORED A NON-PROBLEM"}  ${secs}`);
+      continue;
+    }
+    if (r.kind === "tutor") {
+      const why = [
+        r.missing.length && `missing ${r.missing.join(" | ")}`,
+        r.forbidden.length && `said ${r.forbidden.join(" | ")}`,
+      ].filter(Boolean);
+      console.log(`${mark(r.passed)} ${c.id.padEnd(31)} tutor reply  ${secs}${why.length ? "  ← " + why.join("; ") : ""}`);
+      continue;
+    }
     const notes = [
       r.falseAlarm && "FALSE ALARM",
       r.missed && "missed error",
@@ -112,6 +167,8 @@ First-error line     ${s.lineMatch}
 Answer leaks         ${s.answerLeaks} case(s)   (final answer before "Show the rest")
 Label spoilers       ${s.labelSpoilers} case(s)   (concept label names the method)
 Headline leaks       ${s.headlineLeaks} case(s)   (headline says what's wrong, not just where)
+Not-homework         ${s.notStemTurnedAway} turned away
+Tutor replies        ${s.tutorPassed} passed
 ${s.failedToRun ? `\n${s.failedToRun} case(s) failed to run.` : ""}`);
 
 if (JSON_OUT) {
@@ -173,6 +230,14 @@ function selftest() {
   t("headline saying only where is clean", r.headlineLeak.length === 0);
   r = scoreCase(fallCase, { verdict: "error_found", headline: "Your ball-drop setup holds until line 2.", strength: "", firstError: { ...fallErr, diagnosis: "The ball's drop is treated as a time." }, continueFrom: "" });
   t("the problem's own words don't count as a leak", r.headlineLeak.length === 0);
+  // A7: the not-homework and tutor-reply kinds.
+  t("not-homework turned away passes", scoreNotStem({ id: "n" }, { hasStemContent: false }).turnedAway);
+  t("not-homework tutored fails", !scoreNotStem({ id: "n" }, { hasStemContent: true }).turnedAway);
+  const unitCase = { id: "u", mustMatch: ["\\bJ\\b|joule"], mustNotMatch: ["(answer|unit|units) (is|are) (in )?(N|newtons)\\b"] };
+  t("tutor reply in joules passes", scoreTutor(unitCase, "Not quite: kg·m²/s² is a joule, so it's 4.0 J.").passed);
+  t("tutor reply agreeing on newtons fails", !scoreTutor(unitCase, "Yes, the unit is newtons.").passed);
+  const mixed = summarize([scoreNotStem({ id: "n" }, { hasStemContent: false }), scoreTutor(unitCase, "4.0 J"), scoreCase(rightCase, { verdict: "correct", headline: "", strength: "", continueFrom: "" })]);
+  t("summary keeps kinds apart", mixed.notStemTurnedAway === "1/1" && mixed.tutorPassed === "1/1" && mixed.verdictAccuracy === "100%");
   t("summary counts headline leaks", summarize([scoreCase(fallCase, { verdict: "error_found", headline: "Line 2 uses a distance as a time.", strength: "", firstError: fallErr, continueFrom: "" })]).headlineLeaks === 1);
 
   let failed = 0;

@@ -3,8 +3,12 @@
  * itself can be checked against canned responses (`node evals/run.mjs
  * --selftest`) before its numbers are trusted.
  *
- * A case (evals/cases/*.json):
- *   id, problem, attempt: { text } | { image: "evals/images/x.jpg" }
+ * A case (evals/cases/*.json), one of three kinds:
+ *
+ * check (default) — analyze, then check-work, the way the app does:
+ *   id, problem, and either attempt: { text } (analyzed as typed text) or
+ *   image: "evals/images/x.jpg" (a photo of the question and the working,
+ *   analyzed and checked as the same photo; `problem` is then reference only)
  *   expect: {
  *     correct:     true when the attempt is right (any valid method)
  *     categories?: acceptable firstError categories, for a wrong attempt
@@ -12,6 +16,14 @@
  *   }
  *   finalAnswer?:   strings that must appear ONLY in continueFrom
  *   mustNotReveal?: terms the safe concept label must not contain
+ *
+ * notStem — a photo or text with nothing to tutor; analyze must say so:
+ *   id, kind: "notStem", image | text
+ *
+ * tutor — one tutor reply, e.g. to a student disputing the tutor:
+ *   id, kind: "tutor", problem (a ProblemAnalysis), history, studentText,
+ *   action? (default "ask"), mustMatch?: regex[], mustNotMatch?: regex[]
+ *   (case-insensitive, against the reply text)
  */
 
 /** Words that say nothing about WHAT went wrong, only where or how it reads. */
@@ -96,6 +108,7 @@ export function scoreCase(c, check, analysis) {
     answerLeaks: [],
     labelSpoilers: [],
     headlineLeak: headlineLeak(check, c.problem),
+    kind: "check",
   };
 
   if (!c.expect.correct && !saidCorrect) {
@@ -132,17 +145,43 @@ export function scoreCase(c, check, analysis) {
   return r;
 }
 
+/** A not-homework input must be turned away by the analysis. */
+export function scoreNotStem(c, analysis) {
+  return {
+    id: c.id,
+    kind: "notStem",
+    turnedAway: analysis?.hasStemContent === false,
+  };
+}
+
+/** A tutor reply must match every mustMatch and no mustNotMatch pattern. */
+export function scoreTutor(c, reply) {
+  const text = String(reply ?? "");
+  const missing = (c.mustMatch ?? []).filter((re) => !new RegExp(re, "i").test(text));
+  const forbidden = (c.mustNotMatch ?? []).filter((re) => new RegExp(re, "i").test(text));
+  return {
+    id: c.id,
+    kind: "tutor",
+    passed: missing.length === 0 && forbidden.length === 0,
+    missing,
+    forbidden,
+  };
+}
+
 const pct = (n, d) => (d ? `${Math.round((100 * n) / d)}%` : "n/a");
 
 export function summarize(results) {
-  const ok = results.filter((r) => !r.failed);
+  const ran = results.filter((r) => !r.failed);
+  const notStem = ran.filter((r) => r.kind === "notStem");
+  const tutor = ran.filter((r) => r.kind === "tutor");
+  const ok = ran.filter((r) => !r.kind || r.kind === "check");
   const correctCases = ok.filter((r) => r.expectedCorrect);
   const errorCases = ok.filter((r) => !r.expectedCorrect);
   const cat = ok.filter((r) => r.categoryRight !== null);
   const line = ok.filter((r) => r.lineRight !== null);
   return {
     cases: results.length,
-    failedToRun: results.length - ok.length,
+    failedToRun: results.length - ran.length,
     verdictAccuracy: pct(ok.filter((r) => r.verdictRight).length, ok.length),
     falseAlarmRate: pct(correctCases.filter((r) => r.falseAlarm).length, correctCases.length),
     missedErrorRate: pct(errorCases.filter((r) => r.missed).length, errorCases.length),
@@ -151,5 +190,7 @@ export function summarize(results) {
     answerLeaks: ok.filter((r) => r.answerLeaks.length).length,
     labelSpoilers: ok.filter((r) => r.labelSpoilers.length).length,
     headlineLeaks: ok.filter((r) => r.headlineLeak?.length).length,
+    notStemTurnedAway: `${notStem.filter((r) => r.turnedAway).length}/${notStem.length}`,
+    tutorPassed: `${tutor.filter((r) => r.passed).length}/${tutor.length}`,
   };
 }

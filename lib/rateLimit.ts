@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { constantTimeEqual } from "@/lib/accessToken";
 
 /**
  * In-memory rate limiter for the AI routes. Every route it guards is a model
@@ -59,6 +60,19 @@ function clientKey(req: Request): string {
   );
 }
 
+/**
+ * The eval runner's way past the limiter: `npm run eval` fires several paid
+ * calls per case and would otherwise eat the day's cap. Honoured only when the
+ * server has EVAL_BYPASS_TOKEN set AND the request's x-eval-bypass header
+ * matches it; with the env var unset (the default, production included) the
+ * header does nothing.
+ */
+function evalBypass(req: Request): boolean {
+  const token = process.env.EVAL_BYPASS_TOKEN?.trim();
+  const sent = req.headers.get("x-eval-bypass");
+  return !!token && !!sent && constantTimeEqual(sent, token);
+}
+
 function tooMany(message: string, resetAt: number, now: number): NextResponse {
   const retryAfter = Math.max(1, Math.ceil((resetAt - now) / 1000));
   return NextResponse.json(
@@ -73,6 +87,7 @@ function tooMany(message: string, resetAt: number, now: number): NextResponse {
  * `const limited = rateLimited(req); if (limited) return limited;`
  */
 export function rateLimited(req: Request): NextResponse | null {
+  if (evalBypass(req)) return null;
   const now = Date.now();
   prune(minuteBuckets, now);
   prune(dayBuckets, now);

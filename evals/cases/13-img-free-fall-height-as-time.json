@@ -1,0 +1,27 @@
+{
+  "id": "13-img-free-fall-height-as-time",
+  "note": "Photo: the height used as a time (the headline-leak case from the re-test).",
+  "image": "evals/images/free-fall-height-as-time.jpg",
+  "problem": "5. A stone is dropped from rest from a height of 45 m. How fast is it moving when it hits the ground? (g = 9.81 m/s²)",
+  "expect": {
+    "correct": false,
+    "categories": [
+      "conceptual",
+      "setup",
+      "model_selection"
+    ],
+    "line": [
+      "9.81 × 45",
+      "9.81×45",
+      "u + gt"
+    ]
+  },
+  "finalAnswer": [
+    "29.7"
+  ],
+  "mustNotReveal": [
+    "2gh",
+    "v²",
+    "energy"
+  ]
+}

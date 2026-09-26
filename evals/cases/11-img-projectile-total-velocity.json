@@ -1,0 +1,24 @@
+{
+  "id": "11-img-projectile-total-velocity",
+  "note": "Photo: the classic components mistake, handwritten under a printed question.",
+  "image": "evals/images/projectile-total-velocity.jpg",
+  "problem": "7. A ball is kicked at 20 m/s at 30° above the horizontal on level ground. How long is it in the air? (g = 9.81 m/s²)",
+  "expect": {
+    "correct": false,
+    "categories": [
+      "conceptual"
+    ],
+    "line": [
+      "2v/g",
+      "2(20)"
+    ]
+  },
+  "finalAnswer": [
+    "2.04"
+  ],
+  "mustNotReveal": [
+    "vertical",
+    "sin30",
+    "component"
+  ]
+}

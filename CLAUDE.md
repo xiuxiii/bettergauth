@@ -20,8 +20,13 @@ gate. `npm run eval` (`evals/run.mjs`, plain Node) hits the running app's
 `/api/analyze` and `/api/check-work` with the cases in `evals/cases/`, and reports
 verdict accuracy, the **false "you're wrong" rate** (keep it at 0), first-error
 category/line, final-answer leaks before "Show the rest", and label spoilers.
-Pass `--base` for another port. It is how to tune the thinking `effort`. The seed
-cases are typed attempts; real handwriting photos go in `evals/images/`.
+Pass `--base` for another port. It is how to tune the thinking `effort`. Cases
+come in three kinds: `check` (typed text, or a photo analyzed and checked the way
+the app does), `notStem` (must be turned away) and `tutor` (one reply, checked
+against regexes, e.g. units in a dispute). The photos are rendered by
+`node evals/make-images.mjs` (needs Playwright; the JPEGs are committed) and include
+a tilted, dim one, a multi-part one and a not-homework one. Each case is several
+paid calls through the rate limiter: set `EVAL_BYPASS_TOKEN` on both sides.
 
 ## Environment
 
@@ -35,6 +40,7 @@ cases are typed attempts; real handwriting photos go in `evals/images/`.
 | `ACCESS_SECRET` | Key for the access cookie, which names a code by an HMAC id and never contains it (`lib/accessToken.ts`). Unset = the key is `ACCESS_CODE`, else derived from the list — so **set it when using `ACCESS_CODES`**, or every list edit logs everyone out. |
 | `RATE_LIMIT_PER_MIN` | Per-IP fixed window, default 30. A burst brake. |
 | `RATE_LIMIT_PER_DAY` | Per-IP 24h cap, default 150 — the real spend ceiling. Counts only admitted requests. In memory per warm instance for now; `lib/rateLimit.ts` has the TODO for Upstash/Vercel KV. |
+| `EVAL_BYPASS_TOKEN` | Lets `npm run eval` skip the rate limiter: requests whose `x-eval-bypass` header matches it aren't counted. Unset (the default, and production unless you set it) = the header is ignored. Set the same value in the runner's env. |
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |
 | `DEBUG_TOKENS` | Logs per-call token usage, including whether prompt caching is hitting. |
 | `AI_PROVIDER` | Defaults to `anthropic`, the only implemented provider. Any other value throws at startup. |

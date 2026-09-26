@@ -1,0 +1,37 @@
+{
+  "id": "19-tutor-kinetic-energy-units",
+  "kind": "tutor",
+  "note": "Dispute reply must get the units right: ½mv² is in joules, not newtons.",
+  "problem": {
+    "problemText": "A 0.50 kg ball moves at 4.0 m/s. Find its kinetic energy.",
+    "subject": "Physics",
+    "topic": "Kinetic energy",
+    "concept": "Work and energy",
+    "keyIdea": "KE = ½mv².",
+    "confidence": 0.95,
+    "openingHint": ""
+  },
+  "history": [
+    {
+      "role": "student",
+      "content": "I got KE = ½(0.50)(4.0)² = 4.0"
+    },
+    {
+      "role": "tutor",
+      "content": "That's the right number. What unit does it come out in?"
+    },
+    {
+      "role": "student",
+      "content": "It's 4.0 N, because kg times m/s squared is newtons."
+    }
+  ],
+  "studentText": "It's 4.0 N, because kg times m/s squared is newtons.",
+  "mustMatch": [
+    "\\bJ\\b|joule|kg\\s*·?\\s*m\\s*²\\s*/\\s*s\\s*²|kg\\s*m\\^?2\\s*/\\s*s\\^?2|m²/s²"
+  ],
+  "mustNotMatch": [
+    "(answer|unit|units|result) (is|are|should be|comes out in) (in )?(N|newtons)\\b",
+    "you'?re right[^.]*\\bnewtons?\\b",
+    "that'?s right[^.]*\\bnewtons?\\b"
+  ]
+}
