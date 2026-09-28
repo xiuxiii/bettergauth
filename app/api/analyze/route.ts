@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const analysis = await getProvider().analyzeProblem(
+    const analysis = await getProvider(req).analyzeProblem(
       hasImage ? { imageDataUrl: image } : { problemText: text },
     );
     return NextResponse.json(analysis);

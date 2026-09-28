@@ -108,17 +108,17 @@ export interface AIProvider {
 }
 
 /**
- * Thrown by a provider slot that is reserved but not wired up yet (today:
- * DeepSeek). Shaped like an upstream API error — numeric `status`, string
- * `type` — so `classify` in lib/apiError.ts reports it as a 501 with a clear
- * "switch AI_PROVIDER back" message instead of a generic "Please try again".
+ * A photo the selected provider can't read, with no other provider to hand it
+ * to (DeepSeek with no ANTHROPIC_API_KEY set). Shaped like an upstream API
+ * error so `classify` in lib/apiError.ts turns it into a 422 that tells the
+ * student what to do, instead of a "Please try again" that can't succeed.
  */
-export class ProviderNotImplementedError extends Error {
-  readonly status = 501;
-  readonly type = "not_implemented_error";
+export class PhotoUnsupportedError extends Error {
+  readonly status = 422;
+  readonly type = "photo_unsupported";
 
-  constructor(provider: string, method: string) {
-    super(`The "${provider}" provider does not implement ${method}() yet.`);
-    this.name = "ProviderNotImplementedError";
+  constructor() {
+    super("The selected AI provider could not read this photo.");
+    this.name = "PhotoUnsupportedError";
   }
 }

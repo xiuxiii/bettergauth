@@ -106,13 +106,13 @@ function classify(err: unknown): Classified | null {
     };
   }
 
-  // A reserved provider slot (ProviderNotImplementedError in lib/ai/types.ts).
-  if (bodyType === "not_implemented_error") {
+  // PhotoUnsupportedError in lib/ai/types.ts.
+  if (bodyType === "photo_unsupported") {
     return {
-      status: 501,
-      code: "provider_not_implemented",
+      status: 422,
+      code: "photo_unsupported",
       message:
-        "The selected AI provider isn't wired up yet. Set AI_PROVIDER back to anthropic on the server.",
+        "This tutor can't read photos right now. Type the problem in instead.",
     };
   }
 

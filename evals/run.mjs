@@ -3,10 +3,11 @@
  * Check-work evals against a RUNNING app — the real routes, the real prompts,
  * the real provider — so what is measured is what students get.
  *
- *   npm run dev                      (with ANTHROPIC_API_KEY set)
+ *   npm run dev                      (with DEEPSEEK_API_KEY and/or ANTHROPIC_API_KEY)
  *   npm run eval                     all cases, against http://localhost:3000
  *   npm run eval -- --base http://localhost:3100 --only projectile
  *   npm run eval -- --json out.json  also write the per-case results
+ *   npm run eval -- --provider anthropic   pin a provider (default: the app's)
  *   npm run eval -- --selftest       check the scorer itself; no app, no key
  *
  * Each case runs /api/analyze on the problem text (for the label spoiler
@@ -35,6 +36,8 @@ const BASE = (flag("--base") ?? process.env.EVAL_BASE ?? "http://localhost:3000"
 const ONLY = flag("--only");
 const JSON_OUT = flag("--json");
 const COOKIE = process.env.EVAL_COOKIE; // for a gated deploy: stem_access=...
+// Same header as the setup page's switch (lib/aiChoice.ts).
+const PROVIDER = flag("--provider");
 
 const cases = fs
   .readdirSync(path.join(HERE, "cases"))
@@ -43,7 +46,11 @@ const cases = fs
   .map((f) => JSON.parse(fs.readFileSync(path.join(HERE, "cases", f), "utf8")))
   .filter((c) => !ONLY || c.id.includes(ONLY));
 
-const headers = { "Content-Type": "application/json", ...(COOKIE ? { Cookie: COOKIE } : {}) };
+const headers = {
+  "Content-Type": "application/json",
+  ...(COOKIE ? { Cookie: COOKIE } : {}),
+  ...(PROVIDER ? { "x-ai-provider": PROVIDER } : {}),
+};
 
 async function post(route, body) {
   const res = await fetch(`${BASE}${route}`, { method: "POST", headers, body: JSON.stringify(body) });
@@ -80,7 +87,7 @@ async function runCase(c) {
 
 const mark = (b) => (b === null ? "·" : b ? "✓" : "✗");
 
-console.log(`Running ${cases.length} case(s) against ${BASE}\n`);
+console.log(`Running ${cases.length} case(s) against ${BASE}${PROVIDER ? ` (provider: ${PROVIDER})` : ""}\n`);
 const results = [];
 for (const c of cases) {
   try {

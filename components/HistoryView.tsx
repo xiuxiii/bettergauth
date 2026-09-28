@@ -10,7 +10,7 @@ import {
   type SessionRecord,
 } from "@/lib/history/db";
 import { rankConcepts, type ConceptProgress } from "@/lib/tutor/progress";
-import { readApiError } from "@/lib/apiClient";
+import { apiFetch, readApiError } from "@/lib/apiClient";
 import { formatRelativeDate } from "@/lib/utils";
 import { Spinner } from "@/components/States";
 import RichText, { InlineRichText } from "@/components/RichText";
@@ -47,7 +47,7 @@ export default function HistoryView() {
     setSummaryBusy(true);
     setSummaryError(null);
     try {
-      const res = await fetch("/api/progress", {
+      const res = await apiFetch("/api/progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ concepts: concepts.slice(0, 8) }),

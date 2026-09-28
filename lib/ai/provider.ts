@@ -6,72 +6,143 @@ import { DeepSeekProvider } from "@/lib/ai/deepseekProvider";
 
 /**
  * Provider factory — the single place a provider is chosen and constructed.
- * This module is server-only (see the `server-only` import), so the API key
+ * This module is server-only (see the `server-only` import), so the API keys
  * read here can never be bundled into client code.
  *
- * `AI_PROVIDER` picks the backend:
- *   - `anthropic` (default) — the real provider. `ANTHROPIC_API_KEY` is
- *     required; `ANTHROPIC_MODEL` optionally pins the model (defaults to
- *     claude-sonnet-5).
- *   - `deepseek` — a reserved slot. `DEEPSEEK_API_KEY` is required;
- *     `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` are optional. Every call currently
- *     fails with a 501 (see lib/ai/deepseekProvider.ts).
- * Both keys can be set at once; only the selected provider's key is read.
+ * Two providers, chosen per request:
+ *   - The client's pick arrives as the `x-ai-provider` header (the switch on
+ *     the setup page, lib/aiChoice.ts). It is honoured only when that
+ *     provider's key is configured; anything else gets the default.
+ *   - The default is `AI_PROVIDER` when set, else DeepSeek when
+ *     `DEEPSEEK_API_KEY` is set (it is far cheaper), else Anthropic. An
+ *     Anthropic-only deploy therefore behaves exactly as before.
+ *
+ * With both keys set, DeepSeek hands any photo it can't read to Claude.
  */
-let cached: AIProvider | null = null;
+export type ProviderId = "anthropic" | "deepseek";
 
-export function getProvider(): AIProvider {
-  if (cached) return cached;
+export const PROVIDER_HEADER = "x-ai-provider";
 
-  const provider = (process.env.AI_PROVIDER?.trim() || "anthropic").toLowerCase();
+const DEFAULT_MODELS: Record<ProviderId, string> = {
+  anthropic: "claude-sonnet-5",
+  deepseek: "deepseek-flash",
+};
 
-  switch (provider) {
-    case "anthropic": {
-      const apiKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
-      const model = process.env.ANTHROPIC_MODEL?.trim() || undefined;
-      // Optional: run question detection on a different (faster/cheaper) model
-      // than the tutoring calls. Unset means "same model", so this changes
-      // nothing until someone deliberately sets it.
-      const detectionModel = process.env.DETECTION_MODEL?.trim() || undefined;
+/** What is configured, read from env. Never includes a key. */
+export function providerConfig() {
+  const env = (name: string) => process.env[name]?.trim() || undefined;
+  const aiProvider = env("AI_PROVIDER")?.toLowerCase();
+  const anthropic = !!env("ANTHROPIC_API_KEY");
+  const deepseek = !!env("DEEPSEEK_API_KEY");
 
-      if (!apiKey) {
-        throw new Error(
-          "ANTHROPIC_API_KEY is missing or blank. Set it in .env.local (or your host's " +
-            "server env) and restart. See /api/health and docs/ai-provider-integration.md.",
-        );
-      }
+  const defaultProvider: ProviderId | null =
+    aiProvider === undefined
+      ? deepseek
+        ? "deepseek"
+        : "anthropic"
+      : aiProvider === "anthropic" || aiProvider === "deepseek"
+        ? aiProvider
+        : null;
 
-      console.log(
-        `[ai] provider=anthropic; model=${model ?? "claude-sonnet-5"}` +
-          (detectionModel ? `; detection=${detectionModel}` : ""),
-      );
-      cached = new AnthropicProvider({ apiKey, model, detectionModel });
-      return cached;
-    }
+  return {
+    aiProvider: aiProvider ?? null,
+    /** null when AI_PROVIDER names something unknown. */
+    defaultProvider,
+    providers: {
+      anthropic: {
+        configured: anthropic,
+        model: env("ANTHROPIC_MODEL") ?? DEFAULT_MODELS.anthropic,
+      },
+      deepseek: {
+        configured: deepseek,
+        model: env("DEEPSEEK_MODEL") ?? DEFAULT_MODELS.deepseek,
+        /** DEEPSEEK_VISION=off sends photos straight to the fallback. */
+        vision: env("DEEPSEEK_VISION")?.toLowerCase() !== "off",
+      },
+    },
+    /** Who reads a photo DeepSeek can't. */
+    photoFallback: deepseek && anthropic ? ("anthropic" as const) : null,
+  };
+}
 
-    case "deepseek": {
-      const apiKey = process.env.DEEPSEEK_API_KEY?.trim() ?? "";
-      const model = process.env.DEEPSEEK_MODEL?.trim() || undefined;
-      const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || undefined;
+const cache: Partial<Record<ProviderId, AIProvider>> = {};
 
-      if (!apiKey) {
-        throw new Error(
-          "DEEPSEEK_API_KEY is missing or blank (AI_PROVIDER=deepseek). Set it in " +
-            ".env.local (or your host's server env) and restart, or unset AI_PROVIDER " +
-            "to use Anthropic.",
-        );
-      }
+/**
+ * The provider for this request. Pass the route's `Request` so the student's
+ * choice is honoured; without one, the default is used.
+ */
+export function getProvider(req?: Request): AIProvider {
+  const config = providerConfig();
+  const requested = req?.headers.get(PROVIDER_HEADER)?.trim().toLowerCase();
 
-      console.log(
-        `[ai] provider=deepseek; model=${model ?? "deepseek-chat"} (stub — not implemented)`,
-      );
-      cached = new DeepSeekProvider({ apiKey, model, baseURL });
-      return cached;
-    }
-
-    default:
-      throw new Error(
-        `Unknown AI_PROVIDER "${provider}". Use "anthropic" (default) or "deepseek".`,
-      );
+  let id: ProviderId;
+  if (
+    (requested === "anthropic" || requested === "deepseek") &&
+    config.providers[requested].configured
+  ) {
+    id = requested;
+  } else if (config.defaultProvider) {
+    id = config.defaultProvider;
+  } else {
+    throw new Error(
+      `Unknown AI_PROVIDER "${config.aiProvider}". Use "anthropic" or "deepseek", or unset it.`,
+    );
   }
+  return build(id);
+}
+
+function build(id: ProviderId): AIProvider {
+  const cached = cache[id];
+  if (cached) return cached;
+  const provider = id === "anthropic" ? buildAnthropic() : buildDeepSeek();
+  cache[id] = provider;
+  return provider;
+}
+
+function buildAnthropic(): AIProvider {
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
+  const model = process.env.ANTHROPIC_MODEL?.trim() || undefined;
+  // Optional: run question detection on a different (faster/cheaper) model
+  // than the tutoring calls. Unset means "same model", so this changes nothing
+  // until someone deliberately sets it.
+  const detectionModel = process.env.DETECTION_MODEL?.trim() || undefined;
+
+  if (!apiKey) {
+    throw new Error(
+      "ANTHROPIC_API_KEY is missing or blank. Set it in .env.local (or your host's " +
+        "server env) and restart. See /api/health and docs/ai-provider-integration.md.",
+    );
+  }
+
+  console.log(
+    `[ai] provider=anthropic; model=${model ?? DEFAULT_MODELS.anthropic}` +
+      (detectionModel ? `; detection=${detectionModel}` : ""),
+  );
+  return new AnthropicProvider({ apiKey, model, detectionModel });
+}
+
+function buildDeepSeek(): AIProvider {
+  const apiKey = process.env.DEEPSEEK_API_KEY?.trim() ?? "";
+  const model = process.env.DEEPSEEK_MODEL?.trim() || undefined;
+  const baseURL = process.env.DEEPSEEK_BASE_URL?.trim() || undefined;
+  const vision = process.env.DEEPSEEK_VISION?.trim().toLowerCase() !== "off";
+
+  if (!apiKey) {
+    throw new Error(
+      "DEEPSEEK_API_KEY is missing or blank (AI_PROVIDER=deepseek). Set it in " +
+        ".env.local (or your host's server env) and restart, or set " +
+        "AI_PROVIDER=anthropic.",
+    );
+  }
+
+  // Claude reads the photos DeepSeek can't, when there is a key for it.
+  const fallback = process.env.ANTHROPIC_API_KEY?.trim()
+    ? build("anthropic")
+    : undefined;
+
+  console.log(
+    `[ai] provider=deepseek; model=${model ?? DEFAULT_MODELS.deepseek}; ` +
+      `photos=${vision ? "deepseek" : "skipped"}; fallback=${fallback ? "anthropic" : "none"}`,
+  );
+  return new DeepSeekProvider({ apiKey, model, baseURL, vision, fallback });
 }

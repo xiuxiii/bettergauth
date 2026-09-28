@@ -20,14 +20,16 @@ gate. `npm run eval` (`evals/run.mjs`, plain Node) hits the running app's
 `/api/analyze` and `/api/check-work` with the cases in `evals/cases/`, and reports
 verdict accuracy, the **false "you're wrong" rate** (keep it at 0), first-error
 category/line, final-answer leaks before "Show the rest", and label spoilers.
-Pass `--base` for another port. It is how to tune the thinking `effort`. The seed
+Pass `--base` for another port, `--provider deepseek|anthropic` to pin one. It
+is how to tune the thinking `effort`, and how to compare DeepSeek against Claude. The seed
 cases are typed attempts; real handwriting photos go in `evals/images/`.
 
 ## Environment
 
 | Var | Effect |
 |---|---|
-| `ANTHROPIC_API_KEY` | Required. Without it the provider reports `provider: "none"` at `/api/health`. |
+| `DEEPSEEK_API_KEY` | DeepSeek. When set it is the default provider (far cheaper). At least one of this and `ANTHROPIC_API_KEY` is needed, or `/api/health` reports `provider: "none"`. |
+| `ANTHROPIC_API_KEY` | Claude. Alone, the app runs on Claude as it always did. Alongside DeepSeek it is the photo backup and the other side of the setup-page switch. |
 | `ANTHROPIC_MODEL` | Overrides the `claude-sonnet-5` default. |
 | `DETECTION_MODEL` | Question detection only. Unset = same as `ANTHROPIC_MODEL`. Exists to A/B a faster model (e.g. `claude-haiku-4-5`) on the box-finding call without touching tutoring. |
 | `ACCESS_CODE` | Shared-access gate, a code that never expires. **Gate is off only when this AND `ACCESS_CODES` are unset**, so local dev just works. |
@@ -37,8 +39,8 @@ cases are typed attempts; real handwriting photos go in `evals/images/`.
 | `RATE_LIMIT_PER_DAY` | Per-IP 24h cap, default 150 — the real spend ceiling. Counts only admitted requests. In memory per warm instance for now; `lib/rateLimit.ts` has the TODO for Upstash/Vercel KV. |
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |
 | `DEBUG_TOKENS` | Logs per-call token usage, including whether prompt caching is hitting. |
-| `AI_PROVIDER` | `anthropic` (default) or `deepseek`. Any other value throws on the first AI call. Only the selected provider's key is read, so both can be set. |
-| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | A reserved slot: `lib/ai/deepseekProvider.ts` is a stub whose every method throws `ProviderNotImplementedError`, which `lib/apiError.ts` reports as a 501 `provider_not_implemented`. `/api/health` shows `implemented: false`. DeepSeek's API is text-only, so the image methods will need a fallback when it is written. |
+| `AI_PROVIDER` | Default provider, `deepseek` or `anthropic`. Unset = DeepSeek if its key is set, else Anthropic. Any other value throws on the first AI call. |
+| `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_VISION` | Model (default `deepseek-flash`, which takes photos), endpoint, and `off` to send every photo straight to Claude. |
 
 Vercel applies env vars **at build time** — after adding one, redeploy or it won't
 be picked up.
@@ -225,6 +227,22 @@ one back (Haiku is the exception, and rejects `effort`). Those calls stream
 `content_block_start` events, then `{t:"done", check}`. It awaits the first
 event BEFORE returning 200, so an auth or limit failure still gets its real
 status instead of vanishing into the stream.
+
+**Two providers, one set of prompts.** `lib/ai/shared.ts` holds every schema,
+system prompt and per-call message text; `anthropicProvider.ts` and
+`deepseekProvider.ts` only differ in transport. Change a prompt there and both
+get it (Claude's cached prefix is byte-identical to before the split). DeepSeek
+goes through its OpenAI-compatible `/chat/completions`, NOT its
+Anthropic-compatible endpoint: every Claude call relies on structured outputs,
+which that endpoint doesn't document, so DeepSeek gets JSON mode + the schema in
+the prompt + the same Zod validation, with one repair round. The student's pick
+travels as the `x-ai-provider` header, added by `apiFetch` from
+`lib/aiChoice.ts` (its own storage key: it must never reach the prompt), and is
+honoured only for a configured provider. A photo DeepSeek rejects (400/404/413/
+415/422, or twice-invalid output) is re-run on Claude when that key is set,
+otherwise a 422 `photo_unsupported` tells the student to type it. Auth, balance
+(402 → `spend_limit`) and rate limits never fall back. DeepSeek runs without
+thinking for now; `npm run eval` decides whether check-work needs it.
 
 **The tutor's formatting is prompt-enforced.** `SYSTEM_INSTRUCTIONS` in
 `lib/tutor/engine.ts` and `STYLE_NOTE` in `lib/ai/anthropicProvider.ts` ask for short

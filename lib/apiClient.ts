@@ -1,3 +1,5 @@
+import { AI_CHOICE_HEADER, loadAiChoice } from "@/lib/aiChoice";
+
 /**
  * Client-side helper for reading a failed fetch Response.
  *
@@ -103,12 +105,21 @@ export class NetworkError extends Error {
   }
 }
 
-/** `fetch`, but a dropped connection surfaces as a NetworkError. Aborts are
- *  left alone: a caller that aborted on purpose has its own handling. */
+/** `fetch`, but a dropped connection surfaces as a NetworkError, and the
+ *  student's AI choice rides along. Aborts are left alone: a caller that
+ *  aborted on purpose has its own handling. */
 export async function apiFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
+  // The DeepSeek/Claude switch on the setup page. No saved choice sends no
+  // header, and the server picks its default.
+  const choice = loadAiChoice();
+  if (choice) {
+    const headers = new Headers(init?.headers);
+    headers.set(AI_CHOICE_HEADER, choice);
+    init = { ...init, headers };
+  }
   try {
     return await fetch(input, init);
   } catch (err) {

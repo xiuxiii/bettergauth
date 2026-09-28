@@ -71,10 +71,10 @@ export async function POST(req: Request) {
     };
 
     if (!STREAMING_ACTIONS.includes(body.action)) {
-      return NextResponse.json(await getProvider().tutor(request));
+      return NextResponse.json(await getProvider(req).tutor(request));
     }
 
-    const events = getProvider().tutorStream(request);
+    const events = getProvider(req).tutorStream(request);
     const encoder = new TextEncoder();
     const line = (o: unknown) => encoder.encode(`${JSON.stringify(o)}\n`);
 

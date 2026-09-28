@@ -9,6 +9,7 @@ import {
   watchSystemTheme,
   type Theme,
 } from "@/lib/theme";
+import { loadAiChoice, saveAiChoice, type AiChoice } from "@/lib/aiChoice";
 
 /**
  * The preference controls shared by the full settings page (SetupForm) and the
@@ -17,7 +18,13 @@ import {
  * other would let the tour save a value the settings page can't display.
  */
 
-export type Option = { value: string; label: string; sub?: string; className?: string };
+export type Option = {
+  value: string;
+  label: string;
+  sub?: string;
+  className?: string;
+  disabled?: boolean;
+};
 
 export const GRADE_OPTIONS: Option[] = [
   { value: "9", label: "9", className: "text-center sm:px-2" },
@@ -85,6 +92,68 @@ export function useThemeChoice(): [Theme, (next: Theme) => void] {
   return [theme, chooseTheme];
 }
 
+/** Provider status as /api/health reports it. */
+type HealthProviders = {
+  default?: AiChoice;
+  providers?: Record<AiChoice, { configured: boolean }>;
+};
+
+/**
+ * The DeepSeek / Claude switch. Starts on the server's default until the
+ * student picks, and marks a provider the server has no key for so it can't be
+ * chosen (the server would ignore that pick anyway). Saved the moment it's
+ * picked, like the theme: every later request carries it.
+ */
+export function useAiChoice(): {
+  choice: AiChoice | null;
+  options: Option[];
+  choose: (next: AiChoice) => void;
+} {
+  const [saved, setSaved] = useState<AiChoice | null>(null);
+  const [health, setHealth] = useState<HealthProviders | null>(null);
+
+  useEffect(() => {
+    setSaved(loadAiChoice());
+    let cancelled = false;
+    fetch("/api/health")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: HealthProviders | null) => {
+        if (!cancelled) setHealth(data);
+      })
+      .catch(() => {
+        // Offline or blocked: show both options and let the server decide.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const configured = (id: AiChoice) => health?.providers?.[id]?.configured !== false;
+  const options: Option[] = [
+    {
+      value: "deepseek",
+      label: "DeepSeek",
+      sub: configured("deepseek") ? "Cheaper" : "Not set up",
+      disabled: !configured("deepseek"),
+    },
+    {
+      value: "anthropic",
+      label: "Claude",
+      sub: configured("anthropic") ? "Best at handwriting" : "Not set up",
+      disabled: !configured("anthropic"),
+    },
+  ];
+
+  // A saved pick the server can no longer honour shows what will actually run.
+  const choice = saved && configured(saved) ? saved : (health?.default ?? null);
+
+  function choose(next: AiChoice) {
+    setSaved(next);
+    saveAiChoice(next);
+  }
+  return { choice, options, choose };
+}
+
 export function Field({
   label,
   hint,
@@ -128,9 +197,10 @@ export function Options({
             type="button"
             role="radio"
             aria-checked={active}
+            disabled={o.disabled}
             onClick={() => onChange(o.value)}
             className={
-              "min-h-[44px] rounded-md border px-3 py-2 text-left text-sm transition active:scale-[0.98] sm:px-4 " +
+              "min-h-[44px] rounded-md border px-3 py-2 text-left text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 sm:px-4 " +
               (active
                 ? "border-brand-500 bg-brand-50 text-brand-800"
                 : "border-slate-300 bg-surface text-slate-700 hover:border-brand-400") +

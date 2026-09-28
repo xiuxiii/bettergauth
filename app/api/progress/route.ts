@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const summary = await getProvider().summarizeProgress({ concepts });
+    const summary = await getProvider(req).summarizeProgress({ concepts });
     return NextResponse.json({ summary });
   } catch (err) {
     return errorResponse(err, "Could not build a summary. Please try again.");

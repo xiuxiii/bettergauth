@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const evaluation = await getProvider().evaluatePractice({
+    const evaluation = await getProvider(req).evaluatePractice({
       practice: body.practice,
       attempt: {
         text: body.attempt.text,

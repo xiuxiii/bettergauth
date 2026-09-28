@@ -58,7 +58,7 @@ export async function POST(req: Request) {
           }
         : undefined;
 
-    const events = getProvider().checkWorkStream({
+    const events = getProvider(req).checkWorkStream({
       problem: body.problem,
       attempt: {
         text: body.attempt.text,

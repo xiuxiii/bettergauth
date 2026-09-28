@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const detection = await getProvider().detectQuestions({
+    const detection = await getProvider(req).detectQuestions({
       imageDataUrl: image,
       width,
       height,

@@ -12,13 +12,13 @@ Runs on a real **Claude vision model**. Needs an Anthropic API key.
 
 ```bash
 npm install
-# .env.local:  ANTHROPIC_API_KEY=sk-ant-...   (required)
+# .env.local:  DEEPSEEK_API_KEY=sk-...  and/or  ANTHROPIC_API_KEY=sk-ant-...
 npm run dev        # http://localhost:3000
 # or: npm run build && npm run start
 ```
 
 Confirm the provider is live at `http://localhost:3000/api/health` →
-`{"provider":"anthropic","keyDetected":true,…}`. Restart the server after
+`{"provider":"deepseek","keyDetected":true,…}` (or `"anthropic"`). Restart the server after
 changing env (env is read at boot). See `.env.example` and
 `docs/ai-provider-integration.md`.
 
@@ -95,7 +95,10 @@ structured output into the domain types — nothing model-specific reaches the U
 The real provider is implemented in `lib/ai/anthropicProvider.ts` (Anthropic SDK
 + Zod structured outputs). Config is env-only:
 
-- `ANTHROPIC_API_KEY` — required, server-side only.
+- `DEEPSEEK_API_KEY` — DeepSeek (`lib/ai/deepseekProvider.ts`), the cheaper
+  default when set. See `docs/ai-provider-integration.md`.
+- `ANTHROPIC_API_KEY` — Claude; required unless DeepSeek is set, and the photo
+  backup when both are. Server-side only.
 - `ANTHROPIC_MODEL` — optional, defaults to `claude-sonnet-5` (cheaper; set
   `claude-opus-5` for more headroom).
 - `DETECTION_MODEL` — optional, question detection only; unset means the same

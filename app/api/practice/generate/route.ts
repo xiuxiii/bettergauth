@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const practice = await getProvider().generatePractice({
+    const practice = await getProvider(req).generatePractice({
       problem: body.problem,
       focus: body.focus,
     });

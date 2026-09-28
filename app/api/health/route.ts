@@ -1,54 +1,42 @@
 import { NextResponse } from "next/server";
+import { providerConfig } from "@/lib/ai/provider";
 
 export const runtime = "nodejs";
 
-/** Per-provider env: which key it needs, its model override and default. */
-const PROVIDERS = {
-  anthropic: {
-    keyEnv: "ANTHROPIC_API_KEY",
-    modelEnv: "ANTHROPIC_MODEL",
-    defaultModel: "claude-sonnet-5",
-    implemented: true,
-  },
-  deepseek: {
-    keyEnv: "DEEPSEEK_API_KEY",
-    modelEnv: "DEEPSEEK_MODEL",
-    defaultModel: "deepseek-chat",
-    // A reserved slot: see lib/ai/deepseekProvider.ts.
-    implemented: false,
-  },
-} as const;
-
 /**
  * GET /api/health — diagnostics for "is the AI provider configured?".
- * Reads env directly (never constructs the provider, which throws without a
- * key) and never returns the key itself. Restart the server after changing env.
+ * Reads env directly (never constructs a provider, which throws without a key)
+ * and never returns a key itself. Restart the server after changing env.
+ *
+ * The top-level fields describe the default provider, as they always have;
+ * `providers` is what the setup page's model switch reads.
  */
 export async function GET() {
-  const aiProviderEnv = process.env.AI_PROVIDER?.trim() || null;
-  const selected = (aiProviderEnv ?? "anthropic").toLowerCase();
-  const config = PROVIDERS[selected as keyof typeof PROVIDERS];
+  const config = providerConfig();
+  const id = config.defaultProvider;
 
-  if (!config) {
+  if (!id) {
     return NextResponse.json({
       provider: "none",
       keyDetected: false,
-      aiProviderEnv,
+      aiProviderEnv: config.aiProvider,
       model: null,
-      implemented: false,
       ok: false,
-      error: `Unknown AI_PROVIDER "${aiProviderEnv}". Use "anthropic" or "deepseek".`,
+      error: `Unknown AI_PROVIDER "${config.aiProvider}". Use "anthropic" or "deepseek", or unset it.`,
+      providers: config.providers,
+      photoFallback: config.photoFallback,
     });
   }
 
-  const keyDetected = !!process.env[config.keyEnv]?.trim();
-
+  const keyDetected = config.providers[id].configured;
   return NextResponse.json({
-    provider: keyDetected ? selected : "none",
+    provider: keyDetected ? id : "none",
     keyDetected,
-    aiProviderEnv,
-    model: process.env[config.modelEnv]?.trim() || config.defaultModel,
-    implemented: config.implemented,
-    ok: keyDetected && config.implemented,
+    aiProviderEnv: config.aiProvider,
+    model: config.providers[id].model,
+    ok: keyDetected,
+    default: id,
+    providers: config.providers,
+    photoFallback: config.photoFallback,
   });
 }

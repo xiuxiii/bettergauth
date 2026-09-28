@@ -11,6 +11,7 @@ import {
 } from "@/lib/preferences";
 import MindGapMark from "@/components/MindGapMark";
 import type { Theme } from "@/lib/theme";
+import type { AiChoice } from "@/lib/aiChoice";
 import {
   CURRICULUM_OPTIONS,
   Field,
@@ -20,6 +21,7 @@ import {
   STYLE_OPTIONS,
   THEME_OPTIONS,
   gradeValue,
+  useAiChoice,
   useThemeChoice,
   withGrade,
 } from "@/components/PreferenceFields";
@@ -37,6 +39,7 @@ export default function SetupForm() {
   );
 
   const [theme, chooseTheme] = useThemeChoice();
+  const ai = useAiChoice();
 
   function save() {
     savePreferences(prefs);
@@ -101,6 +104,18 @@ export default function SetupForm() {
               onChange={(v) => setPrefs({ ...prefs, goal: v as TutorPreferences["goal"] })}
               className="grid grid-cols-3"
               options={GOAL_OPTIONS}
+            />
+          </Field>
+
+          <Field
+            label="AI model"
+            hint="Applies right away. DeepSeek costs far less; Claude reads messy handwriting best."
+          >
+            <Options
+              value={ai.choice ?? ""}
+              onChange={(v) => ai.choose(v as AiChoice)}
+              className="grid grid-cols-2"
+              options={ai.options}
             />
           </Field>
 

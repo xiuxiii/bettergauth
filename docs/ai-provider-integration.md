@@ -176,27 +176,45 @@ The real provider is **implemented and wired**, not a stub:
 
 ## What you must provide to run it
 
-- **`ANTHROPIC_API_KEY`** — your Anthropic API key (`sk-ant-...`). **Required.**
-  Server-side only; never sent to the client. Without it every AI call errors.
+- **`ANTHROPIC_API_KEY`** — your Anthropic API key (`sk-ant-...`). Required
+  unless `DEEPSEEK_API_KEY` is set (see the DeepSeek section below).
+  Server-side only; never sent to the client.
 - **`ANTHROPIC_MODEL`** *(optional)* — defaults to `claude-sonnet-5`. Override to
   pin a different vision-capable model (e.g. `claude-opus-5`).
 
 That's the entire configuration surface. No authentication, database, payment, or
 other infrastructure is required or added. Confirm it's live at `/api/health`.
 
-## DeepSeek (slot reserved, not implemented)
+## DeepSeek (the default when its key is set)
 
-`AI_PROVIDER=deepseek` selects `lib/ai/deepseekProvider.ts`, configured by
-`DEEPSEEK_API_KEY` (required), `DEEPSEEK_MODEL` (default `deepseek-chat`) and
-`DEEPSEEK_BASE_URL` (default `https://api.deepseek.com`). The factory, config and
-`/api/health` reporting are in place; every method throws
-`ProviderNotImplementedError`, surfaced to the client as a 501 with code
-`provider_not_implemented`. Unset `AI_PROVIDER` to go back to Anthropic.
+`lib/ai/deepseekProvider.ts` implements the same `AIProvider` contract on
+DeepSeek, which costs a fraction of Claude. Configuration:
 
-Open decisions before implementing it (also listed in the file's header):
-DeepSeek's OpenAI-compatible API vs. its Anthropic-compatible endpoint
-(`/anthropic`), a vision fallback since its API models are text-only, and how
-`deepseek-reasoner` maps onto the calls that use thinking here.
+- **`DEEPSEEK_API_KEY`**: when set, DeepSeek is the default provider.
+- **`DEEPSEEK_MODEL`** *(optional)*: defaults to `deepseek-flash`, which accepts
+  photos. (`deepseek-chat` / `deepseek-reasoner` were retired in July 2026.)
+- **`DEEPSEEK_BASE_URL`** *(optional)*: defaults to `https://api.deepseek.com`.
+- **`DEEPSEEK_VISION=off`** *(optional)*: send every photo straight to Claude.
+- **`AI_PROVIDER`** *(optional)*: force the default to `deepseek` or `anthropic`.
+
+How it works:
+
+- **Same prompts, same validation.** Schemas, system prompts and per-call text
+  live in `lib/ai/shared.ts` and are used by both providers.
+- **Chat Completions, not the Anthropic-compatible endpoint.** DeepSeek also
+  serves `/anthropic`, but every Claude call here depends on structured outputs
+  (`messages.parse` + `output_config.format`), which that endpoint doesn't
+  document. So DeepSeek gets JSON mode with the schema in the prompt, is
+  validated with the same Zod schemas, and gets one repair round on a miss.
+- **Photos.** `deepseek-flash` reads them. If DeepSeek rejects one, or twice
+  returns unusable output for it, that single call is re-run on Claude when
+  `ANTHROPIC_API_KEY` is set; otherwise the student gets a 422 asking them to
+  type the problem. Auth, balance (402) and rate-limit errors never fall back.
+- **The switch.** The setup page has a DeepSeek / Claude choice, saved in the
+  browser and sent as the `x-ai-provider` header on every AI call. The server
+  honours it only for a provider whose key is set.
+- **Thinking** is off on DeepSeek for now. Run `npm run eval` against both
+  providers; the false "you're wrong" rate must stay at 0.
 
 ## Tuning notes (optional)
 
