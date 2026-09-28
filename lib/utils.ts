@@ -46,3 +46,23 @@ export function formatRelativeDate(ms: number): string {
   if (days < 7) return `${days} days ago`;
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+/**
+ * Whether this Enter keypress should send. On a keyboard, Enter sends and
+ * Shift+Enter is a newline. On a phone (a coarse pointer) Enter is a newline
+ * and the send button sends: a phone keyboard has no Shift+Enter, so Enter
+ * sending meant a multi-line answer was impossible and a stray tap sent half
+ * a message. IME composition (e.g. Japanese input) never sends.
+ */
+export function enterSends(e: {
+  key: string;
+  shiftKey: boolean;
+  nativeEvent?: { isComposing?: boolean };
+}): boolean {
+  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent?.isComposing) return false;
+  try {
+    return !window.matchMedia("(pointer: coarse)").matches;
+  } catch {
+    return true;
+  }
+}

@@ -64,6 +64,13 @@ export default function HomeDashboard() {
                   <p className="text-sm font-medium text-ink">
                     <InlineRichText text={c.concept} />
                   </p>
+                  {/* The mistake itself, when the check named one: the label
+                      says where the gap is, this says what it was. */}
+                  {c.studentBelief && (
+                    <p className="line-clamp-2 text-xs text-slate-600">
+                      <InlineRichText text={c.studentBelief} />
+                    </p>
+                  )}
                   <p className="text-xs tnum text-slate-500">
                     Went wrong in {c.problems}{" "}
                     {c.problems === 1 ? "problem" : "problems"}

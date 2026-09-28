@@ -1,0 +1,26 @@
+{
+  "id": "16-img-units-cm-tilted-dim",
+  "note": "Photo, tilted and dim: centimetres used where metres belong.",
+  "image": "evals/images/units-cm-tilted-dim.jpg",
+  "problem": "11. A spring stretches 2.0 cm when a 5.0 N force is applied. Find its spring constant in N/m.",
+  "expect": {
+    "correct": false,
+    "categories": [
+      "units_notation",
+      "setup"
+    ],
+    "line": [
+      "5.0 / 2.0",
+      "5.0/2.0",
+      "2.5"
+    ]
+  },
+  "finalAnswer": [
+    "250"
+  ],
+  "mustNotReveal": [
+    "0.02",
+    "metres",
+    "convert"
+  ]
+}

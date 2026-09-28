@@ -1,0 +1,9 @@
+{
+  "id": "15-img-correct-completing-square",
+  "note": "Photo: correct by an unconventional method.",
+  "image": "evals/images/correct-completing-square.jpg",
+  "problem": "9. Solve x² + 6x + 5 = 0.",
+  "expect": {
+    "correct": true
+  }
+}

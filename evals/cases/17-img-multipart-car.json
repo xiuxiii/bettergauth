@@ -1,0 +1,26 @@
+{
+  "id": "17-img-multipart-car",
+  "note": "Photo, multi-part: (b) builds on (a); the first error is in (a), and (b) is consistent with it.",
+  "image": "evals/images/multipart-car.jpg",
+  "problem": "12. A car accelerates uniformly from rest to 24 m/s in 8.0 s. (a) Find its acceleration. (b) How far does it travel in that time?",
+  "expect": {
+    "correct": false,
+    "categories": [
+      "conceptual",
+      "setup",
+      "procedural"
+    ],
+    "line": [
+      "t/v",
+      "8.0/24",
+      "0.33"
+    ]
+  },
+  "finalAnswer": [
+    "96"
+  ],
+  "mustNotReveal": [
+    "v/t",
+    "Δv"
+  ]
+}

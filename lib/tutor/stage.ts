@@ -32,6 +32,8 @@ export interface StageMessage {
   workCheck?: WorkCheck;
   reveal?: RevealStep;
   solution?: unknown;
+  /** A tutor turn that confirmed the student solved it in the chat. */
+  resolved?: boolean;
 }
 
 /** Whether a check has anything behind "Show me the fix". */
@@ -75,6 +77,9 @@ export function sessionStage(messages: readonly StageMessage[]): SessionStage {
   if (messages.some((m) => m.solution)) return "resolved";
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
+    // Solved in the chat, after the latest check (or with none): the tutor
+    // confirmed it, so the session has moved on whatever the card shows.
+    if (m.resolved) return "resolved";
     if (!m.workCheck) continue;
     if (m.workCheck.verdict === "correct") return "resolved";
     return fullyRevealed(m.workCheck, m.reveal ?? 0) ? "resolved" : "diagnosed";

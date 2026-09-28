@@ -2,6 +2,7 @@
 
 import katex from "katex";
 import { useMemo } from "react";
+import { splitEmphasis, splitMath } from "@/lib/richText";
 
 /**
  * Renders tutor/student text as real blocks so answers read like structured
@@ -239,48 +240,39 @@ function renderMath(expr: string, display: boolean, key: number) {
 
 /** Split a run of text into math and non-math parts, rendering each. */
 function renderSegments(para: string, inline = false) {
-  const regex = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
   const out: React.ReactNode[] = [];
-  let last = 0;
   let key = 0;
-  let m: RegExpExecArray | null;
-
-  while ((m = regex.exec(para)) !== null) {
-    if (m.index > last) {
-      out.push(...renderInlineText(para.slice(last, m.index), key));
+  for (const seg of splitMath(para)) {
+    if (seg.kind === "text") {
+      out.push(...renderInlineText(seg.text, key));
       key += 1000;
+    } else {
+      // Inline callers get $$…$$ as inline math too: a display block inside a
+      // one-line label or a line-clamped row would break the layout.
+      out.push(renderMath(seg.text, seg.block && !inline, key++));
     }
-    const block = m[1] !== undefined;
-    // Inline callers get $$…$$ as inline math too: a display block inside a
-    // one-line label or a line-clamped row would break the layout.
-    out.push(renderMath((block ? m[1] : m[2]).trim(), block && !inline, key++));
-    last = regex.lastIndex;
-  }
-  if (last < para.length) {
-    out.push(...renderInlineText(para.slice(last), key));
   }
   return out;
 }
 
-/** Handle **bold** and *italic* in a plain-text run. */
+/** Handle **bold** and *italic* in a plain-text run (rules: lib/richText.ts). */
 function renderInlineText(text: string, baseKey: number): React.ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).filter(Boolean);
-  return parts.map((part, i) => {
+  return splitEmphasis(text).map((seg, i) => {
     const key = baseKey + i + 1;
-    if (part.startsWith("**") && part.endsWith("**")) {
+    if (seg.kind === "strong") {
       return (
         <strong key={key} className="font-semibold">
-          {part.slice(2, -2)}
+          {seg.text}
         </strong>
       );
     }
-    if (part.startsWith("*") && part.endsWith("*")) {
+    if (seg.kind === "em") {
       return (
         <em key={key} className="italic">
-          {part.slice(1, -1)}
+          {seg.text}
         </em>
       );
     }
-    return <span key={key}>{part}</span>;
+    return <span key={key}>{seg.text}</span>;
   });
 }

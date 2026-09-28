@@ -2,20 +2,10 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
+import { TutorRequestSchema, parseBody } from "@/lib/api/schemas";
 import type { TutorAction, TutorRequest } from "@/lib/tutor/types";
 
 export const runtime = "nodejs";
-
-const ACTIONS: TutorAction[] = [
-  "ask",
-  "question",
-  "continue",
-  "hint",
-  "explain",
-  "go_deeper",
-  "show_solution",
-  "similar_problem",
-];
 
 /**
  * The conceptual moves stream; the other two don't. `show_solution` and
@@ -52,18 +42,19 @@ export async function POST(req: Request) {
   if (limited) return limited;
 
   try {
-    const body = (await req.json().catch(() => null)) as TutorRequest | null;
-
-    if (!body?.problem?.problemText || !ACTIONS.includes(body.action)) {
-      return NextResponse.json(
-        { error: "A valid problem and action are required." },
-        { status: 400 },
-      );
-    }
+    // Shape and size are checked before any model is called: this is client
+    // text on its way into a prompt (lib/api/schemas.ts).
+    const parsed = await parseBody(
+      req,
+      TutorRequestSchema,
+      "A valid problem, history and action are required.",
+    );
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
     const request: TutorRequest = {
       problem: body.problem,
-      history: Array.isArray(body.history) ? body.history : [],
+      history: body.history,
       action: body.action,
       studentText: body.studentText,
       preferences: body.preferences,

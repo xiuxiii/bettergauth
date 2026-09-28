@@ -31,6 +31,8 @@ import {
 export interface LiveMessage {
   id: string;
   attemptImage?: string;
+  /** A practice card's saved progress; its attempt photo is externalised too. */
+  practiceState?: { attempt?: { imageDataUrl?: string } };
 }
 
 /**
@@ -62,9 +64,29 @@ async function externalise<T extends LiveMessage>(
         const id = await storeImage(attemptImage);
         if (id) stored.attemptImageId = id;
       }
+      // A practice attempt photo, same treatment: an id, never the data URL.
+      const practicePhoto = m.practiceState?.attempt?.imageDataUrl;
+      if (typeof practicePhoto === "string") {
+        const id = await storeImage(practicePhoto);
+        const attempt: Record<string, unknown> = { ...m.practiceState!.attempt };
+        delete attempt.imageDataUrl;
+        if (id) attempt.imageId = id;
+        stored.practiceState = { ...m.practiceState, attempt };
+      }
       return stored;
     }),
   );
+}
+
+/**
+ * Carry on recording a reopened session. Its attempt photos were resolved back
+ * to data URLs for display; registering which id each came from means the
+ * next save reuses those ids instead of storing every photo again — which it
+ * did on every reopen, leaking a copy into IndexedDB each time.
+ */
+export function resumeSession(knownImages: Iterable<[dataUrl: string, id: string]>): void {
+  imageIds.clear();
+  for (const [dataUrl, id] of knownImages) imageIds.set(dataUrl, id);
 }
 
 /**

@@ -20,6 +20,7 @@ import type {
   TutorTurn,
   WorkCheck,
 } from "@/lib/tutor/types";
+import { normalizeWorkCheck } from "@/lib/tutor/types";
 import { createMessageFieldDecoder } from "@/lib/tutor/streamText";
 import {
   ANALYZE_SYSTEM,
@@ -39,6 +40,7 @@ import {
   checkWorkText,
   evaluatePracticeText,
   generatePracticeText,
+  guardNotStem,
   normalizeDetection,
   progressText,
   tutorSystemParts,
@@ -63,8 +65,8 @@ import {
  * Auth, balance and rate-limit errors never fall back: those are real.
  *
  * TODO: thinking. Claude thinks on checkWork / show_solution /
- * evaluatePractice (`thinkingFor` in anthropicProvider.ts). This runs them
- * without; `npm run eval` against DeepSeek is how to tell whether that costs
+ * evaluatePractice, and at low effort on tutor turns so it checks its maths
+ * (`thinkingFor` in anthropicProvider.ts). This runs them all without; `npm run eval` against DeepSeek is how to tell whether that costs
  * accuracy (the false "you're wrong" rate must stay 0).
  */
 
@@ -334,7 +336,17 @@ export class DeepSeekProvider implements AIProvider {
           maxTokens: 1200,
           label: "detectQuestions",
         });
-        return normalizeDetection(out, request.width, request.height);
+        return {
+          ...normalizeDetection(out, request.width, request.height),
+          // The route strips this unless the client asked for it.
+          debug: {
+            model: this.model,
+            width: request.width,
+            height: request.height,
+            raw: out.questions.map(({ label, x1, y1, x2, y2 }) => ({ label, x1, y1, x2, y2 })),
+            primaryIndex: out.primaryIndex,
+          },
+        };
       },
       (fallback) => fallback.detectQuestions(request),
     );
@@ -344,20 +356,22 @@ export class DeepSeekProvider implements AIProvider {
     return this.withPhoto(
       !!request.imageDataUrl,
       "analyzeProblem",
-      () =>
-        this.chatJson(ProblemAnalysisSchema, {
-          system: ANALYZE_SYSTEM,
-          messages: [
-            {
-              role: "user",
-              content: request.imageDataUrl
-                ? withImage("Extract and classify this problem.", request.imageDataUrl)
-                : `Extract and classify this problem, typed by the student:\n\n${request.problemText ?? ""}`,
-            },
-          ],
-          maxTokens: 1800,
-          label: "analyze",
-        }),
+      async () =>
+        guardNotStem(
+          await this.chatJson(ProblemAnalysisSchema, {
+            system: ANALYZE_SYSTEM,
+            messages: [
+              {
+                role: "user",
+                content: request.imageDataUrl
+                  ? withImage("Extract and classify this problem.", request.imageDataUrl)
+                  : `Extract and classify this problem, typed by the student:\n\n${request.problemText ?? ""}`,
+              },
+            ],
+            maxTokens: 1800,
+            label: "analyze",
+          }),
+        ),
       (fallback) => fallback.analyzeProblem(request),
     );
   }
@@ -395,7 +409,12 @@ export class DeepSeekProvider implements AIProvider {
         maxTokens: 4000,
         label: "tutor:solution",
       });
-      return { message: out.message, solution: out.solution, memory };
+      // Declined (not a STEM problem): the fields come back empty, and an empty
+      // card would render headings over nothing. Just the message, then.
+      const empty = Object.values(out.solution).every((v) => !String(v).trim());
+      return empty
+        ? { message: out.message, memory }
+        : { message: out.message, solution: out.solution, memory };
     }
 
     if (request.action === "similar_problem") {
@@ -405,7 +424,11 @@ export class DeepSeekProvider implements AIProvider {
         maxTokens: 800,
         label: "tutor:similar",
       });
-      return { message: out.message, similarProblem: out.similarProblem, memory };
+      return {
+        message: out.message,
+        similarProblem: out.similarProblem.trim() || undefined,
+        memory,
+      };
     }
 
     const out = await this.chatJson(TutorChunkSchema, {
@@ -414,7 +437,12 @@ export class DeepSeekProvider implements AIProvider {
       maxTokens: 900,
       label: "tutor:chunk",
     });
-    return { message: out.message, hasMore: out.hasMore, memory: out.memory };
+    return {
+      message: out.message,
+      hasMore: out.hasMore,
+      resolved: out.resolved,
+      memory: out.memory,
+    };
   }
 
   /**
@@ -444,7 +472,12 @@ export class DeepSeekProvider implements AIProvider {
     const out = await this.chatJson(TutorChunkSchema, options, raw);
     yield {
       type: "done",
-      turn: { message: out.message, hasMore: out.hasMore, memory: out.memory },
+      turn: {
+        message: out.message,
+        hasMore: out.hasMore,
+        resolved: out.resolved,
+        memory: out.memory,
+      },
     };
   }
 
@@ -489,7 +522,9 @@ export class DeepSeekProvider implements AIProvider {
       maxTokens: 4000,
       label: "checkWork",
     });
-    return { ...out, firstError: out.firstError ?? undefined };
+    // Same clean-up as Claude's and as a stored check (stray quotes, a null
+    // firstError), so the UI never sees raw model output.
+    return normalizeWorkCheck(out);
   }
 
   async checkWork(request: CheckWorkRequest): Promise<WorkCheck> {

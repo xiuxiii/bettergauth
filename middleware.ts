@@ -9,17 +9,17 @@ import { ACCESS_COOKIE, accessConfig, checkCookie } from "@/lib/accessToken";
  * (in the Vercel dashboard, no laptop needed). See docs/deploy.md.
  */
 
+const OPEN_PATHS = new Set(["/unlock", "/api/unlock", "/api/health"]);
+
 export async function middleware(req: NextRequest) {
   // Off only when neither ACCESS_CODE nor ACCESS_CODES is set.
   if (!(await accessConfig()).enabled) return NextResponse.next();
 
   const { pathname } = req.nextUrl;
-  // Always reachable: the unlock flow itself and the health check.
-  if (
-    pathname.startsWith("/unlock") ||
-    pathname.startsWith("/api/unlock") ||
-    pathname.startsWith("/api/health")
-  ) {
+  // Always reachable: the unlock flow itself and the health check. Exact
+  // paths, not prefixes: a prefix let /unlockanything, /api/unlock-* and
+  // /api/healthz past the gate too.
+  if (OPEN_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 

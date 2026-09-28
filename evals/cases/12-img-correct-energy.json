@@ -1,0 +1,9 @@
+{
+  "id": "12-img-correct-energy",
+  "note": "Photo: correct, by energy conservation.",
+  "image": "evals/images/correct-energy.jpg",
+  "problem": "3. A 2.0 kg ball is dropped from rest from a height of 20 m. Ignoring air resistance, find its speed just before it hits the ground. (g = 9.81 m/s²)",
+  "expect": {
+    "correct": true
+  }
+}

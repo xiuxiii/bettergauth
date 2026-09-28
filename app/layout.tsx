@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, Newsreader } from "next/font/google";
 import "./globals.css";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
+import ThemeWatcher from "@/components/ThemeWatcher";
 
 // MindGap's type system: Hanken Grotesk for UI, Newsreader for display/serif.
 const sans = Hanken_Grotesk({
@@ -62,7 +63,10 @@ export default function RootLayout({
             dark-flash-on-a-light-theme this prevents. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="min-h-dvh font-sans">{children}</body>
+      <body className="min-h-dvh font-sans">
+        <ThemeWatcher />
+        {children}
+      </body>
     </html>
   );
 }

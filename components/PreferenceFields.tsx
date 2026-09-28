@@ -10,6 +10,7 @@ import {
   type Theme,
 } from "@/lib/theme";
 import { loadAiChoice, saveAiChoice, type AiChoice } from "@/lib/aiChoice";
+import { apiFetch } from "@/lib/apiClient";
 
 /**
  * The preference controls shared by the full settings page (SetupForm) and the
@@ -92,10 +93,10 @@ export function useThemeChoice(): [Theme, (next: Theme) => void] {
   return [theme, chooseTheme];
 }
 
-/** Provider status as /api/health reports it. */
-type HealthProviders = {
-  default?: AiChoice;
-  providers?: Record<AiChoice, { configured: boolean }>;
+/** What /api/providers reports. */
+type ProviderStatus = {
+  default?: AiChoice | null;
+  available?: Record<AiChoice, boolean>;
 };
 
 /**
@@ -110,15 +111,15 @@ export function useAiChoice(): {
   choose: (next: AiChoice) => void;
 } {
   const [saved, setSaved] = useState<AiChoice | null>(null);
-  const [health, setHealth] = useState<HealthProviders | null>(null);
+  const [status, setStatus] = useState<ProviderStatus | null>(null);
 
   useEffect(() => {
     setSaved(loadAiChoice());
     let cancelled = false;
-    fetch("/api/health")
+    apiFetch("/api/providers")
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: HealthProviders | null) => {
-        if (!cancelled) setHealth(data);
+      .then((data: ProviderStatus | null) => {
+        if (!cancelled) setStatus(data);
       })
       .catch(() => {
         // Offline or blocked: show both options and let the server decide.
@@ -128,7 +129,7 @@ export function useAiChoice(): {
     };
   }, []);
 
-  const configured = (id: AiChoice) => health?.providers?.[id]?.configured !== false;
+  const configured = (id: AiChoice) => status?.available?.[id] !== false;
   const options: Option[] = [
     {
       value: "deepseek",
@@ -145,7 +146,7 @@ export function useAiChoice(): {
   ];
 
   // A saved pick the server can no longer honour shows what will actually run.
-  const choice = saved && configured(saved) ? saved : (health?.default ?? null);
+  const choice = saved && configured(saved) ? saved : (status?.default ?? null);
 
   function choose(next: AiChoice) {
     setSaved(next);

@@ -1,6 +1,8 @@
 // Domain types shared across UI, tutoring logic, and the AI provider layer.
 // Kept provider-agnostic on purpose so a real model can be swapped in later.
 
+import { canonicalConcept } from "@/lib/tutor/concepts";
+
 export type Subject =
   | "Physics"
   | "Chemistry"
@@ -59,6 +61,13 @@ export interface ProblemAnalysis {
   studentWork: {
     present: boolean;
   };
+  /**
+   * TYPED input only: the student's own working, copied verbatim out of what
+   * they typed and kept out of `problemText`. A typed attempt has no photo for
+   * the check to read, so this is what gets checked. Empty for photos, where
+   * the transcription problem above still applies.
+   */
+  attemptText?: string;
   /**
    * One short sentence pointing at where to start, shown as the session's first
    * message. It rides along on the analysis call, so the student gets a real
@@ -149,6 +158,23 @@ export interface QuestionDetection {
   hasStemContent: boolean;
   questions: DetectedQuestion[];
   /** Index into `questions` of the most likely intended question. */
+  primaryIndex: number;
+  /**
+   * Only when the client asks (`debug: true`, from `?debug=boxes`): what the
+   * model actually returned, before normalizing, so a misplaced box can be
+   * traced to a coordinate-space bug or to the model misreading the page.
+   */
+  debug?: DetectionDebug;
+  /** The client asked for `debug` but the server doesn't allow it here. */
+  debugDenied?: boolean;
+}
+
+export interface DetectionDebug {
+  model: string;
+  /** The image size the model was told, and the coordinates' bounds. */
+  width: number;
+  height: number;
+  raw: { label: string; x1: number; y1: number; x2: number; y2: number }[];
   primaryIndex: number;
 }
 
@@ -350,7 +376,7 @@ function mapCategory(cat: ErrorCategory): RememberedError["type"] {
  * recurrence, don't-re-teach, and resolution — the check-work path runs through
  * a separate endpoint that doesn't round-trip memory, so we merge its already
  * structured result in on the client (no extra model tokens):
- *  - log the classified error against the problem's concept;
+ *  - log the classified error against the check's canonical concept;
  *  - on a significant conceptual/strategic error, record/confirm a misconception;
  *  - when the attempt's concept is sound, mark it demonstrated and RESOLVE any
  *    open misconception on it (this clears a recurring flag — a retry that stuck).
@@ -358,9 +384,13 @@ function mapCategory(cat: ErrorCategory): RememberedError["type"] {
 export function applyWorkCheckToMemory(
   memory: SessionMemory,
   check: WorkCheck,
-  concept: string,
+  fallbackConcept: string,
 ): SessionMemory {
-  const c = concept.trim();
+  // Keyed on the check's own canonical label: the gap it found, not the
+  // problem's topic. The fallback covers older checks, and only counts when it
+  // is itself a canonical label — a free-text topic would never merge.
+  const c =
+    canonicalConcept(check.concept) ?? canonicalConcept(fallbackConcept) ?? "";
   const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
   const next: SessionMemory = {
     demonstrated: [...memory.demonstrated],
@@ -438,6 +468,22 @@ export function resolveMisconception(
   return next;
 }
 
+/**
+ * Close gaps the student has just fixed: each concept becomes demonstrated and
+ * any open misconception on it resolved. Used when the tutor confirms a fix in
+ * the chat, so "Concepts to work on" stops listing what they already solved.
+ */
+export function resolveGaps(
+  memory: SessionMemory,
+  concepts: readonly (string | undefined)[],
+): SessionMemory {
+  let next = memory;
+  for (const c of concepts) {
+    if (c?.trim()) next = resolveMisconception(next, c);
+  }
+  return next;
+}
+
 /** Record another failed attempt at a concept (a targeted retry that missed). */
 export function recordConceptError(
   memory: SessionMemory,
@@ -496,6 +542,12 @@ export interface TutorTurn {
    * conceptual moves (ask / continue / hint / explain / go_deeper).
    */
   hasMore?: boolean;
+  /**
+   * The student has just solved the problem or fixed the flagged step in the
+   * chat, and the tutor checked and confirmed it. The client then treats the
+   * session as resolved: the check's rest is revealed and the gap is closed.
+   */
+  resolved?: boolean;
   /**
    * The tutor's updated cross-turn memory. The conceptual moves return a freshly
    * updated one; other moves pass the incoming memory back unchanged. The client
@@ -597,6 +649,13 @@ export interface WorkCheck {
   /** The rest of the way from the corrected point — the ONLY field that may
    *  contain the final answer. */
   continueFrom: string;
+  /**
+   * The canonical label (lib/tutor/concepts.ts) for the idea the attempt
+   * hinges on — for an error, the idea the FIRST error is about. This, not
+   * the problem's own concept, is what the gap is tracked under, so the same
+   * mistake merges across problems. Absent on checks saved before it existed.
+   */
+  concept?: string;
 }
 
 /**
@@ -610,7 +669,7 @@ export interface WorkCheck {
  */
 export function normalizeWorkCheck(raw: unknown): WorkCheck {
   const c = (raw ?? {}) as Record<string, unknown>;
-  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  const s = (v: unknown) => (typeof v === "string" ? trimStrayQuote(v) : "");
   const e = c.firstError as Record<string, unknown> | null | undefined;
   const verdict: CheckVerdict =
     c.verdict === "correct" || c.verdict === "partially_correct"
@@ -632,7 +691,17 @@ export function normalizeWorkCheck(raw: unknown): WorkCheck {
         }
       : undefined,
     continueFrom: s(c.continueFrom),
+    concept: s(c.concept) || undefined,
   };
+}
+
+/**
+ * Drop a quote mark left dangling after a sentence's end: the model has ended
+ * a fix with "…before using v = gt.'". Only trailing quotes straight after end
+ * punctuation go, so a quote that closes a real quotation mid-text is kept.
+ */
+export function trimStrayQuote(text: string): string {
+  return text.trim().replace(/([.!?…)])\s*['"‘’“”`]+$/u, "$1");
 }
 
 /** Progress frames streamed by /api/check-work, then exactly one result. */

@@ -11,24 +11,33 @@ npm run dev      # local dev
 npm run build    # production build (run before every push)
 npm run lint
 npx tsc --noEmit # typecheck
+npm test         # unit tests for pure lib/ logic (node:test, no deps)
 npm run eval     # check-work evals against a running app (needs a key)
 npm run eval -- --selftest   # the eval scorer on canned responses, no key
 ```
 
-There are no unit tests. `npx tsc --noEmit && npm run build` is the verification
-gate. `npm run eval` (`evals/run.mjs`, plain Node) hits the running app's
+`npx tsc --noEmit && npm run build && npm test && node evals/run.mjs --selftest` is
+the verification gate. `npm test` covers pure logic only (`tests/*.test.mjs`
+import TypeScript through `tests/importTs.mjs`, which transpiles with the
+project's own `typescript`); keep testable rules in React-free files like
+`lib/richText.ts`. `npm run eval` (`evals/run.mjs`, plain Node) hits the running app's
 `/api/analyze` and `/api/check-work` with the cases in `evals/cases/`, and reports
 verdict accuracy, the **false "you're wrong" rate** (keep it at 0), first-error
 category/line, final-answer leaks before "Show the rest", and label spoilers.
 Pass `--base` for another port, `--provider deepseek|anthropic` to pin one. It
-is how to tune the thinking `effort`, and how to compare DeepSeek against Claude. The seed
-cases are typed attempts; real handwriting photos go in `evals/images/`.
+is how to tune the thinking `effort`, and how to compare DeepSeek against Claude.
+Cases come in three kinds: `check` (typed text, or a photo analyzed and checked
+the way the app does), `notStem` (must be turned away) and `tutor` (one reply,
+checked against regexes, e.g. units in a dispute). The photos are rendered by
+`node evals/make-images.mjs` (needs Playwright; the JPEGs are committed) and include
+a tilted, dim one, a multi-part one and a not-homework one. Each case is several
+paid calls through the rate limiter: set `EVAL_BYPASS_TOKEN` on both sides.
 
 ## Environment
 
 | Var | Effect |
 |---|---|
-| `DEEPSEEK_API_KEY` | DeepSeek. When set it is the default provider (far cheaper). At least one of this and `ANTHROPIC_API_KEY` is needed, or `/api/health` reports `provider: "none"`. |
+| `DEEPSEEK_API_KEY` | DeepSeek. When set it is the default provider (far cheaper). At least one of this and `ANTHROPIC_API_KEY` is needed, or `/api/health` reports `ok: false` (and `provider: "none"` in its details). |
 | `ANTHROPIC_API_KEY` | Claude. Alone, the app runs on Claude as it always did. Alongside DeepSeek it is the photo backup and the other side of the setup-page switch. |
 | `ANTHROPIC_MODEL` | Overrides the `claude-sonnet-5` default. |
 | `DETECTION_MODEL` | Question detection only. Unset = same as `ANTHROPIC_MODEL`. Exists to A/B a faster model (e.g. `claude-haiku-4-5`) on the box-finding call without touching tutoring. |
@@ -37,6 +46,8 @@ cases are typed attempts; real handwriting photos go in `evals/images/`.
 | `ACCESS_SECRET` | Key for the access cookie, which names a code by an HMAC id and never contains it (`lib/accessToken.ts`). Unset = the key is `ACCESS_CODE`, else derived from the list — so **set it when using `ACCESS_CODES`**, or every list edit logs everyone out. |
 | `RATE_LIMIT_PER_MIN` | Per-IP fixed window, default 30. A burst brake. |
 | `RATE_LIMIT_PER_DAY` | Per-IP 24h cap, default 150 — the real spend ceiling. Counts only admitted requests. In memory per warm instance for now; `lib/rateLimit.ts` has the TODO for Upstash/Vercel KV. |
+| `EVAL_BYPASS_TOKEN` | Lets `npm run eval` skip the rate limiter: requests whose `x-eval-bypass` header matches it aren't counted. Unset (the default, and production unless you set it) = the header is ignored. Set the same value in the runner's env. |
+| `DEBUG_CODE` | Unlocks debug detail in production: `?debug=boxes&code=<it>` in the cropper (raw detection output), and the provider/model details on `/api/health?code=<it>` (publicly it returns only `{ ok }`). Unset = never in production; always on outside production (`lib/debugAccess.ts`). |
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |
 | `DEBUG_TOKENS` | Logs per-call token usage, including whether prompt caching is hitting. |
 | `AI_PROVIDER` | Default provider, `deepseek` or `anthropic`. Unset = DeepSeek if its key is set, else Anthropic. Any other value throws on the first AI call. |
@@ -219,8 +230,12 @@ on `resolved`, only things that would spoil the problem. The table is in
 `docs/tutoring-engine.md` §8.11.
 
 **Thinking is on only where being wrong is costly:** `checkWork`,
-`show_solution`, `evaluatePractice`. `thinkingFor` gives adaptive thinking +
-`effort: "medium"`; `budget_tokens` returns a **400** on Sonnet 5, so don't add
+`show_solution`, `evaluatePractice` at `effort: "medium"`, and the
+conversational turns (`tutor` / `tutorStream`: hint, explain, a typed reply) at
+`"low"` (`TURN_EFFORT`). Those turns ran thinking-off and did graph reading and
+arithmetic in one pass: a tutor handed out a slope that failed its own check,
+then caved when the student disputed it. Analyze, detect, practice generation
+and the progress summary stay thinking-off. `thinkingFor` gives adaptive thinking; `budget_tokens` returns a **400** on Sonnet 5, so don't add
 one back (Haiku is the exception, and rejects `effort`). Those calls stream
 (`messages.stream` + `finalMessage`) to stay clear of HTTP timeouts.
 `/api/check-work` streams NDJSON stage frames from the model's real
@@ -238,14 +253,17 @@ which that endpoint doesn't document, so DeepSeek gets JSON mode + the schema in
 the prompt + the same Zod validation, with one repair round. The student's pick
 travels as the `x-ai-provider` header, added by `apiFetch` from
 `lib/aiChoice.ts` (its own storage key: it must never reach the prompt), and is
-honoured only for a configured provider. A photo DeepSeek rejects (400/404/413/
+honoured only for a configured provider. The switch learns what can be picked
+from `/api/providers` (behind the access gate, no model names), never from
+`/api/health`, which is up/down only in public. A photo DeepSeek rejects (400/404/413/
 415/422, or twice-invalid output) is re-run on Claude when that key is set,
 otherwise a 422 `photo_unsupported` tells the student to type it. Auth, balance
 (402 → `spend_limit`) and rate limits never fall back. DeepSeek runs without
-thinking for now; `npm run eval` decides whether check-work needs it.
+thinking for now, including on tutor turns where Claude thinks at low effort to
+check its maths; `npm run eval` decides whether it needs it.
 
 **The tutor's formatting is prompt-enforced.** `SYSTEM_INSTRUCTIONS` in
-`lib/tutor/engine.ts` and `STYLE_NOTE` in `lib/ai/anthropicProvider.ts` ask for short
+`lib/tutor/engine.ts` and `STYLE_NOTE` in `lib/ai/shared.ts` ask for short
 blank-line-separated paragraphs, `## ` section labels, and lists. `components/RichText.tsx`
 is the renderer that turns them into real blocks. Change one and check the other, or
 markdown will leak into the UI as literal dashes.

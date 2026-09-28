@@ -17,11 +17,13 @@ import type {
   ProgressRequest,
   QuestionDetection,
   SessionMemory,
+  TutorPreferences,
   TutorStreamEvent,
   TutorTurn,
   TutorRequest,
   WorkCheck,
 } from "@/lib/tutor/types";
+import { normalizeWorkCheck } from "@/lib/tutor/types";
 import { createMessageFieldDecoder } from "@/lib/tutor/streamText";
 import {
   ANALYZE_SYSTEM,
@@ -41,6 +43,7 @@ import {
   checkWorkText,
   evaluatePracticeText,
   generatePracticeText,
+  guardNotStem,
   normalizeDetection,
   progressText,
   required,
@@ -116,7 +119,17 @@ export class AnthropicProvider implements AIProvider {
     });
     logUsage("detectQuestions", res);
     const out = required(res.parsed_output, "question detection");
-    return normalizeDetection(out, request.width, request.height);
+    return {
+      ...normalizeDetection(out, request.width, request.height),
+      // The route strips this unless the client asked for it.
+      debug: {
+        model: this.detectionModel,
+        width: request.width,
+        height: request.height,
+        raw: out.questions.map(({ label, x1, y1, x2, y2 }) => ({ label, x1, y1, x2, y2 })),
+        primaryIndex: out.primaryIndex,
+      },
+    };
   }
 
   async summarizeProgress(request: ProgressRequest): Promise<string> {
@@ -167,7 +180,7 @@ export class AnthropicProvider implements AIProvider {
       output_config: { format: zodOutputFormat(ProblemAnalysisSchema) },
     });
     logUsage("analyze", res);
-    return required(res.parsed_output, "problem analysis");
+    return guardNotStem(required(res.parsed_output, "problem analysis"));
   }
 
   /**
@@ -223,7 +236,13 @@ export class AnthropicProvider implements AIProvider {
         .finalMessage();
       logUsage("tutor:solution", res);
       const out = required(res.parsed_output, "solution");
-      return { message: out.message, solution: out.solution, memory };
+      // Declined (not a STEM problem): the fields come back empty by
+      // instruction, and an empty card would render section headings over
+      // nothing — or "Not applicable" six times. Just the message, then.
+      const empty = Object.values(out.solution).every((v) => !String(v).trim());
+      return empty
+        ? { message: out.message, memory }
+        : { message: out.message, solution: out.solution, memory };
     }
 
     if (request.action === "similar_problem") {
@@ -237,22 +256,35 @@ export class AnthropicProvider implements AIProvider {
       });
       logUsage("tutor:similar", res);
       const out = required(res.parsed_output, "similar problem");
-      return { message: out.message, similarProblem: out.similarProblem, memory };
+      return {
+        message: out.message,
+        similarProblem: out.similarProblem.trim() || undefined,
+        memory,
+      };
     }
 
     // Conceptual moves (ask / continue / hint / explain / go_deeper): one small
     // piece + hasMore, so the UI can offer "Continue". Kept short on purpose.
+    const turnThinking = thinkingFor(this.model, TURN_EFFORT);
     const res = await this.client.messages.parse({
       model: this.model,
-      max_tokens: 900,
-      thinking: { type: "disabled" },
+      max_tokens: TURN_MAX_TOKENS,
+      thinking: turnThinking.thinking,
       system,
       messages,
-      output_config: { format: zodOutputFormat(TutorChunkSchema) },
+      output_config: {
+        format: zodOutputFormat(TutorChunkSchema),
+        ...(turnThinking.effort ? { effort: turnThinking.effort } : {}),
+      },
     });
     logUsage("tutor:chunk", res);
     const out = required(res.parsed_output, "tutor reply");
-    return { message: out.message, hasMore: out.hasMore, memory: out.memory };
+    return {
+      message: out.message,
+      hasMore: out.hasMore,
+      resolved: out.resolved,
+      memory: out.memory,
+    };
   }
 
   /**
@@ -275,13 +307,19 @@ export class AnthropicProvider implements AIProvider {
   ): AsyncGenerator<TutorStreamEvent, void, unknown> {
     const { system, messages } = this.tutorContext(request);
 
+    // Thinking blocks stream first and carry no text deltas, so the decoder
+    // below skips them; the student sees "Tutor is thinking…" meanwhile.
+    const turnThinking = thinkingFor(this.model, TURN_EFFORT);
     const stream = this.client.messages.stream({
       model: this.model,
-      max_tokens: 900,
-      thinking: { type: "disabled" },
+      max_tokens: TURN_MAX_TOKENS,
+      thinking: turnThinking.thinking,
       system,
       messages,
-      output_config: { format: zodOutputFormat(TutorChunkSchema) },
+      output_config: {
+        format: zodOutputFormat(TutorChunkSchema),
+        ...(turnThinking.effort ? { effort: turnThinking.effort } : {}),
+      },
     });
 
     const decode = createMessageFieldDecoder();
@@ -300,7 +338,12 @@ export class AnthropicProvider implements AIProvider {
     const out = required(final.parsed_output, "tutor reply");
     yield {
       type: "done",
-      turn: { message: out.message, hasMore: out.hasMore, memory: out.memory },
+      turn: {
+        message: out.message,
+        hasMore: out.hasMore,
+        resolved: out.resolved,
+        memory: out.memory,
+      },
     };
   }
 
@@ -355,10 +398,10 @@ export class AnthropicProvider implements AIProvider {
     const final = await stream.finalMessage();
     logUsage("checkWork", final);
     const out = required(final.parsed_output, "work check");
-    yield {
-      type: "done",
-      check: { ...out, firstError: out.firstError ?? undefined },
-    };
+    // Every fresh check goes through the same clean-up as a stored one (a
+    // stray trailing quote, a null firstError), so the UI never sees raw
+    // model output.
+    yield { type: "done", check: normalizeWorkCheck(out) };
   }
 
   /** The same diagnosis without the progress frames, for non-streaming callers. */
@@ -423,7 +466,6 @@ export class AnthropicProvider implements AIProvider {
 // --- Helpers ----------------------------------------------------------------
 
 
-
 /** Haiku takes a different thinking shape from the Sonnet/Opus default. */
 function isHaiku(model: string): boolean {
   return model.toLowerCase().includes("haiku");
@@ -431,8 +473,9 @@ function isHaiku(model: string): boolean {
 
 /**
  * Thinking for the calls where being WRONG is the costly failure: judging a
- * student's work, a full worked solution, and marking practice. Telling a
- * correct student they are wrong is the worst thing this app can do.
+ * student's work, a full worked solution, and marking practice at "medium";
+ * conversational turns at "low" (see TURN_EFFORT). Telling a correct student
+ * they are wrong is the worst thing this app can do.
  *
  * There is no token budget on the default model: on Sonnet 5 `budget_tokens`
  * is removed and returns a 400, and adaptive thinking with an effort level is
@@ -443,17 +486,39 @@ function isHaiku(model: string): boolean {
  * `display: "omitted"` because nothing here ever shows the reasoning — it is
  * still done and billed, just not shipped over the wire.
  */
-function thinkingFor(model: string): {
+function thinkingFor(
+  model: string,
+  effort: "low" | "medium" = "medium",
+): {
   thinking: Anthropic.ThinkingConfigParam;
-  effort?: "medium";
+  effort?: "low" | "medium";
 } {
   if (isHaiku(model)) {
     return {
-      thinking: { type: "enabled", budget_tokens: 4000, display: "omitted" },
+      thinking: {
+        type: "enabled",
+        budget_tokens: effort === "low" ? 2000 : 4000,
+        display: "omitted",
+      },
     };
   }
-  return { thinking: { type: "adaptive", display: "omitted" }, effort: "medium" };
+  return { thinking: { type: "adaptive", display: "omitted" }, effort };
 }
+
+/**
+ * Conversational turns (hint, explain, a typed reply) think at LOW effort.
+ * They used to run with thinking off, and a tutor reading slopes off a graph
+ * and doing arithmetic in one pass handed a student a slope that failed its
+ * own check, then caved when the student disputed it. Adaptive thinking lets
+ * the model skip it on "sure, what's next?" and use it when there is maths.
+ */
+const TURN_EFFORT = "low" as const;
+
+/**
+ * Room for low-effort thinking plus a one-piece reply and the memory blob.
+ * The reply's own length is held down by the chunking rule in the prompt.
+ */
+const TURN_MAX_TOKENS = 8000;
 
 /**
  * Room for thinking plus the structured answer. Streaming requests don't hit
@@ -516,5 +581,4 @@ export function dataUrlToImagePart(dataUrl: string): {
   }
   return { mediaType: match[1], data: match[2] };
 }
-
 

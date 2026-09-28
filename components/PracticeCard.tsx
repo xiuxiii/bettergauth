@@ -21,6 +21,21 @@ import { ErrorState, Eyebrow, LoadingState } from "@/components/States";
 type Phase = "generating" | "gen_error" | "solving" | "evaluating" | "done";
 
 /**
+ * What a practice card has reached, saved on its transcript message so a
+ * reopen restores it. Without this every reopen regenerated every card: a
+ * paid call each, and the student's problem swapped for a new one.
+ */
+export interface PracticeState {
+  problem?: PracticeProblem;
+  /** The submitted attempt: its text, and its photo (externalised to an
+   *  image id in history, like any attempt photo). */
+  attempt?: StudentAttempt;
+  evaluation?: PracticeEvaluation;
+  /** For a targeted retry: whether it cleared the misconception. */
+  resolved?: boolean;
+}
+
+/**
  * Self-contained "practice one like this" widget. It generates a fresh problem
  * on the same concept, lets the student solve it INDEPENDENTLY (the solution is
  * withheld until they submit), then evaluates the attempt across five axes and
@@ -31,18 +46,31 @@ export default function PracticeCard({
   source,
   focus,
   onResolved,
+  saved,
+  onChange,
+  onSettled,
 }: {
   source: ProblemAnalysis;
   /** When set, this is a targeted retry of a recurring misconception. */
   focus?: PracticeFocus;
   /** Called after a genuine attempt to a targeted retry, with the outcome. */
   onResolved?: (concept: string, resolved: boolean) => void;
+  /** Progress saved on the message: restored instead of regenerating. */
+  saved?: PracticeState;
+  /** Reports progress worth saving (the problem, then the evaluation). */
+  onChange?: (state: PracticeState) => void;
+  /** Generation finished, with a problem or an error: the parent unlocks. */
+  onSettled?: () => void;
 }) {
-  const [phase, setPhase] = useState<Phase>("generating");
-  const [problem, setProblem] = useState<PracticeProblem | null>(null);
-  const [evaluation, setEvaluation] = useState<PracticeEvaluation | null>(null);
-  const [submitted, setSubmitted] = useState<StudentAttempt | null>(null);
-  const [resolved, setResolved] = useState<boolean | null>(null);
+  const [phase, setPhase] = useState<Phase>(
+    saved?.evaluation ? "done" : saved?.problem ? "solving" : "generating",
+  );
+  const [problem, setProblem] = useState<PracticeProblem | null>(saved?.problem ?? null);
+  const [evaluation, setEvaluation] = useState<PracticeEvaluation | null>(
+    saved?.evaluation ?? null,
+  );
+  const [submitted, setSubmitted] = useState<StudentAttempt | null>(saved?.attempt ?? null);
+  const [resolved, setResolved] = useState<boolean | null>(saved?.resolved ?? null);
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
 
@@ -56,18 +84,29 @@ export default function PracticeCard({
         body: JSON.stringify({ problem: source, focus }),
       });
       if (!res.ok) throw new Error(await readApiError(res, "Generation failed."));
-      setProblem(await res.json());
+      const generated: PracticeProblem = await res.json();
+      setProblem(generated);
       setPhase("solving");
+      onChange?.({ problem: generated });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed.");
       setPhase("gen_error");
+    } finally {
+      onSettled?.();
     }
   }, [source, focus]);
 
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
+    // A restored card already has its problem: generating again would bill a
+    // call and swap the problem the student was working on.
+    if (saved?.problem) {
+      onSettled?.();
+      return;
+    }
     void generate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generate]);
 
   async function submit(attempt: StudentAttempt) {
@@ -86,11 +125,13 @@ export default function PracticeCard({
       setEvaluation(evaluation);
       setPhase("done");
       // Retry→verify: only a genuine attempt on a targeted retry reports back.
+      let ok: boolean | undefined;
       if (focus && (attempt.text || attempt.imageDataUrl)) {
-        const ok = practiceResolved(evaluation);
+        ok = practiceResolved(evaluation);
         setResolved(ok);
         onResolved?.(focus.concept, ok);
       }
+      onChange?.({ problem, attempt, evaluation, resolved: ok });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Evaluation failed.");
       setPhase("solving"); // let them retry the submission

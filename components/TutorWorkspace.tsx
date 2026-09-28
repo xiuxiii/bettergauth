@@ -32,6 +32,7 @@ import {
   normalizeAnalysis,
   normalizeWorkCheck,
   recordConceptError,
+  resolveGaps,
   resolveMisconception,
 } from "@/lib/tutor/types";
 import {
@@ -48,14 +49,14 @@ import {
   loadPreferences,
   savePreferences,
 } from "@/lib/preferences";
-import { saveProgress, startSession } from "@/lib/history/record";
+import { resumeSession, saveProgress, startSession } from "@/lib/history/record";
 import { getImage, getSession } from "@/lib/history/db";
 import { blobToDataUrl } from "@/lib/image";
 import ProblemCard from "@/components/ProblemCard";
 import MessageBubble from "@/components/MessageBubble";
 import ActionBar from "@/components/ActionBar";
 import AttemptComposer from "@/components/AttemptComposer";
-import PracticeCard from "@/components/PracticeCard";
+import PracticeCard, { type PracticeState } from "@/components/PracticeCard";
 import SessionToggles from "@/components/SessionToggles";
 import RecurringBanner from "@/components/RecurringBanner";
 import Wordmark from "@/components/Wordmark";
@@ -86,8 +87,12 @@ type DisplayMessage = ChatMessage & {
   practiceFor?: ProblemAnalysis;
   /** When set, the practice widget is a targeted retry of this misconception. */
   practiceFocus?: PracticeFocus;
+  /** The practice widget's own progress, saved so a reopen can restore it. */
+  practiceState?: PracticeState;
   /** The tutor action that produced this turn (e.g. "hint"). */
   action?: TutorAction;
+  /** This turn confirmed the student solved it in the chat. */
+  resolved?: boolean;
   /** The session's opening nudge, rendered quieter than a real tutor turn. */
   opener?: boolean;
   /** A student turn that is only a photo: `content` is for the model, not the UI. */
@@ -126,12 +131,30 @@ const PROBLEM_FROM_PHOTO: ProblemAnalysis = {
 
 type Phase = "loading" | "ready" | "error" | "empty" | "notWork";
 
+/**
+ * Whether the transcript already holds a practice card for `concept` that the
+ * student hasn't finished. A finished card is one with a saved evaluation.
+ */
+function hasOpenPractice(messages: readonly DisplayMessage[], concept: string) {
+  const key = concept.trim().toLowerCase();
+  return messages.some(
+    (m) =>
+      m.practiceFor &&
+      m.practiceFocus?.concept.trim().toLowerCase() === key &&
+      !m.practiceState?.evaluation,
+  );
+}
+
 export default function TutorWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [image, setImage] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<ProblemAnalysis | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  // The committed transcript, for callbacks that outlive the render they were
+  // created in (a streamed turn finishing seconds later).
+  const messagesRef = useRef<DisplayMessage[]>([]);
+  messagesRef.current = messages;
   const [phase, setPhase] = useState<Phase>("loading");
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [turnBusy, setTurnBusy] = useState(false);
@@ -287,7 +310,13 @@ export default function TutorWorkspace() {
       // must never block or break the tutoring itself.
       void startSession(data, dataUrl).then((id) => {
         recordIdRef.current = id;
-        if (id) bumpRecord();
+        if (!id) return;
+        bumpRecord();
+        // From here the session lives in history. Point the URL at it, so a
+        // reload or revisit reopens it — instead of re-running the paid
+        // analysis on a handoff that is already spent, and filing a second
+        // copy of the same problem.
+        router.replace(`/workspace?session=${encodeURIComponent(id)}`);
       });
 
       // Ask mode: they asked something specific, so answer that. It wins over
@@ -315,6 +344,22 @@ export default function TutorWorkspace() {
       if (dataUrl && data.studentWork?.present) {
         setMessages([]);
         void sendCheckWork({ imageDataUrl: dataUrl }, data, early?.promise);
+        return;
+      }
+      // Typed working: there is no photo for the check to read, so the
+      // analysis hands the working back separately. Show it as theirs (the
+      // problem card holds only the question) and check it straight away.
+      const typedWork = !dataUrl ? data.attemptText?.trim() : "";
+      if (typedWork && data.studentWork?.present) {
+        setMessages([
+          {
+            id: uid("s"),
+            role: "student",
+            content: typedWork,
+            createdAt: Date.now(),
+          },
+        ]);
+        void sendCheckWork({ text: typedWork }, data);
         return;
       }
       // Detection thought there was working; the analysis says not. Drop it.
@@ -380,17 +425,39 @@ export default function TutorWorkspace() {
         // Attempt photos are stored as ids, not inline data URLs, so they have
         // to be resolved back or the student's own working vanishes from the
         // transcript they just reopened.
+        // Every photo resolved from an id, so the next save can reuse the id.
+        const knownImages: [string, string][] = [];
         const restored = await Promise.all(
           rec.messages.map(async (m) => {
             const msg = { ...m } as unknown as DisplayMessage & {
               attemptImageId?: string;
             };
             if (msg.workCheck) msg.workCheck = normalizeWorkCheck(msg.workCheck);
+            // A practice card's attempt photo is stored by id, like any other.
+            const practicePhotoId = (
+              msg.practiceState?.attempt as { imageId?: string } | undefined
+            )?.imageId;
+            if (practicePhotoId && msg.practiceState?.attempt) {
+              const blob = await getImage(practicePhotoId);
+              if (blob) {
+                try {
+                  const dataUrl = await blobToDataUrl(blob);
+                  knownImages.push([dataUrl, practicePhotoId]);
+                  msg.practiceState = {
+                    ...msg.practiceState,
+                    attempt: { ...msg.practiceState.attempt, imageDataUrl: dataUrl },
+                  };
+                } catch {
+                  /* the evaluation still stands without the photo */
+                }
+              }
+            }
             if (msg.attemptImageId) {
               const blob = await getImage(msg.attemptImageId);
               if (blob) {
                 try {
                   msg.attemptImage = await blobToDataUrl(blob);
+                  knownImages.push([msg.attemptImage, msg.attemptImageId]);
                 } catch {
                   /* leave the bubble without its photo */
                 }
@@ -400,8 +467,10 @@ export default function TutorWorkspace() {
           }),
         );
         // "Practice this" on the home screen: reopen the session the concept
-        // last went wrong in, with a targeted practice problem waiting.
-        if (practiceConcept) {
+        // last went wrong in, with a targeted practice problem waiting. Only
+        // if there isn't one open for that concept already: the link used to
+        // add a card, and a paid generate call, on every load of the URL.
+        if (practiceConcept && !hasOpenPractice(restored, practiceConcept)) {
           const key = practiceConcept.trim().toLowerCase();
           const m = rec.memory.misconceptions?.find(
             (x) => x.concept.trim().toLowerCase() === key && x.status !== "resolved",
@@ -422,36 +491,45 @@ export default function TutorWorkspace() {
         setMessages(restored);
         // Keep writing to the same record, so continuing an old session
         // extends it rather than forking a duplicate.
+        resumeSession(knownImages);
         recordIdRef.current = rec.id;
         setPhase("ready");
+        // The practice request is spent; a reload must not repeat it.
+        if (practiceConcept) {
+          router.replace(`/workspace?session=${encodeURIComponent(rec.id)}`);
+        }
       })();
       return;
     }
 
+    // The handoff from home is read once and cleared at once: every key, so a
+    // reload can't replay it (another paid analysis, another history record).
+    // After the analysis the URL names the saved session, which is what a
+    // reload reopens.
     let stored: string | null = null;
     let typedText: string | null = null;
     try {
       stored = sessionStorage.getItem(IMAGE_KEY);
       typedText = stored ? null : sessionStorage.getItem(TEXT_KEY)?.trim() || null;
+      questionRef.current = sessionStorage.getItem(QUESTION_KEY)?.trim() || null;
+      workHintRef.current = sessionStorage.getItem(WORK_HINT_KEY) === "1";
+      for (const key of [IMAGE_KEY, TEXT_KEY, QUESTION_KEY, WORK_HINT_KEY]) {
+        sessionStorage.removeItem(key);
+      }
     } catch {
       /* blocked storage: nothing was handed over */
+      questionRef.current = null;
+      workHintRef.current = false;
     }
     if (typedText) {
+      questionRef.current = null;
+      workHintRef.current = false;
       void runAnalysis({ text: typedText });
       return;
     }
     if (!stored) {
       setPhase("empty");
       return;
-    }
-    try {
-      questionRef.current = sessionStorage.getItem(QUESTION_KEY)?.trim() || null;
-      sessionStorage.removeItem(QUESTION_KEY);
-      workHintRef.current = sessionStorage.getItem(WORK_HINT_KEY) === "1";
-      sessionStorage.removeItem(WORK_HINT_KEY);
-    } catch {
-      questionRef.current = null;
-      workHintRef.current = false;
     }
     setImage(stored);
     void runAnalysis({ image: stored });
@@ -561,7 +639,9 @@ export default function TutorWorkspace() {
           solution: turn.solution,
           similarProblem: turn.similarProblem,
           hasMore: turn.hasMore,
+          resolved: turn.resolved || undefined,
         });
+        if (turn.resolved) markSolvedInChat();
       };
 
       // show_solution / similar_problem still answer with one JSON body.
@@ -666,6 +746,45 @@ export default function TutorWorkspace() {
     );
   }
 
+  /**
+   * The tutor confirmed the student solved it in the chat. Move everything on
+   * as if they had revealed it: the latest check shows the rest, and its gap
+   * (plus any misconception still open this session) is closed in memory, so
+   * "Concepts to work on" stops listing what they just fixed. The stage reads
+   * the turn's `resolved` flag, which is what shows the key idea and the
+   * resolved chips.
+   */
+  function markSolvedInChat() {
+    setMessages((prev) => {
+      const i = prev.map((m) => !!m.workCheck).lastIndexOf(true);
+      if (i === -1) return prev;
+      const next = prev.slice();
+      next[i] = { ...next[i], reveal: 2 };
+      return next;
+    });
+    // The updater above runs lazily, so the check's concept is read from the
+    // latest committed transcript instead.
+    const latest = [...messagesRef.current].reverse().find((m) => m.workCheck);
+    const open = memoryRef.current.misconceptions
+      .filter((m) => m.status !== "resolved")
+      .map((m) => m.concept);
+    memoryRef.current = resolveGaps(memoryRef.current, [
+      latest?.workCheck?.concept,
+      ...open,
+    ]);
+    setRecurring(detectRecurring(memoryRef.current));
+    bumpRecord();
+  }
+
+  /** Save a practice card's progress on its message (persisted with it). */
+  function savePracticeState(id: string, state: PracticeState) {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id ? { ...m, practiceState: { ...m.practiceState, ...state } } : m,
+      ),
+    );
+  }
+
   /** Move a check's reveal on. Saved with the transcript by the effect above. */
   function handleReveal(id: string, next: RevealStep) {
     setMessages((prev) =>
@@ -724,8 +843,10 @@ export default function TutorWorkspace() {
     // An early check may already be reporting progress; keep its stage.
     if (!pending) setCheckStage(null);
     try {
-      const check = await (pending ??
-        fetchCheck(attempt, forProblem, undefined, retryOf, setCheckStage));
+      const check = normalizeWorkCheck(
+        await (pending ??
+          fetchCheck(attempt, forProblem, undefined, retryOf, setCheckStage)),
+      );
       // Fold the diagnosis into memory so it counts toward recurrence /
       // resolution, then refresh the recurring-gap banner.
       memoryRef.current = applyWorkCheckToMemory(
@@ -758,8 +879,17 @@ export default function TutorWorkspace() {
     }
   }
 
+  // A practice card is on its way: set synchronously, so a double tap (two
+  // clicks in one tick, before any re-render) can't add a second card and a
+  // second paid generate call. Cleared once the new card has its problem, or
+  // gave up.
+  const practicePendingRef = useRef(false);
+  const [practicePending, setPracticePending] = useState(false);
+
   function handlePractice(focus?: PracticeFocus) {
-    if (!analysis || turnBusy) return;
+    if (!analysis || turnBusy || practicePendingRef.current) return;
+    practicePendingRef.current = true;
+    setPracticePending(true);
     // Append a self-contained practice widget; it generates and evaluates on
     // its own via /api/practice/*. A focus makes it a targeted retry.
     setMessages((prev) => [
@@ -806,21 +936,30 @@ export default function TutorWorkspace() {
     );
   }
 
-  // The photo had nothing to tutor. The same words the cropper uses, centred,
-  // with one way forward — not the red error card, because nothing failed:
-  // the photo just wasn't of work.
+  // Nothing to tutor. The same words the cropper uses, centred, with one way
+  // forward — not the red error card, because nothing failed: the input just
+  // wasn't a maths or science problem. Nothing was saved to history.
   if (phase === "notWork") {
+    const typed = !!inputRef.current?.text;
     return (
       <CenteredShell>
         <EmptyState
-          title="Question not detected"
-          hint="Please try again with the problem in frame."
+          title={
+            typed
+              ? "That doesn't look like a maths or science problem"
+              : "Question not detected"
+          }
+          hint={
+            typed
+              ? "MindGap helps with maths, physics, chemistry and biology. Type or snap one of those."
+              : "Please try again with the problem in frame."
+          }
         />
         <Link
           href="/"
           className="mt-4 inline-flex h-11 items-center rounded-md bg-brand-600 px-4 text-sm font-semibold text-white shadow-raised transition hover:bg-accent-deep active:scale-[0.98] active:bg-accent-deep"
         >
-          Take another photo
+          {typed ? "Back to home" : "Take another photo"}
         </Link>
       </CenteredShell>
     );
@@ -863,7 +1002,8 @@ export default function TutorWorkspace() {
     <div className="mx-auto flex h-dvh w-full max-w-md animate-rise flex-col bg-slate-50 md:grid md:max-w-6xl md:grid-cols-[minmax(320px,400px)_1fr] md:grid-rows-[auto_minmax(0,1fr)] md:gap-0">
       <TopBar
         onBack={() => router.push("/")}
-        topic={analysis?.topic}
+        // The same label as the problem card's tag, not a second, longer one.
+        topic={analysis ? analysis.concept || analysis.topic : undefined}
         prefs={prefs}
         onPrefsChange={updatePrefs}
         prefsDisabled={turnBusy}
@@ -893,6 +1033,12 @@ export default function TutorWorkspace() {
                     source={m.practiceFor}
                     focus={m.practiceFocus}
                     onResolved={handlePracticeResolved}
+                    saved={m.practiceState}
+                    onChange={(state) => savePracticeState(m.id, state)}
+                    onSettled={() => {
+                      practicePendingRef.current = false;
+                      setPracticePending(false);
+                    }}
                   />
                 </div>
               ) : m.opener ? (
@@ -978,7 +1124,7 @@ export default function TutorWorkspace() {
 
         {analysis && (
           <ActionBar
-            busy={turnBusy}
+            busy={turnBusy || practicePending}
             stage={stage}
             hinted={hintGiven(messages)}
             onAction={handleAction}

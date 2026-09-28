@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, ChevronUp, Ellipsis } from "lucide-react";
 import type { TutorAction } from "@/lib/tutor/types";
 import type { SessionStage } from "@/lib/tutor/stage";
+import { enterSends } from "@/lib/utils";
 import { Spinner } from "@/components/States";
 
 type ChipId =
@@ -262,7 +263,7 @@ export default function ActionBar({
             onChange={(e) => setText(e.target.value)}
             onFocus={onFocus}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (enterSends(e)) {
                 e.preventDefault();
                 submit();
               }

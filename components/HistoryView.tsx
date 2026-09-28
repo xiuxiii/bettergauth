@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, Trash2 } from "lucide-react";
 import {
@@ -23,6 +23,9 @@ import RichText, { InlineRichText } from "@/components/RichText";
  * write-up costs a model call and is therefore opt-in, not something that fires
  * on every visit.
  */
+/** How long a deleted problem can be brought back. */
+const UNDO_MS = 5000;
+
 export default function HistoryView() {
   const [sessions, setSessions] = useState<SessionRecord[] | null>(null);
   const [concepts, setConcepts] = useState<ConceptProgress[]>([]);
@@ -66,9 +69,44 @@ export default function HistoryView() {
     }
   }
 
-  async function remove(id: string) {
-    await deleteSession(id);
+  // A delete is held for UNDO_MS with an Undo before it happens: one stray tap
+  // on the bin used to erase a problem and its photos for good. Leaving the
+  // page, or deleting another item, commits the pending one straight away.
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const pendingRef = useRef<{ id: string; timer: number } | null>(null);
+
+  const commitPending = useCallback(async () => {
+    const pending = pendingRef.current;
+    if (!pending) return;
+    pendingRef.current = null;
+    window.clearTimeout(pending.timer);
+    setPendingDelete(null);
+    await deleteSession(pending.id);
     await load();
+  }, [load]);
+
+  useEffect(() => {
+    const flush = () => void commitPending();
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, [commitPending]);
+
+  async function remove(id: string) {
+    await commitPending();
+    const timer = window.setTimeout(() => void commitPending(), UNDO_MS);
+    pendingRef.current = { id, timer };
+    setPendingDelete(id);
+  }
+
+  function undoDelete() {
+    const pending = pendingRef.current;
+    if (!pending) return;
+    window.clearTimeout(pending.timer);
+    pendingRef.current = null;
+    setPendingDelete(null);
   }
 
   async function removeEverything() {
@@ -159,7 +197,9 @@ export default function HistoryView() {
           )}
 
           <ul className="space-y-2">
-            {sessions.map((s) => (
+            {sessions
+              .filter((s) => s.id !== pendingDelete)
+              .map((s) => (
               <li key={s.id}>
                 <div className="flex items-center gap-3 rounded-lg border border-hairline bg-surface p-2.5">
                   <Link
@@ -238,6 +278,22 @@ export default function HistoryView() {
             )}
           </div>
         </>
+      )}
+      {pendingDelete && (
+        <div
+          role="status"
+          className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom,0px))] z-30 flex justify-center px-4"
+        >
+          <div className="flex animate-pop-in items-center gap-3 rounded-full bg-ink px-4 py-2 text-sm text-paper shadow-raised">
+            <span>Problem deleted</span>
+            <button
+              onClick={undoDelete}
+              className="h-9 rounded-full px-3 font-semibold text-paper underline underline-offset-4 transition hover:opacity-80"
+            >
+              Undo
+            </button>
+          </div>
+        </div>
       )}
     </main>
   );

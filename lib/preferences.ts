@@ -53,6 +53,24 @@ export function savePreferences(prefs: TutorPreferences): void {
   }
 }
 
+/**
+ * Whether localStorage works at all. With site data blocked (some private
+ * modes, strict settings) every read throws or comes back empty and every write
+ * is lost — so "no preferences saved" means nothing, and gating on it sent the
+ * student round the welcome tour forever: finish, land on home, get sent back.
+ */
+export function storageAvailable(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const probe = "mindgap:probe";
+    window.localStorage.setItem(probe, "1");
+    window.localStorage.removeItem(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Whether the student has completed setup at least once. */
 export function hasPreferences(): boolean {
   return loadPreferences() !== null;

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import MindGapMark from "@/components/MindGapMark";
-import { readApiError } from "@/lib/apiClient";
+import { NetworkError, apiFetch, readApiError } from "@/lib/apiClient";
 
 /** One-field unlock: submit the shared access code to get in. */
 export default function UnlockForm() {
@@ -26,7 +26,7 @@ export default function UnlockForm() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/unlock", {
+      const res = await apiFetch("/api/unlock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: code.trim() }),
@@ -39,8 +39,12 @@ export default function UnlockForm() {
         setError(await readApiError(res, "Incorrect code."));
         setBusy(false);
       }
-    } catch {
-      setError("Something went wrong. Try again.");
+    } catch (err) {
+      // No response at all: say it's the connection, in words, rather than
+      // the browser's "Failed to fetch" or a vague "something went wrong".
+      setError(
+        err instanceof NetworkError ? err.message : "Something went wrong. Try again.",
+      );
       setBusy(false);
     }
   }

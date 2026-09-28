@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { providerConfig } from "@/lib/ai/provider";
+import { debugAllowed } from "@/lib/debugAccess";
 
 export const runtime = "nodejs";
 
@@ -8,12 +9,20 @@ export const runtime = "nodejs";
  * Reads env directly (never constructs a provider, which throws without a key)
  * and never returns a key itself. Restart the server after changing env.
  *
- * The top-level fields describe the default provider, as they always have;
- * `providers` is what the setup page's model switch reads.
+ * The top-level fields describe the default provider. The setup page's model
+ * switch does NOT read this (publicly it is just up/down); it uses the gated
+ * /api/providers.
  */
-export async function GET() {
+export async function GET(req: Request) {
   const config = providerConfig();
   const id = config.defaultProvider;
+  const keyDetected = !!id && config.providers[id].configured;
+
+  // Publicly just up/down: which provider and model the app runs on is
+  // nobody's business but ours. The details show outside production, or with
+  // ?code=<DEBUG_CODE>.
+  const code = new URL(req.url).searchParams.get("code");
+  if (!debugAllowed(code)) return NextResponse.json({ ok: keyDetected });
 
   if (!id) {
     return NextResponse.json({
@@ -28,7 +37,6 @@ export async function GET() {
     });
   }
 
-  const keyDetected = config.providers[id].configured;
   return NextResponse.json({
     provider: keyDetected ? id : "none",
     keyDetected,

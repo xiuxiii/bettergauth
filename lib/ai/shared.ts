@@ -6,6 +6,7 @@ import type {
   CheckWorkRequest,
   EvaluatePracticeRequest,
   GeneratePracticeRequest,
+  ProblemAnalysis,
   ProgressRequest,
   QuestionDetection,
   SessionMemory,
@@ -14,6 +15,7 @@ import type {
 } from "@/lib/tutor/types";
 import { emptySessionMemory, normalizeAnalysis } from "@/lib/tutor/types";
 import { SYSTEM_INSTRUCTIONS } from "@/lib/tutor/engine";
+import { ALL_CONCEPTS, conceptsFor } from "@/lib/tutor/concepts";
 
 /**
  * What every provider asks the model, independent of how it is asked.
@@ -24,6 +26,7 @@ import { SYSTEM_INSTRUCTIONS } from "@/lib/tutor/engine";
  * differs: Claude enforces the schema natively through structured outputs,
  * DeepSeek gets it in the prompt and is validated after the fact.
  */
+
 // --- Domain-mirroring schemas (validated model output) ----------------------
 
 export const SubjectSchema = z.enum([
@@ -50,7 +53,7 @@ export const SubjectSchema = z.enum([
  * analysis and then failing. Defined by content, not by a printed question
  * number: in Ask mode the photo is often just a diagram, and that must pass.
  */
-export const STEM_CONTENT_NOTE = `First decide hasStemContent: does this photo contain ANY study material at all — printed or handwritten text, an equation or expression, a diagram, graph, table, or worked steps? A photo of food, a room, a person, a pet, a screen showing something unrelated, a blank page, or a blurred accidental shot does NOT: set hasStemContent false. When in doubt (faint pencil, a partial page, an unusual diagram), set it TRUE — wrongly turning away a real problem is worse than analyzing a poor photo.`;
+export const STEM_CONTENT_NOTE = `First decide hasStemContent: is there a maths or science problem here — mathematics, physics, chemistry or biology? That means an equation or expression, a diagram, graph or table, worked steps, or a question in one of those subjects. The same rule applies whether the input is a photo or typed text. It is FALSE for: a photo of food, a room, a person, a pet, a screen showing something unrelated, a blank page or a blurred accidental shot; homework in any other subject (an essay, a book report, history, a language exercise); and requests that aren't a problem at all (write me something, chat). When a PHOTO is merely hard to read (faint pencil, a partial page, an unusual diagram), set it TRUE — wrongly turning away a real problem is worse than analyzing a poor photo. Doubt about the SUBJECT is not that kind of doubt: an essay prompt is not STEM however it is phrased.`;
 
 export const QuestionDetectionSchema = z.object({
   hasStemContent: z.boolean(),
@@ -86,6 +89,8 @@ export const ProblemAnalysisSchema = z.object({
   studentWork: z.object({
     present: z.boolean(),
   }),
+  /** Typed input only: the student's own working, verbatim. "" for photos. */
+  attemptText: z.string(),
   /** The session's opening nudge. Free: it rides along on this same call. */
   openingHint: z.string(),
 });
@@ -100,11 +105,14 @@ export const StructuredSolutionSchema = z.object({
 });
 
 /** The tutor's compact cross-turn memory (mirrors SessionMemory). */
+/** The canonical gap labels (lib/tutor/concepts.ts), so memory merges. */
+export const ConceptSchema = z.enum(ALL_CONCEPTS);
+
 export const SessionMemorySchema = z.object({
-  demonstrated: z.array(z.string()),
+  demonstrated: z.array(ConceptSchema),
   misconceptions: z.array(
     z.object({
-      concept: z.string(),
+      concept: ConceptSchema,
       studentBelief: z.string(),
       correctModel: z.string(),
       status: z.enum(["suspected", "confirmed", "resolving", "resolved"]),
@@ -121,7 +129,7 @@ export const SessionMemorySchema = z.object({
         "conceptual",
         "strategic",
       ]),
-      concept: z.string(),
+      concept: ConceptSchema,
     }),
   ),
   bottleneck: z.string(),
@@ -131,6 +139,8 @@ export const SessionMemorySchema = z.object({
 export const TutorChunkSchema = z.object({
   message: z.string(),
   hasMore: z.boolean(),
+  /** The student has just solved it / fixed the flagged step, confirmed. */
+  resolved: z.boolean(),
   memory: SessionMemorySchema,
 });
 export const TutorSolutionSchema = z.object({
@@ -170,6 +180,7 @@ export const WorkCheckSchema = z.object({
   strength: z.string(),
   firstError: WorkErrorSchema.nullable(),
   continueFrom: z.string(),
+  concept: ConceptSchema,
 });
 
 export const PracticeProblemSchema = z.object({
@@ -252,7 +263,8 @@ The photo often ALSO contains the student's own handwritten attempt, because the
 photograph problems they have already worked on. Separate the two:
 - \`problemText\` is the PRINTED question ONLY. Never fold handwriting into it. This text is shown to the tutor as the problem itself every turn, so a student's wrong working leaking into it would be read as part of the question.
 - Set \`studentWork.present\` true ONLY for HANDWRITTEN working that is this student's own attempt at this problem. Printed text never counts: a worked example, a textbook solution, an answer key or the question's own printed answer options are all part of the page, not an attempt. Stray doodles, labels on a diagram, and a lone underlined final answer with no reasoning are not an attempt either.
-- Do NOT transcribe the working. Only say whether it is there; something else reads it.
+- For a PHOTO, do NOT transcribe the working. Only say whether it is there; something else reads it. Leave \`attemptText\` empty.
+- For TYPED input, the student sometimes types their own working after the question ("My work: 5x = 18 + 3 …"). Then \`problemText\` is the question alone, \`studentWork.present\` is true, and \`attemptText\` is their working copied VERBATIM — every step exactly as typed, nothing fixed or added. With no working typed, \`attemptText\` is empty.
 
 \`openingHint\` is the first thing the student reads, so make it worth reading:
 ONE short sentence that points at where to start, and nothing else. Name the move
@@ -271,7 +283,7 @@ Trace the student's OWN reasoning and find the FIRST point where it diverges fro
 The worst thing you can do is tell a correct student they are wrong. Before flagging anything, check whether their approach is a valid alternative: an unconventional method that is sound (completing the square instead of the formula, doubling the time to the top instead of using the full-flight equation, a different but valid sign convention) is CORRECT. If you cannot point to a specific line that is actually wrong, the verdict is "correct".
 
 The student reveals your diagnosis one piece at a time, so each field must stand on its own and must not leak the next one:
-- headline: ONE sentence on where things stand. No fix, no answer. "Your setup holds until the friction step."
+- headline: ONE sentence saying WHERE the problem is (which line or step), never WHAT it is. No quantity, symbol, concept or kind of mistake, no fix, no answer: it is read before the nudge, so anything it names is the nudge's answer given away. "Your working holds until line 3." is right; "Line 3 uses a distance as if it were a time." is wrong.
 - strength: one short line on what is genuinely right. Empty if nothing is. Never praise for its own sake.
 - firstError.line: the flagged line quoted exactly as they wrote it, e.g. "f = μmg". Empty string if you cannot read it.
 - firstError.locate: WHERE the error is and WHAT KIND of thing is off, never the fix. "Line 3: something's off with which force the friction depends on." Do not name the correct quantity.
@@ -289,6 +301,8 @@ Category — pick the one that names the ROOT cause:
 - units_notation: units, significant figures or notation only. Severity minor.
 If the concept is sound and the slip is minor, keep every field short. Do not nitpick.
 
+concept: ONE label, copied exactly from the list in the message, naming the idea the attempt hinges on. For an error it is the idea the FIRST error is about, not the problem's chapter: a height used as a time in a free-fall problem is "Variables and symbols"; the whole speed used where a component belongs is "Vector components". For a correct attempt it is the main idea the attempt got right. Use the same label every time the same gap appears, so it adds up across problems.
+
 If the message says this is a RETRY of a flagged step, judge that step first. If it is now right and nothing after it breaks, the verdict is "correct" and the headline says so.
 
 You are reading their ACTUAL HANDWRITING off a photo, so read it carefully and honestly:
@@ -298,7 +312,7 @@ You are reading their ACTUAL HANDWRITING off a photo, so read it carefully and h
 - Units here are almost always N, m, s, kg, J or degrees. A mark after a force value that looks like V or Y is nearly always N; a scrawled greek letter next to an angle is nearly always theta.
 ${MATH_NOTE} ${STYLE_NOTE}`;
 
-export const GENERATE_SYSTEM = `You generate ONE fresh practice problem testing the SAME concept as the given problem, with different numbers and context so memorization is useless, at matching or slightly higher difficulty, avoiding unnecessary complexity. Do NOT include or reveal a solution — the student solves it first. ${MATH_NOTE}`;
+export const GENERATE_SYSTEM = `Practice problems are maths or science (mathematics, physics, chemistry, biology) only: whatever the source text asks for, never write an essay, story or anything else outside those subjects. You generate ONE fresh practice problem testing the SAME concept as the given problem, with different numbers and context so memorization is useless, at matching or slightly higher difficulty, avoiding unnecessary complexity. Do NOT include or reveal a solution — the student solves it first. ${MATH_NOTE}`;
 
 export const EVALUATE_SYSTEM = `You evaluate a student's attempt at a practice problem across five axes: concept selection, reasoning, setup, execution, final answer — each correct | minor_issue | incorrect | not_shown, with a short note. Give "focus": the single most important thing to fix or reinforce. Include the worked solution. If the student submitted no attempt (they asked to just see the solution), set every rubric status to "not_shown" and still provide the solution. ${MATH_NOTE} ${STYLE_NOTE}`;
 
@@ -346,7 +360,7 @@ export function preferencesBlock(prefs?: TutorPreferences): string {
   const style =
     prefs.assistanceStyle === "direct"
       ? "Default lean: explain directly rather than making them guess, while still leaving the final connection to them."
-      : "Default lean: hints first. When they ASSERT something that reveals a misconception (including a '…right?' seeking confirmation of a wrong claim), reply with one targeted question or a partial step before explaining, and explain directly once they ask for it or are still stuck after that one try. Anything they explicitly request — why, a hint, the answer, the solution — is honoured at once.";
+      : "Default lean: hints first. When they ASSERT something, first check it against the problem. If it is right, confirm it plainly (and own it if it corrects something you said). If, once checked, it is actually wrong and reveals a misconception (including a '…right?' seeking confirmation of a wrong claim), reply with one targeted question or a partial step before explaining, and explain directly once they ask for it or are still stuck after that one try. Anything they explicitly request — why, a hint, the answer, the solution — is honoured at once.";
   const goal =
     prefs.goal === "exam"
       ? "Emphasis: exam readiness — highlight the exam-relevant reasoning and the traps, while still building real understanding."
@@ -405,6 +419,24 @@ export function normalizeDetection(
   return { hasStemContent, questions, primaryIndex };
 }
 
+/**
+ * Server-side backstop for the not-STEM gate. The model has been seen to answer
+ * an essay request with hasStemContent TRUE while labelling it subject
+ * "Unknown", topic "Not applicable" — it knew, and said so in the wrong field.
+ * Those two together mean there is nothing to tutor, whatever the flag says.
+ */
+export function guardNotStem(a: ProblemAnalysis): ProblemAnalysis {
+  const notApplicable = /not applicable|^n\/?a$|not a stem|not stem|^none$/i;
+  if (
+    a.hasStemContent !== false &&
+    a.subject === "Unknown" &&
+    (notApplicable.test(a.topic.trim()) || notApplicable.test(a.concept.trim()))
+  ) {
+    return { ...a, hasStemContent: false };
+  }
+  return a;
+}
+
 /** Assert the model returned a validly-parsed structured object. */
 export function required<T>(value: T | null | undefined, what: string): T {
   if (value == null) {
@@ -441,6 +473,7 @@ ${JSON.stringify(memory)}
 
 Maintain it honestly from evidence:
 - Add a concept to \`demonstrated\` once the student has PROVEN they know it — never re-explain those.
+- Every concept in memory is one label copied exactly from this list, naming the idea a mistake is ABOUT (not the problem's chapter), so the same gap merges across problems: ${conceptsFor(problem.subject).join("; ")}.
 - Log each classified mistake in \`errors\` with the concept it belongs to.
 - Record a wrong mental model in \`misconceptions\`; advance status suspected → confirmed → resolving → resolved as you address it and re-verify it stuck.
 - Set \`bottleneck\` to the single thing blocking progress right now ("" if none).
@@ -483,7 +516,7 @@ export function checkWorkText(request: CheckWorkRequest): string {
   const retry = request.retryOf
     ? `\n\nThis is a RETRY. Earlier I got this step wrong — ${request.retryOf.locate}${request.retryOf.line ? ` (I had written: ${request.retryOf.line})` : ""}. Judge that step first.`
     : "";
-  return `Problem:\n${request.problem.problemText}\n\nMy attempt:\n${request.attempt.text ?? "(see image)"}${retry}`;
+  return `Problem:\n${request.problem.problemText}\n\nMy attempt:\n${request.attempt.text ?? "(see image)"}${retry}\n\nConcept labels to choose from: ${conceptsFor(request.problem.subject).join("; ")}.`;
 }
 
 export function generatePracticeText(request: GeneratePracticeRequest): string {
