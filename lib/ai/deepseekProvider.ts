@@ -22,6 +22,7 @@ import type {
 } from "@/lib/tutor/types";
 import { normalizeWorkCheck } from "@/lib/tutor/types";
 import { createMessageFieldDecoder } from "@/lib/tutor/streamText";
+import { canonicalConcept } from "@/lib/tutor/concepts";
 import {
   ANALYZE_SYSTEM,
   CHECKWORK_SYSTEM,
@@ -62,7 +63,12 @@ import {
  * rejects the request, or twice returns something unusable), that single call
  * is re-run on the fallback provider (Claude, when ANTHROPIC_API_KEY is set),
  * or fails with PhotoUnsupportedError asking the student to type the problem.
- * Auth, balance and rate-limit errors never fall back: those are real.
+ * Any other call whose answer is still unusable after the repair round also
+ * goes to the fallback when there is one. Auth, balance and rate-limit errors
+ * never fall back: those are real.
+ *
+ * Thinking is sent explicitly OFF on every call: deepseek-flash thinks by
+ * default, and that reasoning eats max_tokens (see `post`).
  *
  * TODO: thinking. Claude thinks on checkWork / show_solution /
  * evaluatePractice, and at low effort on tutor turns so it checks its maths
@@ -133,6 +139,13 @@ function photoRejected(err: unknown): boolean {
   return err instanceof DeepSeekError && PHOTO_REJECTED.has(err.status);
 }
 
+/**
+ * A tutor turn: one short message plus the whole memory blob, which grows
+ * through a session. Only what is written is billed, so the cap is headroom,
+ * not cost; running out mid-JSON is what fails a turn.
+ */
+const TURN_MAX_TOKENS = 3000;
+
 /** Generous, but bounded: a hung upstream must not hold the function open. */
 const REQUEST_TIMEOUT_MS = 120_000;
 
@@ -174,7 +187,11 @@ export class DeepSeekProvider implements AIProvider {
         "content-type": "application/json",
         authorization: `Bearer ${this.apiKey}`,
       },
-      body: JSON.stringify({ model: this.model, ...body }),
+      // Thinking OFF, explicitly: deepseek-flash thinks by default, at high
+      // effort. Its reasoning then counts against max_tokens, so a longer turn
+      // ran out before the JSON answer was written ("The tutor stopped
+      // mid-answer"), and every call paid for reasoning nobody reads.
+      body: JSON.stringify({ model: this.model, thinking: { type: "disabled" }, ...body }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) {
@@ -205,10 +222,11 @@ export class DeepSeekProvider implements AIProvider {
       ...(json ? { response_format: { type: "json_object" } } : {}),
     });
     const data = (await res.json()) as {
-      choices?: { message?: { content?: string | null } }[];
+      choices?: { message?: { content?: string | null }; finish_reason?: string | null }[];
       usage?: Record<string, unknown>;
     };
     logUsage(label, data.usage);
+    warnIfCut(label, data.choices?.[0]?.finish_reason);
     return data.choices?.[0]?.message?.content ?? "";
   }
 
@@ -243,10 +261,11 @@ export class DeepSeekProvider implements AIProvider {
           const payload = line.slice(5).trim();
           if (payload === "[DONE]") return;
           const event = JSON.parse(payload) as {
-            choices?: { delta?: { content?: string | null } }[];
+            choices?: { delta?: { content?: string | null }; finish_reason?: string | null }[];
             usage?: Record<string, unknown> | null;
           };
           if (event.usage) logUsage(label, event.usage);
+          warnIfCut(label, event.choices?.[0]?.finish_reason);
           const text = event.choices?.[0]?.delta?.content;
           if (text) yield text;
         }
@@ -289,27 +308,31 @@ export class DeepSeekProvider implements AIProvider {
   }
 
   /**
-   * Run a call that may carry a photo. Text-only calls just run. A photo call
-   * runs on DeepSeek unless vision is off, and moves to the fallback when
-   * DeepSeek can't handle it.
+   * Run one call on DeepSeek, handing it to the fallback (Claude, when
+   * configured) when DeepSeek can't do it:
+   *   - a photo it rejects, or that twice gets an unusable answer;
+   *   - any call whose answer is still unusable after the repair round, so a
+   *     student sees Claude's reply instead of "Please try again".
+   * A photo with no fallback becomes PhotoUnsupportedError. Auth, balance and
+   * rate-limit errors never fall back: those are DeepSeek's real answer.
    */
-  private async withPhoto<T>(
+  private async guarded<T>(
     hasImage: boolean,
     method: string,
     run: () => Promise<T>,
     onFallback: (fallback: AIProvider) => Promise<T>,
   ): Promise<T> {
-    if (!hasImage) return run();
-    if (this.vision) {
+    if (!(hasImage && !this.vision)) {
       try {
         return await run();
       } catch (err) {
-        if (!photoRejected(err)) throw err;
-        console.warn(`[ai] deepseek could not handle a photo (${method})`, err);
+        const rescuable = hasImage ? photoRejected(err) : err instanceof InvalidOutputError;
+        if (!rescuable || (!hasImage && !this.fallback)) throw err;
+        console.warn(`[ai] deepseek could not answer (${method})`, err);
       }
     }
     if (!this.fallback) throw new PhotoUnsupportedError();
-    console.log(`[ai] deepseek photo fallback → ${this.fallback.name} (${method})`);
+    console.log(`[ai] deepseek fallback → ${this.fallback.name} (${method})`);
     return onFallback(this.fallback);
   }
 
@@ -318,7 +341,7 @@ export class DeepSeekProvider implements AIProvider {
   async detectQuestions(
     request: DetectQuestionsRequest,
   ): Promise<QuestionDetection> {
-    return this.withPhoto(
+    return this.guarded(
       true,
       "detectQuestions",
       async () => {
@@ -333,7 +356,7 @@ export class DeepSeekProvider implements AIProvider {
               ),
             },
           ],
-          maxTokens: 1200,
+          maxTokens: 2500,
           label: "detectQuestions",
         });
         return {
@@ -353,7 +376,7 @@ export class DeepSeekProvider implements AIProvider {
   }
 
   async analyzeProblem(request: AnalyzeRequest): Promise<ProblemAnalysis> {
-    return this.withPhoto(
+    return this.guarded(
       !!request.imageDataUrl,
       "analyzeProblem",
       async () =>
@@ -368,7 +391,7 @@ export class DeepSeekProvider implements AIProvider {
                   : `Extract and classify this problem, typed by the student:\n\n${request.problemText ?? ""}`,
               },
             ],
-            maxTokens: 1800,
+            maxTokens: 3000,
             label: "analyze",
           }),
         ),
@@ -382,7 +405,7 @@ export class DeepSeekProvider implements AIProvider {
         { role: "system", content: PROGRESS_SYSTEM },
         { role: "user", content: progressText(request) },
       ],
-      700,
+      1500,
       "summarizeProgress",
       false,
     );
@@ -400,13 +423,22 @@ export class DeepSeekProvider implements AIProvider {
   }
 
   async tutor(request: TutorRequest): Promise<TutorTurn> {
+    return this.guarded(
+      false,
+      `tutor:${request.action}`,
+      () => this.tutorOnce(request),
+      (fallback) => fallback.tutor(request),
+    );
+  }
+
+  private async tutorOnce(request: TutorRequest): Promise<TutorTurn> {
     const { memory, system, messages } = this.tutorContext(request);
 
     if (request.action === "show_solution") {
       const out = await this.chatJson(TutorSolutionSchema, {
         system,
         messages,
-        maxTokens: 4000,
+        maxTokens: 6000,
         label: "tutor:solution",
       });
       // Declined (not a STEM problem): the fields come back empty, and an empty
@@ -421,7 +453,7 @@ export class DeepSeekProvider implements AIProvider {
       const out = await this.chatJson(TutorSimilarSchema, {
         system,
         messages,
-        maxTokens: 800,
+        maxTokens: 1500,
         label: "tutor:similar",
       });
       return {
@@ -434,7 +466,7 @@ export class DeepSeekProvider implements AIProvider {
     const out = await this.chatJson(TutorChunkSchema, {
       system,
       messages,
-      maxTokens: 900,
+      maxTokens: TURN_MAX_TOKENS,
       label: "tutor:chunk",
     });
     return {
@@ -455,7 +487,7 @@ export class DeepSeekProvider implements AIProvider {
     request: TutorRequest,
   ): AsyncGenerator<TutorStreamEvent, void, unknown> {
     const { system, messages } = this.tutorContext(request);
-    const options: ChatOptions = { system, messages, maxTokens: 900, label: "tutor:chunk" };
+    const options: ChatOptions = { system, messages, maxTokens: TURN_MAX_TOKENS, label: "tutor:chunk" };
 
     let raw = "";
     const decode = createMessageFieldDecoder();
@@ -469,7 +501,18 @@ export class DeepSeekProvider implements AIProvider {
       if (shown) yield { type: "delta", text: shown };
     }
 
-    const out = await this.chatJson(TutorChunkSchema, options, raw);
+    let out: z.infer<typeof TutorChunkSchema>;
+    try {
+      out = await this.chatJson(TutorChunkSchema, options, raw);
+    } catch (err) {
+      if (!(err instanceof InvalidOutputError) || !this.fallback) throw err;
+      // The `done` frame replaces whatever deltas were shown, so the student
+      // just sees Claude's reply land instead of an error card.
+      console.warn("[ai] deepseek could not answer (tutor stream)", err);
+      console.log(`[ai] deepseek fallback → ${this.fallback.name} (tutorStream)`);
+      yield { type: "done", turn: await this.fallback.tutor(request) };
+      return;
+    }
     yield {
       type: "done",
       turn: {
@@ -496,13 +539,15 @@ export class DeepSeekProvider implements AIProvider {
       if (hasImage && !this.vision) throw new PhotoUnsupportedError();
       check = await this.checkWorkOnce(request);
     } catch (err) {
-      if (!hasImage) throw err;
+      const rescuable =
+        err instanceof PhotoUnsupportedError ||
+        (hasImage ? photoRejected(err) : err instanceof InvalidOutputError);
+      if (!rescuable || (!hasImage && !this.fallback)) throw err;
       if (!(err instanceof PhotoUnsupportedError)) {
-        if (!photoRejected(err)) throw err;
-        console.warn("[ai] deepseek could not handle a photo (checkWork)", err);
+        console.warn("[ai] deepseek could not answer (checkWork)", err);
       }
       if (!this.fallback) throw new PhotoUnsupportedError();
-      console.log(`[ai] deepseek photo fallback → ${this.fallback.name} (checkWork)`);
+      console.log(`[ai] deepseek fallback → ${this.fallback.name} (checkWork)`);
       yield* this.fallback.checkWorkStream(request);
       return;
     }
@@ -519,7 +564,7 @@ export class DeepSeekProvider implements AIProvider {
           content: withImage(checkWorkText(request), request.attempt.imageDataUrl),
         },
       ],
-      maxTokens: 4000,
+      maxTokens: 6000,
       label: "checkWork",
     });
     // Same clean-up as Claude's and as a stored check (stray quotes, a null
@@ -537,18 +582,24 @@ export class DeepSeekProvider implements AIProvider {
   async generatePractice(
     request: GeneratePracticeRequest,
   ): Promise<PracticeProblem> {
-    return this.chatJson(PracticeProblemSchema, {
-      system: GENERATE_SYSTEM,
-      messages: [{ role: "user", content: generatePracticeText(request) }],
-      maxTokens: 800,
-      label: "generatePractice",
-    });
+    return this.guarded(
+      false,
+      "generatePractice",
+      () =>
+        this.chatJson(PracticeProblemSchema, {
+          system: GENERATE_SYSTEM,
+          messages: [{ role: "user", content: generatePracticeText(request) }],
+          maxTokens: 2000,
+          label: "generatePractice",
+        }),
+      (fallback) => fallback.generatePractice(request),
+    );
   }
 
   async evaluatePractice(
     request: EvaluatePracticeRequest,
   ): Promise<PracticeEvaluation> {
-    return this.withPhoto(
+    return this.guarded(
       !!request.attempt.imageDataUrl,
       "evaluatePractice",
       () =>
@@ -563,7 +614,7 @@ export class DeepSeekProvider implements AIProvider {
               ),
             },
           ],
-          maxTokens: 4000,
+          maxTokens: 6000,
           label: "evaluatePractice",
         }),
       (fallback) => fallback.evaluatePractice(request),
@@ -602,13 +653,57 @@ function validate<S extends z.ZodType>(
   } catch {
     return { ok: false, error: "the reply was not valid JSON" };
   }
-  const result = schema.safeParse(parsed);
+  const result = schema.safeParse(canonicalizeConcepts(parsed));
   if (result.success) return { ok: true, data: result.data };
   const issues = result.error.issues
     .slice(0, 5)
     .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
     .join("; ");
   return { ok: false, error: `it did not match the schema (${issues})` };
+}
+
+/**
+ * Concept labels come from a fixed list (lib/tutor/concepts.ts), which Claude
+ * is held to by constrained decoding and DeepSeek only by the prompt. A label
+ * off by case or spacing is corrected; an invented one is dropped from memory
+ * (losing one tracked gap) rather than failing the student's whole turn. A
+ * work check's own `concept` is left for the schema, so a wrong one still
+ * goes through the repair round.
+ */
+function canonicalizeConcepts(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const obj = { ...(value as Record<string, unknown>) };
+  if (typeof obj.concept === "string") {
+    obj.concept = canonicalConcept(obj.concept) ?? obj.concept;
+  }
+  const memory = obj.memory as Record<string, unknown> | undefined;
+  if (memory && typeof memory === "object") {
+    const fixed = { ...memory };
+    if (Array.isArray(fixed.demonstrated)) {
+      fixed.demonstrated = fixed.demonstrated
+        .map((c) => (typeof c === "string" ? canonicalConcept(c) : null))
+        .filter((c): c is string => c !== null);
+    }
+    for (const key of ["misconceptions", "errors"] as const) {
+      const list = fixed[key];
+      if (!Array.isArray(list)) continue;
+      fixed[key] = list.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return [];
+        const e = entry as Record<string, unknown>;
+        const concept = typeof e.concept === "string" ? canonicalConcept(e.concept) : null;
+        return concept ? [{ ...e, concept }] : [];
+      });
+    }
+    obj.memory = fixed;
+  }
+  return obj;
+}
+
+/** A reply that hit max_tokens is cut mid-JSON; say so, or it looks like a bad model. */
+function warnIfCut(label: string, finishReason?: string | null): void {
+  if (finishReason === "length") {
+    console.warn(`[ai] deepseek ${label}: reply hit max_tokens and was cut off`);
+  }
 }
 
 /** Per-call token usage when DEBUG_TOKENS is set, cache hits included. */
