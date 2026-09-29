@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
     if (typeof image !== "string" || !image.startsWith("data:image/")) {
       return NextResponse.json(
-        { error: "A page image (data URL) is required." },
+        { error: "Couldn't read that photo. Try taking it again." },
         { status: 400 },
       );
     }
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     }
     if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
       return NextResponse.json(
-        { error: "The image's pixel dimensions are required." },
+        { error: "Couldn't read that photo. Try taking it again." },
         { status: 400 },
       );
     }

@@ -185,7 +185,7 @@ export default function PracticeCard({
         )}
 
         {phase === "evaluating" && (
-          <LoadingState label="Checking your work across the five axes…" />
+          <LoadingState label="Checking your work…" />
         )}
 
         {phase === "done" && focus && resolved !== null && (

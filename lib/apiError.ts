@@ -10,6 +10,10 @@ import { NextResponse } from "next/server";
  * they don't get flattened into a generic 500 with "Please try again." A paused
  * account answering "Could not analyze the problem. Please try again." sends the
  * student into a retry loop against a wall.
+ *
+ * The student-facing messages stay plain ("The tutor is taking a break"): what
+ * actually happened (a spend limit, a rejected key) is for the owner, who has
+ * the `code` field, the server log, and the DEBUG_ERRORS detail.
  */
 
 /**
@@ -82,8 +86,7 @@ function classify(err: unknown): Classified | null {
     return {
       status: 402,
       code: "spend_limit",
-      message:
-        "MindGap has reached its usage budget, so the tutor is paused. Retrying won't help — this needs the account's spend limit raised.",
+      message: "The tutor is taking a break. Try again later.",
     };
   }
 
@@ -111,8 +114,7 @@ function classify(err: unknown): Classified | null {
     return {
       status: 422,
       code: "photo_unsupported",
-      message:
-        "This tutor can't read photos right now. Type the problem in instead.",
+      message: "Photos can't be read right now. Type the problem in instead.",
     };
   }
 
@@ -120,8 +122,7 @@ function classify(err: unknown): Classified | null {
     return {
       status: 503,
       code: "upstream_auth",
-      message:
-        "The tutor isn't set up correctly: its API key was rejected. This needs fixing on the server, not a retry.",
+      message: "The tutor isn't available right now. Try again later.",
     };
   }
 

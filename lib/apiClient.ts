@@ -80,7 +80,7 @@ export async function readApiError(
       : "You're going a bit fast — give it a few seconds and try again.";
   }
   if (res.status === 401) return "Your session expired. Reload and enter the access code.";
-  if (res.status >= 500) return "The server had a problem with that one. Try again in a moment.";
+  if (res.status >= 500) return "Something went wrong on our end. Try again in a moment.";
 
   return fallback;
 }
