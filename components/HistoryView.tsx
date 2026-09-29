@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, Trash2 } from "lucide-react";
 import {
@@ -14,6 +14,9 @@ import { apiFetch, readApiError } from "@/lib/apiClient";
 import { formatRelativeDate } from "@/lib/utils";
 import { Spinner } from "@/components/States";
 import RichText, { InlineRichText } from "@/components/RichText";
+import ClearHistoryConfirm from "@/components/ClearHistoryConfirm";
+import Toast from "@/components/ui/Toast";
+import { useUndoable } from "@/components/ui/useUndoable";
 
 /**
  * Everything the student has scanned, and what it says about them.
@@ -23,9 +26,6 @@ import RichText, { InlineRichText } from "@/components/RichText";
  * write-up costs a model call and is therefore opt-in, not something that fires
  * on every visit.
  */
-/** How long a deleted problem can be brought back. */
-const UNDO_MS = 5000;
-
 export default function HistoryView() {
   const [sessions, setSessions] = useState<SessionRecord[] | null>(null);
   const [concepts, setConcepts] = useState<ConceptProgress[]>([]);
@@ -69,52 +69,29 @@ export default function HistoryView() {
     }
   }
 
-  // A delete is held for UNDO_MS with an Undo before it happens: one stray tap
-  // on the bin used to erase a problem and its photos for good. Leaving the
-  // page, or deleting another item, commits the pending one straight away.
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const pendingRef = useRef<{ id: string; timer: number } | null>(null);
+  // Deletes are held for a few seconds with an Undo before they happen
+  // (useUndoable): one stray tap on the bin used to erase a problem and its
+  // photos for good. Clearing everything gets the same grace period.
+  const { pending, schedule, undo } = useUndoable();
+  const hidden = (id: string) => pending?.key === "all" || pending?.key === id;
 
-  const commitPending = useCallback(async () => {
-    const pending = pendingRef.current;
-    if (!pending) return;
-    pendingRef.current = null;
-    window.clearTimeout(pending.timer);
-    setPendingDelete(null);
-    await deleteSession(pending.id);
-    await load();
-  }, [load]);
-
-  useEffect(() => {
-    const flush = () => void commitPending();
-    window.addEventListener("pagehide", flush);
-    return () => {
-      window.removeEventListener("pagehide", flush);
-      flush();
-    };
-  }, [commitPending]);
-
-  async function remove(id: string) {
-    await commitPending();
-    const timer = window.setTimeout(() => void commitPending(), UNDO_MS);
-    pendingRef.current = { id, timer };
-    setPendingDelete(id);
+  function remove(id: string) {
+    void schedule(id, "Problem deleted", async () => {
+      await deleteSession(id);
+      await load();
+    });
   }
 
-  function undoDelete() {
-    const pending = pendingRef.current;
-    if (!pending) return;
-    window.clearTimeout(pending.timer);
-    pendingRef.current = null;
-    setPendingDelete(null);
-  }
-
-  async function removeEverything() {
-    await clearAll();
-    setSummary(null);
+  function removeEverything() {
     setConfirmClear(false);
-    await load();
+    void schedule("all", "History cleared", async () => {
+      await clearAll();
+      setSummary(null);
+      await load();
+    });
   }
+
+  const visible = sessions?.filter((s) => !hidden(s.id)) ?? null;
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-md px-4 pb-16 pt-[max(1rem,calc(env(safe-area-inset-top,0px)+0.5rem))]">
@@ -131,11 +108,11 @@ export default function HistoryView() {
         </h1>
       </header>
 
-      {sessions === null ? (
+      {visible === null ? (
         <div className="flex justify-center py-16">
           <Spinner className="h-6 w-6 text-slate-400" />
         </div>
-      ) : sessions.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="rounded-lg border border-hairline bg-surface p-6 text-center">
           <p className="text-base font-medium text-ink">Nothing saved yet</p>
           <p className="mt-1 text-sm text-slate-500">
@@ -151,7 +128,7 @@ export default function HistoryView() {
         </div>
       ) : (
         <>
-          {concepts.length > 0 && (
+          {concepts.length > 0 && pending?.key !== "all" && (
             <section className="mb-6 rounded-lg border border-hairline bg-surface p-4">
               <h2 className="text-sm font-semibold text-slate-800">
                 Concepts to work on
@@ -197,9 +174,7 @@ export default function HistoryView() {
           )}
 
           <ul className="space-y-2">
-            {sessions
-              .filter((s) => s.id !== pendingDelete)
-              .map((s) => (
+            {visible.map((s) => (
               <li key={s.id}>
                 <div className="flex items-center gap-3 rounded-lg border border-hairline bg-surface p-2.5">
                   <Link
@@ -232,7 +207,7 @@ export default function HistoryView() {
                     </div>
                   </Link>
                   <button
-                    onClick={() => void remove(s.id)}
+                    onClick={() => remove(s.id)}
                     aria-label="Delete this problem"
                     className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-danger-50 hover:text-danger-600"
                   >
@@ -247,27 +222,11 @@ export default function HistoryView() {
               device. Clearing everything has to be one obvious action. */}
           <div className="mt-6 text-center">
             {confirmClear ? (
-              <div className="rounded-md border border-danger-200 bg-danger-50 p-3">
-                <p className="text-sm text-danger-800">
-                  Delete all {sessions.length} saved{" "}
-                  {sessions.length === 1 ? "problem" : "problems"}, including
-                  the photos? This can&apos;t be undone.
-                </p>
-                <div className="mt-3 flex justify-center gap-2">
-                  <button
-                    onClick={() => void removeEverything()}
-                    className="h-10 rounded-md bg-danger-solid px-4 text-sm font-semibold text-white transition hover:bg-danger-deep"
-                  >
-                    Delete everything
-                  </button>
-                  <button
-                    onClick={() => setConfirmClear(false)}
-                    className="h-10 rounded-md px-4 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-                  >
-                    Keep them
-                  </button>
-                </div>
-              </div>
+              <ClearHistoryConfirm
+                count={visible.length}
+                onConfirm={removeEverything}
+                onCancel={() => setConfirmClear(false)}
+              />
             ) : (
               <button
                 onClick={() => setConfirmClear(true)}
@@ -279,22 +238,10 @@ export default function HistoryView() {
           </div>
         </>
       )}
-      {pendingDelete && (
-        <div
-          role="status"
-          className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom,0px))] z-30 flex justify-center px-4"
-        >
-          <div className="flex animate-pop-in items-center gap-3 rounded-full bg-ink px-4 py-2 text-sm text-paper shadow-raised">
-            <span>Problem deleted</span>
-            <button
-              onClick={undoDelete}
-              className="h-9 rounded-full px-3 font-semibold text-paper underline underline-offset-4 transition hover:opacity-80"
-            >
-              Undo
-            </button>
-          </div>
-        </div>
-      )}
+      <Toast
+        message={pending?.message ?? null}
+        action={pending ? { label: "Undo", onClick: undo } : undefined}
+      />
     </main>
   );
 }
