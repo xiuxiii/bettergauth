@@ -242,7 +242,8 @@ export default function QuestionCropper({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [image]);
+    // debugBoxes and debugCode are read once from the URL and never change.
+  }, [image, debugBoxes, debugCode]);
 
   function selectQuestion(i: number) {
     if (i < 0 || i >= questions.length) return;

@@ -73,6 +73,10 @@ export default function PracticeCard({
   const [resolved, setResolved] = useState<boolean | null>(saved?.resolved ?? null);
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
+  // The parent passes fresh closures every render. Read through a ref so
+  // `generate` stays stable: a new `generate` would re-run the start effect.
+  const callbacks = useRef({ onChange, onSettled });
+  callbacks.current = { onChange, onSettled };
 
   const generate = useCallback(async () => {
     setPhase("generating");
@@ -87,12 +91,12 @@ export default function PracticeCard({
       const generated: PracticeProblem = await res.json();
       setProblem(generated);
       setPhase("solving");
-      onChange?.({ problem: generated });
+      callbacks.current.onChange?.({ problem: generated });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed.");
       setPhase("gen_error");
     } finally {
-      onSettled?.();
+      callbacks.current.onSettled?.();
     }
   }, [source, focus]);
 
