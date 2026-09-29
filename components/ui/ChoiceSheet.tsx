@@ -64,7 +64,7 @@ export default function ChoiceSheet<T extends string>({
       header={() => (
         <h2
           id={titleId}
-          className="mb-2 px-1 font-serif text-lg font-normal leading-[1.15] tracking-tight text-ink"
+          className="mb-2 px-2.5 font-serif text-lg font-normal leading-[1.15] tracking-tight text-ink"
         >
           {title}
         </h2>

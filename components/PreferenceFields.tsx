@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import { Contrast, Moon, Sun } from "lucide-react";
 import type { TutorPreferences } from "@/lib/tutor/types";
 import {
   applyTheme,
@@ -9,69 +11,91 @@ import {
   watchSystemTheme,
   type Theme,
 } from "@/lib/theme";
-import { loadAiChoice, saveAiChoice, type AiChoice } from "@/lib/aiChoice";
-import { apiFetch } from "@/lib/apiClient";
 
 /**
- * The preference controls shared by the full settings page (SetupForm) and the
- * first-run welcome tour (Onboarding). Both ask the same questions, so the
- * option lists live here once — adding a curriculum in one place and not the
- * other would let the tour save a value the settings page can't display.
+ * The preference options, once, for every place that shows them: the Settings
+ * page, the session popover and the welcome tour. They share this data, not a
+ * component: the tour shows big cards, Settings shows rows. Two copies of a
+ * list let the tour save a value Settings can't display, and let the two
+ * screens call the same setting different things.
  */
 
-export type Option = {
-  value: string;
+export type Option<T extends string = string> = {
+  value: T;
   label: string;
-  sub?: string;
-  className?: string;
-  disabled?: boolean;
+  /** For tight spots: the header pill reads "Hints · Both". */
+  short?: string;
+  /** One line, shown under the label. */
+  description?: string;
+  icon?: LucideIcon;
 };
 
-export const GRADE_OPTIONS: Option[] = [
-  { value: "9", label: "9", className: "text-center sm:px-2" },
-  { value: "10", label: "10", className: "text-center sm:px-2" },
-  { value: "11", label: "11", className: "text-center sm:px-2" },
-  { value: "12", label: "12", className: "text-center sm:px-2" },
-  { value: "other", label: "Other", className: "text-center sm:px-2" },
-  { value: "skip", label: "Prefer not to say", className: "col-span-3 text-center sm:col-span-2 sm:px-2" },
+/** "skip" stands for a null grade; the stored value stays null. */
+export type GradeChoice = NonNullable<TutorPreferences["grade"]> | "skip";
+
+export const GRADE_OPTIONS: Option<GradeChoice>[] = [
+  { value: "9", label: "9" },
+  { value: "10", label: "10" },
+  { value: "11", label: "11" },
+  { value: "12", label: "12" },
+  { value: "other", label: "Other" },
+  { value: "skip", label: "Prefer not to say" },
 ];
 
-export const CURRICULUM_OPTIONS: Option[] = [
-  { value: "standard", label: "Standard", className: "text-center" },
-  { value: "ib", label: "IB", className: "text-center" },
-  { value: "ap", label: "AP", className: "text-center" },
+export const CURRICULUM_OPTIONS: Option<NonNullable<TutorPreferences["curriculum"]>>[] = [
+  { value: "standard", label: "Standard" },
+  { value: "ib", label: "IB" },
+  { value: "ap", label: "AP" },
 ];
 
-export const STYLE_OPTIONS: Option[] = [
-  { value: "hint_first", label: "Hints first", sub: "Make me work" },
-  { value: "direct", label: "Direct", sub: "Explain it to me" },
+export const STYLE_OPTIONS: Option<TutorPreferences["assistanceStyle"]>[] = [
+  { value: "hint_first", label: "Hints first", short: "Hints", description: "Nudges before answers" },
+  { value: "direct", label: "Direct", description: "Explains straight away" },
 ];
 
-export const GOAL_OPTIONS: Option[] = [
-  { value: "both", label: "Both", sub: "Exam-ready + deep" },
-  { value: "understand", label: "Understand", sub: "The why" },
-  { value: "exam", label: "Exam prep", sub: "Drill + traps" },
+export const GOAL_OPTIONS: Option<TutorPreferences["goal"]>[] = [
+  { value: "both", label: "Both", description: "Exam-ready and deep" },
+  { value: "understand", label: "Understand", description: "The why" },
+  { value: "exam", label: "Exam prep", description: "Drills and traps" },
 ];
 
-export const THEME_OPTIONS: Option[] = [
-  { value: "system", label: "System", sub: "Match my phone" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
+export const THEME_OPTIONS: Option<Theme>[] = [
+  { value: "system", label: "Auto", icon: Contrast, description: "Follows your device" },
+  { value: "light", label: "Light", icon: Sun, description: "Always light" },
+  { value: "dark", label: "Dark", icon: Moon, description: "Always dark" },
 ];
 
-/** "skip" is the chip for a null grade; the stored value stays null. */
-export function gradeValue(prefs: TutorPreferences): string {
+/** The setting names, the same on every screen. */
+export const LABELS = {
+  style: "Help style",
+  goal: "Focus",
+  tutor: "Tutor",
+  grade: "Grade",
+  curriculum: "Curriculum",
+  theme: "Appearance",
+} as const;
+
+export function optionOf<T extends string>(options: Option<T>[], value: T): Option<T> | undefined {
+  return options.find((o) => o.value === value);
+}
+
+export function gradeValue(prefs: TutorPreferences): GradeChoice {
   return prefs.grade ?? "skip";
 }
-export function withGrade(prefs: TutorPreferences, v: string): TutorPreferences {
-  return { ...prefs, grade: v === "skip" ? null : (v as TutorPreferences["grade"]) };
+export function withGrade(prefs: TutorPreferences, v: GradeChoice): TutorPreferences {
+  return { ...prefs, grade: v === "skip" ? null : v };
+}
+/** "Grade 11", "Other", or "Not set". */
+export function gradeSummary(prefs: TutorPreferences): string {
+  if (!prefs.grade) return "Not set";
+  return prefs.grade === "other" ? "Other" : `Grade ${prefs.grade}`;
 }
 
 /**
  * The theme choice, applied the moment it's picked. Theme is stored separately
  * from preferences (see lib/theme.ts) and starts at the SSR-safe default:
  * reading storage during render would disagree with the server markup and trip
- * a hydration mismatch on the selected chip.
+ * a hydration mismatch on the selected option.
  */
 export function useThemeChoice(): [Theme, (next: Theme) => void] {
   const [theme, setThemeState] = useState<Theme>("system");
@@ -83,140 +107,11 @@ export function useThemeChoice(): [Theme, (next: Theme) => void] {
     return watchSystemTheme(() => applyTheme("system"));
   }, [theme]);
 
-  // Applied immediately, not on save: a colour choice you cannot see until you
-  // submit the form is a choice you cannot judge.
+  // Applied immediately: a colour choice you cannot see is one you cannot judge.
   function chooseTheme(next: Theme) {
     setThemeState(next);
     applyTheme(next);
     saveTheme(next);
   }
   return [theme, chooseTheme];
-}
-
-/** What /api/providers reports. */
-type ProviderStatus = {
-  default?: AiChoice | null;
-  available?: Record<AiChoice, boolean>;
-};
-
-/**
- * The DeepSeek / Claude switch. Starts on the server's default until the
- * student picks, and marks a provider the server has no key for so it can't be
- * chosen (the server would ignore that pick anyway). Saved the moment it's
- * picked, like the theme: every later request carries it.
- */
-export function useAiChoice(): {
-  choice: AiChoice | null;
-  options: Option[];
-  choose: (next: AiChoice) => void;
-} {
-  const [saved, setSaved] = useState<AiChoice | null>(null);
-  const [status, setStatus] = useState<ProviderStatus | null>(null);
-
-  useEffect(() => {
-    setSaved(loadAiChoice());
-    let cancelled = false;
-    apiFetch("/api/providers")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: ProviderStatus | null) => {
-        if (!cancelled) setStatus(data);
-      })
-      .catch(() => {
-        // Offline or blocked: show both options and let the server decide.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const configured = (id: AiChoice) => status?.available?.[id] !== false;
-  const options: Option[] = [
-    {
-      value: "deepseek",
-      label: "DeepSeek",
-      sub: configured("deepseek") ? "Cheaper" : "Not set up",
-      disabled: !configured("deepseek"),
-    },
-    {
-      value: "anthropic",
-      label: "Claude",
-      sub: configured("anthropic") ? "Best at handwriting" : "Not set up",
-      disabled: !configured("anthropic"),
-    },
-  ];
-
-  // A saved pick the server can no longer honour shows what will actually run.
-  const choice = saved && configured(saved) ? saved : (status?.default ?? null);
-
-  function choose(next: AiChoice) {
-    setSaved(next);
-    saveAiChoice(next);
-  }
-  return { choice, options, choose };
-}
-
-export function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <p className="text-sm font-semibold text-slate-800">{label}</p>
-      {hint && <p className="mb-2 mt-0.5 text-xs text-slate-500">{hint}</p>}
-      <div className="mt-2">{children}</div>
-    </section>
-  );
-}
-
-export function Options({
-  value,
-  onChange,
-  options,
-  className = "",
-  label,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: Option[];
-  /** Extra layout classes for the group (e.g. a grid on wider screens). */
-  className?: string;
-  /** Accessible name for the group, when no visible label is tied to it. */
-  label?: string;
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className={`gap-2 ${className || "flex flex-wrap"}`}>
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            disabled={o.disabled}
-            onClick={() => onChange(o.value)}
-            className={
-              "min-h-[44px] rounded-md border px-3 py-2 text-left text-sm transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 sm:px-4 " +
-              (active
-                ? "border-brand-500 bg-brand-50 text-brand-800"
-                : "border-slate-300 bg-surface text-slate-700 hover:border-brand-400") +
-              (o.className ? ` ${o.className}` : "")
-            }
-          >
-            <span className="block font-medium">{o.label}</span>
-            {o.sub && (
-              <span className={"block text-xs " + (active ? "text-brand-600" : "text-slate-500")}>
-                {o.sub}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
 }

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   Camera,
   ChartLine,
+  Check,
   Crosshair,
   Dumbbell,
   Lightbulb,
@@ -23,20 +24,22 @@ import type { Theme } from "@/lib/theme";
 import Wordmark from "@/components/Wordmark";
 import {
   CURRICULUM_OPTIONS,
-  Field,
   GOAL_OPTIONS,
   GRADE_OPTIONS,
-  Options,
+  LABELS,
   STYLE_OPTIONS,
   THEME_OPTIONS,
+  gradeSummary,
   gradeValue,
+  optionOf,
   useThemeChoice,
   withGrade,
+  type Option,
 } from "@/components/PreferenceFields";
 
 /**
  * The first-run welcome tour: a short introduction to MindGap, then the setup
- * questions from SetupForm broken into three small slides. New visitors land
+ * questions from Settings broken into three small slides. New visitors land
  * here from the home page's first-run gate; anyone can replay it from the
  * settings page. Preferences are saved when the last question is answered, so
  * leaving halfway means the tour simply runs again next time.
@@ -197,25 +200,28 @@ export default function Onboarding() {
             <QuestionSlide
               n={1}
               title="Where are you at?"
-              body="Just a light calibration, so the tutor matches your vocabulary and course terms. It never assumes what you've covered."
+              body="So the tutor matches your level and the terms your course uses. It never assumes what you've covered."
             >
-              <Field label="Your grade">
+              <Field label={LABELS.grade}>
                 <Options
-                  label="Your grade"
+                  label={LABELS.grade}
                   value={gradeValue(prefs)}
                   onChange={(v) => setPrefs(withGrade(prefs, v))}
-                  className="grid grid-cols-3 sm:grid-cols-6"
+                  className="grid-cols-3 sm:grid-cols-6"
+                  cardClassName="h-12"
+                  spans={{ skip: "col-span-3 sm:col-span-2" }}
+                  centered
                   options={GRADE_OPTIONS}
                 />
               </Field>
-              <Field label="Curriculum" hint="Matches the terms your course uses.">
+              <Field label={LABELS.curriculum}>
                 <Options
-                  label="Curriculum"
+                  label={LABELS.curriculum}
                   value={prefs.curriculum ?? "standard"}
-                  onChange={(v) =>
-                    setPrefs({ ...prefs, curriculum: v as TutorPreferences["curriculum"] })
-                  }
-                  className="grid grid-cols-3"
+                  onChange={(v) => setPrefs({ ...prefs, curriculum: v })}
+                  className="grid-cols-3"
+                  cardClassName="h-12"
+                  centered
                   options={CURRICULUM_OPTIONS}
                 />
               </Field>
@@ -225,25 +231,25 @@ export default function Onboarding() {
             <QuestionSlide
               n={2}
               title="How should it teach you?"
-              body="Both of these can be flipped mid-session, whenever a problem calls for it."
+              body="You can change both any time during a session."
             >
-              <Field label="How should it help?">
+              <Field label={LABELS.style}>
                 <Options
-                  label="How should it help?"
+                  label={LABELS.style}
                   value={prefs.assistanceStyle}
-                  onChange={(v) =>
-                    setPrefs({ ...prefs, assistanceStyle: v as TutorPreferences["assistanceStyle"] })
-                  }
-                  className="grid grid-cols-2"
+                  onChange={(v) => setPrefs({ ...prefs, assistanceStyle: v })}
+                  className="sm:grid-cols-2"
+                  cardClassName="h-[3.75rem] sm:h-[4.75rem]"
                   options={STYLE_OPTIONS}
                 />
               </Field>
-              <Field label="Your goal">
+              <Field label={LABELS.goal}>
                 <Options
-                  label="Your goal"
+                  label={LABELS.goal}
                   value={prefs.goal}
-                  onChange={(v) => setPrefs({ ...prefs, goal: v as TutorPreferences["goal"] })}
-                  className="grid grid-cols-3"
+                  onChange={(v) => setPrefs({ ...prefs, goal: v })}
+                  className="sm:grid-cols-3"
+                  cardClassName="h-[3.75rem] sm:h-[4.75rem]"
                   options={GOAL_OPTIONS}
                 />
               </Field>
@@ -547,25 +553,19 @@ const THEME_SWATCH = {
 };
 
 function ThemePicker({ value, onChange }: { value: Theme; onChange: (t: Theme) => void }) {
+  const radio = useRadioGroup(THEME_OPTIONS, value, onChange);
   return (
-    <div role="radiogroup" aria-label="Appearance" className="grid grid-cols-3 gap-3">
+    <div role="radiogroup" aria-label={LABELS.theme} className="grid grid-cols-3 gap-3">
       {THEME_OPTIONS.map((o, i) => {
         const active = o.value === value;
         return (
           <button
             key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => onChange(o.value as Theme)}
-            className={
-              "animate-pop-in rounded-lg border p-2 text-left transition active:scale-[0.98] " +
-              (active
-                ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
-                : "border-slate-300 bg-surface hover:border-brand-400")
-            }
+            {...radio.props(i)}
+            className={`animate-pop-in p-2 ${cardCls(active)}`}
             style={delay(120 + i * 90)}
           >
+            {active && <SelectedBadge />}
             <span className="flex aspect-[3/4] overflow-hidden rounded-md border border-hairline" aria-hidden="true">
               {o.value === "system" ? (
                 <>
@@ -579,8 +579,8 @@ function ThemePicker({ value, onChange }: { value: Theme; onChange: (t: Theme) =
             <span className={"mt-2 block px-1 text-sm font-medium " + (active ? "text-brand-800" : "text-slate-700")}>
               {o.label}
             </span>
-            <span className={"block px-1 text-xs " + (active ? "text-brand-600" : "text-slate-500")}>
-              {o.value === "system" ? "Auto" : "Always"}
+            <span className={"block truncate px-1 text-xs " + (active ? "text-brand-700" : "text-slate-500")}>
+              {o.description}
             </span>
           </button>
         );
@@ -607,13 +607,11 @@ function MiniScreen({ swatch }: { swatch: (typeof THEME_SWATCH)["light"] }) {
 }
 
 function DoneSlide({ prefs }: { prefs: TutorPreferences }) {
-  const label = (options: { value: string; label: string }[], v: string) =>
-    options.find((o) => o.value === v)?.label ?? v;
   const summary = [
-    prefs.grade ? `Grade ${label(GRADE_OPTIONS, prefs.grade)}` : null,
-    label(CURRICULUM_OPTIONS, prefs.curriculum ?? "standard"),
-    label(STYLE_OPTIONS, prefs.assistanceStyle),
-    label(GOAL_OPTIONS, prefs.goal) === "Both" ? "Understand + exam" : label(GOAL_OPTIONS, prefs.goal),
+    prefs.grade ? gradeSummary(prefs) : null,
+    optionOf(CURRICULUM_OPTIONS, prefs.curriculum ?? "standard")?.label,
+    optionOf(STYLE_OPTIONS, prefs.assistanceStyle)?.label,
+    prefs.goal === "both" ? "Understand + exam" : optionOf(GOAL_OPTIONS, prefs.goal)?.label,
   ].filter((s): s is string => !!s);
 
   return (
@@ -659,8 +657,128 @@ function DoneSlide({ prefs }: { prefs: TutorPreferences }) {
         ))}
       </ul>
       <p className="mt-6 animate-rise text-xs text-slate-500" style={delay(850)}>
-        Change any of this later from <span className="font-medium">Edit preferences</span>.
+        Change any of this later in <span className="font-medium">Settings</span>.
       </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Answer cards. One question per screen is where big cards belong; Settings
+// uses rows for the same options (the data is shared, the component isn't).
+// ---------------------------------------------------------------------------
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section>
+      <p className="text-sm font-semibold text-slate-800">{label}</p>
+      <div className="mt-2">{children}</div>
+    </section>
+  );
+}
+
+/** Card chrome for an answer: a 2px border in both states, so selecting one
+ *  never shifts its neighbours, and a solid tint behind the selected one. */
+function cardCls(active: boolean): string {
+  return (
+    "relative rounded-md border-2 text-left transition active:scale-[0.98] " +
+    (active
+      ? "border-brand-500 bg-brand-50 dark:bg-brand-600/15"
+      : "border-slate-200 bg-surface hover:border-brand-400")
+  );
+}
+
+/** On the card's corner rather than inside it, so it never sits on a label
+ *  in a narrow card ("Standard" in a third of a phone). The ring cuts it out
+ *  of whatever is behind: paper on phones, the tour's card from md up. */
+function SelectedBadge() {
+  return (
+    <span
+      aria-hidden="true"
+      className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-white ring-2 ring-paper md:ring-surface"
+    >
+      <Check size={12} strokeWidth={3} />
+    </span>
+  );
+}
+
+/** Radio-group keyboard behaviour: one tab stop, arrow keys move and select. */
+function useRadioGroup<T extends string>(options: Option<T>[], value: T, onChange: (v: T) => void) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const selected = Math.max(0, options.findIndex((o) => o.value === value));
+  return {
+    props: (i: number) => ({
+      ref: (el: HTMLButtonElement | null) => {
+        refs.current[i] = el;
+      },
+      type: "button" as const,
+      role: "radio",
+      "aria-checked": options[i].value === value,
+      tabIndex: i === selected ? 0 : -1,
+      onClick: () => onChange(options[i].value),
+      onKeyDown: (e: React.KeyboardEvent) => {
+        const last = options.length - 1;
+        let next: number | null = null;
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") next = i === last ? 0 : i + 1;
+        else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = i === 0 ? last : i - 1;
+        if (next === null) return;
+        e.preventDefault();
+        refs.current[next]?.focus();
+        onChange(options[next].value);
+      },
+    }),
+  };
+}
+
+function Options<T extends string>({
+  value,
+  onChange,
+  options,
+  label,
+  className,
+  cardClassName,
+  spans = {},
+  centered = false,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: Option<T>[];
+  label: string;
+  /** Grid columns for the group. */
+  className: string;
+  /** A fixed height for every card, so descriptions can't make rows ragged. */
+  cardClassName: string;
+  /** Extra classes per option value (e.g. a column span). */
+  spans?: Partial<Record<T, string>>;
+  centered?: boolean;
+}) {
+  const radio = useRadioGroup(options, value, onChange);
+  return (
+    <div role="radiogroup" aria-label={label} className={`grid gap-2 ${className}`}>
+      {options.map((o, i) => {
+        const active = o.value === value;
+        return (
+          <button
+            key={o.value}
+            {...radio.props(i)}
+            className={
+              `${cardCls(active)} ${cardClassName} flex flex-col justify-center px-3 py-2 text-sm ` +
+              (centered ? "items-center text-center " : "") +
+              (spans[o.value] ?? "")
+            }
+          >
+            {active && <SelectedBadge />}
+            <span className={"block font-medium " + (active ? "text-brand-800" : "text-slate-700")}>
+              {o.label}
+            </span>
+            {o.description && (
+              <span className={"line-clamp-2 text-xs leading-4 " + (active ? "text-brand-700" : "text-slate-500")}>
+                {o.description}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

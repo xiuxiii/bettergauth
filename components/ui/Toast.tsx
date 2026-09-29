@@ -16,7 +16,7 @@ export default function Toast({
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom,0px))] z-50 flex justify-center px-4"
+      className="pointer-events-none fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom,0px))] z-30 flex justify-center px-4"
     >
       {message && (
         <div className="pointer-events-auto flex min-h-10 animate-pop-in items-center gap-3 rounded-full bg-ink px-4 py-1 text-sm text-paper shadow-raised">

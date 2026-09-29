@@ -82,7 +82,7 @@ export default function SegmentedControl<T extends string>({
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => onKeyDown(e, i)}
             className={
-              "flex h-11 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm font-medium transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50 " +
+              "flex h-11 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2 text-sm font-medium transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50 " +
               (active
                 ? "bg-surface text-ink shadow-card dark:bg-slate-200"
                 : "text-slate-600 hover:text-ink")
