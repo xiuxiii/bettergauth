@@ -258,13 +258,16 @@ from `/api/providers` (behind the access gate, no model names), never from
 `/api/health`, which is up/down only in public. A photo DeepSeek rejects (400/404/413/
 415/422, or twice-invalid output) is re-run on Claude when that key is set,
 otherwise a 422 `photo_unsupported` tells the student to type it. Auth, balance
-(402 → `spend_limit`) and rate limits never fall back. DeepSeek runs without
-thinking for now, including on tutor turns where Claude thinks at low effort to
-check its maths; `npm run eval` decides whether it needs it. "Without" has to be
-SENT (`thinking: {type: "disabled"}` in `post`): deepseek-flash thinks by
-default at high effort, the reasoning counts against max_tokens, and a 900-token
-tutor turn was cut off mid-JSON in production ("The tutor stopped
-mid-answer"). An answer still unusable after the repair round goes to Claude
+(402 → `spend_limit`) and rate limits never fall back. DeepSeek thinks only
+when a turn asks for depth: `wantsDeepThought` (`lib/tutor/depth.ts`, unit-tested)
+is true for Go deeper, Explain why, and a typed or Ask-mode question asking
+why/how something works; those get thinking ON and a 12000-token cap, everything
+else OFF and 3000. Checks, solutions and practice marking run without it (Claude
+thinks on those); `npm run eval` decides whether that holds. The setting is
+always SENT (`thinking: {type}` in `post`): deepseek-flash thinks by default at
+high effort, the reasoning counts against max_tokens, and a 900-token tutor turn
+was cut off mid-JSON in production ("The tutor stopped mid-answer"). A thinking
+request DeepSeek rejects (400) is retried once without thinking. An answer still unusable after the repair round goes to Claude
 when that key is set; invented memory concept labels are dropped, not fatal.
 
 **The tutor's formatting is prompt-enforced.** `SYSTEM_INSTRUCTIONS` in

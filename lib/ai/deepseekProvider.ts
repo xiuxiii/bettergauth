@@ -23,6 +23,7 @@ import type {
 import { normalizeWorkCheck } from "@/lib/tutor/types";
 import { createMessageFieldDecoder } from "@/lib/tutor/streamText";
 import { canonicalConcept } from "@/lib/tutor/concepts";
+import { wantsDeepThought } from "@/lib/tutor/depth";
 import {
   ANALYZE_SYSTEM,
   CHECKWORK_SYSTEM,
@@ -67,13 +68,17 @@ import {
  * goes to the fallback when there is one. Auth, balance and rate-limit errors
  * never fall back: those are real.
  *
- * Thinking is sent explicitly OFF on every call: deepseek-flash thinks by
- * default, and that reasoning eats max_tokens (see `post`).
+ * Thinking is sent explicitly on every call, and it is OFF except on tutor
+ * turns that ask for depth ("Go deeper", "Explain why", a typed "why/how does…"
+ * question; `wantsDeepThought` in lib/tutor/depth.ts), which also get a bigger
+ * token cap. deepseek-flash thinks by default, and that reasoning eats
+ * max_tokens (see `post`).
  *
- * TODO: thinking. Claude thinks on checkWork / show_solution /
- * evaluatePractice, and at low effort on tutor turns so it checks its maths
- * (`thinkingFor` in anthropicProvider.ts). This runs them all without; `npm run eval` against DeepSeek is how to tell whether that costs
- * accuracy (the false "you're wrong" rate must stay 0).
+ * Checks, solutions and practice marking run WITHOUT thinking here, unlike
+ * Claude (`thinkingFor` in anthropicProvider.ts), on the bet that
+ * non-thinking flash handles high-school work. `npm run eval` against
+ * DeepSeek is how to tell whether that costs accuracy (the false "you're
+ * wrong" rate must stay 0).
  */
 
 type ContentPart =
@@ -90,6 +95,8 @@ type ChatOptions = {
   messages: ChatMessage[];
   maxTokens: number;
   label: string;
+  /** Turn thinking on for this call (deep tutor turns only; see depth.ts). */
+  think?: boolean;
 };
 
 /**
@@ -146,6 +153,12 @@ function photoRejected(err: unknown): boolean {
  */
 const TURN_MAX_TOKENS = 3000;
 
+/**
+ * A deep turn thinks first, and the reasoning counts against max_tokens, so it
+ * gets room for that on top of the reply. Still billed only as written.
+ */
+const DEEP_TURN_MAX_TOKENS = 12000;
+
 /** Generous, but bounded: a hung upstream must not hold the function open. */
 const REQUEST_TIMEOUT_MS = 120_000;
 
@@ -180,20 +193,39 @@ export class DeepSeekProvider implements AIProvider {
 
   // --- Transport -------------------------------------------------------------
 
-  private async post(body: Record<string, unknown>): Promise<Response> {
+  private async post(
+    body: Record<string, unknown>,
+    think = false,
+    label = "",
+  ): Promise<Response> {
     const res = await fetch(`${this.baseURL}/chat/completions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${this.apiKey}`,
       },
-      // Thinking OFF, explicitly: deepseek-flash thinks by default, at high
-      // effort. Its reasoning then counts against max_tokens, so a longer turn
-      // ran out before the JSON answer was written ("The tutor stopped
-      // mid-answer"), and every call paid for reasoning nobody reads.
-      body: JSON.stringify({ model: this.model, thinking: { type: "disabled" }, ...body }),
+      // Thinking is always SENT, never left to the default: deepseek-flash
+      // thinks by default, at high effort, and its reasoning counts against
+      // max_tokens, so a 900-token turn ran out before the JSON answer was
+      // written ("The tutor stopped mid-answer"). Off unless the turn asked
+      // for depth; callers raise max_tokens when it's on.
+      body: JSON.stringify({
+        model: this.model,
+        thinking: { type: think ? "enabled" : "disabled" },
+        ...body,
+      }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    // Thinking mode has its own rules (it has wanted earlier assistant turns'
+    // reasoning passed back). If DeepSeek turns a thinking request down, the
+    // student still gets an answer: the same request, without thinking.
+    if (think && res.status === 400) {
+      const detail = await res.text().catch(() => "");
+      console.warn(
+        `[ai] deepseek ${label}: thinking request rejected, retrying without: ${detail.slice(0, 200)}`,
+      );
+      return this.post(body, false, label);
+    }
     if (!res.ok) {
       const raw = await res.text().catch(() => "");
       let message = raw.slice(0, 500) || res.statusText;
@@ -214,13 +246,18 @@ export class DeepSeekProvider implements AIProvider {
     maxTokens: number,
     label: string,
     json: boolean,
+    think = false,
   ): Promise<string> {
-    const res = await this.post({
-      messages,
-      max_tokens: maxTokens,
-      stream: false,
-      ...(json ? { response_format: { type: "json_object" } } : {}),
-    });
+    const res = await this.post(
+      {
+        messages,
+        max_tokens: maxTokens,
+        stream: false,
+        ...(json ? { response_format: { type: "json_object" } } : {}),
+      },
+      think,
+      label,
+    );
     const data = (await res.json()) as {
       choices?: { message?: { content?: string | null }; finish_reason?: string | null }[];
       usage?: Record<string, unknown>;
@@ -235,14 +272,21 @@ export class DeepSeekProvider implements AIProvider {
     messages: ChatMessage[],
     maxTokens: number,
     label: string,
+    think = false,
   ): AsyncGenerator<string> {
-    const res = await this.post({
-      messages,
-      max_tokens: maxTokens,
-      stream: true,
-      stream_options: { include_usage: true },
-      response_format: { type: "json_object" },
-    });
+    // With thinking on, the reasoning streams first as `reasoning_content`,
+    // which is skipped below: the student sees "Tutor is thinking…" meanwhile.
+    const res = await this.post(
+      {
+        messages,
+        max_tokens: maxTokens,
+        stream: true,
+        stream_options: { include_usage: true },
+        response_format: { type: "json_object" },
+      },
+      think,
+      label,
+    );
     if (!res.body) return;
 
     const reader = res.body.getReader();
@@ -283,14 +327,14 @@ export class DeepSeekProvider implements AIProvider {
    */
   private async chatJson<S extends z.ZodType>(
     schema: S,
-    { system, messages, maxTokens, label }: ChatOptions,
+    { system, messages, maxTokens, label, think }: ChatOptions,
     firstReply?: string,
   ): Promise<z.infer<S>> {
     const convo: ChatMessage[] = [
       { role: "system", content: `${system}\n\n${jsonInstruction(schema)}` },
       ...messages,
     ];
-    let reply = firstReply ?? (await this.complete(convo, maxTokens, label, true));
+    let reply = firstReply ?? (await this.complete(convo, maxTokens, label, true, think));
     let result = validate(schema, reply);
     if (result.ok) return result.data;
 
@@ -463,11 +507,13 @@ export class DeepSeekProvider implements AIProvider {
       };
     }
 
+    const think = wantsDeepThought(request.action, request.studentText);
     const out = await this.chatJson(TutorChunkSchema, {
       system,
       messages,
-      maxTokens: TURN_MAX_TOKENS,
-      label: "tutor:chunk",
+      maxTokens: think ? DEEP_TURN_MAX_TOKENS : TURN_MAX_TOKENS,
+      label: think ? "tutor:chunk+think" : "tutor:chunk",
+      think,
     });
     return {
       message: out.message,
@@ -487,7 +533,14 @@ export class DeepSeekProvider implements AIProvider {
     request: TutorRequest,
   ): AsyncGenerator<TutorStreamEvent, void, unknown> {
     const { system, messages } = this.tutorContext(request);
-    const options: ChatOptions = { system, messages, maxTokens: TURN_MAX_TOKENS, label: "tutor:chunk" };
+    const think = wantsDeepThought(request.action, request.studentText);
+    const options: ChatOptions = {
+      system,
+      messages,
+      maxTokens: think ? DEEP_TURN_MAX_TOKENS : TURN_MAX_TOKENS,
+      label: think ? "tutor:chunk+think" : "tutor:chunk",
+      think,
+    };
 
     let raw = "";
     const decode = createMessageFieldDecoder();
@@ -495,6 +548,7 @@ export class DeepSeekProvider implements AIProvider {
       [{ role: "system", content: `${system}\n\n${jsonInstruction(TutorChunkSchema)}` }, ...messages],
       options.maxTokens,
       options.label,
+      think,
     )) {
       raw += text;
       const shown = decode(text);
