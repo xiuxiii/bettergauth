@@ -24,10 +24,13 @@ changing env (env is read at boot). See `.env.example` and
 
 ## What's built
 
-- **Setup** (`app/setup/page.tsx`) — a first-run page that captures light
-  preferences (grade for loose calibration, hints-vs-direct, goal). Stored in
-  `localStorage` and folded into the tutor's system prompt. No subject picker —
-  the model detects the subject.
+- **Settings** (`app/settings/page.tsx`, `components/SettingsView.tsx`) —
+  grouped rows (Tutoring, About you, App) that save as they change: help
+  style, focus, grade, curriculum, appearance, and the DeepSeek / Claude switch
+  when both keys are set. First-run visitors get the same questions as the
+  welcome tour (`/welcome`). Preferences are stored in `localStorage` and folded
+  into the tutor's system prompt. No subject picker — the model detects the
+  subject. `/setup` redirects here.
 - **Home** (`app/page.tsx`) — "Snap a problem" / "Upload a photo", or type or
   paste a problem (sent to `/api/analyze` as text). Below: recent sessions and
   the concepts to work on, each with "Practice this". Both photo paths open the
@@ -41,8 +44,8 @@ changing env (env is read at boot). See `.env.example` and
   Ask mode. The confirmed crop then enters the normal analysis flow.
 - **Workspace** (`components/TutorWorkspace.tsx`) — shows the uploaded image, the
   detected problem, subject, and a safe label for the concept (the key idea
-  stays hidden until the gap is closed), then runs the session. In-session toggles (`SessionToggles`) flip help style and goal
-  mid-problem. Loading / error / empty states throughout.
+  stays hidden until the gap is closed), then runs the session. The session popover (`SessionToggles`) flips help style, focus and the
+  tutor mid-problem, from the next request on. Loading / error / empty states throughout.
 - **Chunked tutoring** — conceptual turns deliver ONE small piece, then a
   **Continue** button fetches the next. Free-text follow-ups are always
   available. The action bar shows at most three chips picked by the session's

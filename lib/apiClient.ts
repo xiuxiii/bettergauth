@@ -112,7 +112,7 @@ export async function apiFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
-  // The DeepSeek/Claude switch on the setup page. No saved choice sends no
+  // The DeepSeek/Claude switch in Settings. No saved choice sends no
   // header, and the server picks its default.
   const choice = loadAiChoice();
   if (choice) {

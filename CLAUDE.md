@@ -9,15 +9,15 @@ Next.js 15 (App Router) + TypeScript + Tailwind, deployed on Vercel.
 ```bash
 npm run dev      # local dev
 npm run build    # production build (run before every push)
-npm run lint
+npm run lint     # ESLint, next/core-web-vitals (eslint.config.mjs)
 npx tsc --noEmit # typecheck
 npm test         # unit tests for pure lib/ logic (node:test, no deps)
 npm run eval     # check-work evals against a running app (needs a key)
 npm run eval -- --selftest   # the eval scorer on canned responses, no key
 ```
 
-`npx tsc --noEmit && npm run build && npm test && node evals/run.mjs --selftest` is
-the verification gate. `npm test` covers pure logic only (`tests/*.test.mjs`
+`npx tsc --noEmit && npm run lint && npm run build && npm test && node evals/run.mjs --selftest`
+is the verification gate. `npm test` covers pure logic only (`tests/*.test.mjs`
 import TypeScript through `tests/importTs.mjs`, which transpiles with the
 project's own `typescript`); keep testable rules in React-free files like
 `lib/richText.ts`. `npm run eval` (`evals/run.mjs`, plain Node) hits the running app's
@@ -38,7 +38,7 @@ paid calls through the rate limiter: set `EVAL_BYPASS_TOKEN` on both sides.
 | Var | Effect |
 |---|---|
 | `DEEPSEEK_API_KEY` | DeepSeek. When set it is the default provider (far cheaper). At least one of this and `ANTHROPIC_API_KEY` is needed, or `/api/health` reports `ok: false` (and `provider: "none"` in its details). |
-| `ANTHROPIC_API_KEY` | Claude. Alone, the app runs on Claude as it always did. Alongside DeepSeek it is the photo backup and the other side of the setup-page switch. |
+| `ANTHROPIC_API_KEY` | Claude. Alone, the app runs on Claude as it always did. Alongside DeepSeek it is the photo backup and the other side of the Tutor switch in Settings. |
 | `ANTHROPIC_MODEL` | Overrides the `claude-sonnet-5` default. |
 | `DETECTION_MODEL` | Question detection only. Unset = same as `ANTHROPIC_MODEL`. Exists to A/B a faster model (e.g. `claude-haiku-4-5`) on the box-finding call without touching tutoring. |
 | `ACCESS_CODE` | Shared-access gate, a code that never expires. **Gate is off only when this AND `ACCESS_CODES` are unset**, so local dev just works. |
@@ -154,6 +154,20 @@ problem. Never in Ask mode. Measured with the live timings (analyze ~3.9s, check
 ~7.1s): 12.0s to feedback sequentially, 8.0s in parallel. A wrong `hasWorking`
 costs one wasted check call, which is the trade.
 
+**Settings are rows, the tour is cards, and both read one list.** Every
+option label and description lives in `components/PreferenceFields.tsx`
+(data only). `/settings` (`SettingsView`) and the session popover
+(`SessionToggles`) build rows from `components/ui/` (SettingsGroup,
+SettingsRow, SegmentedControl, ChoiceSheet); the welcome tour draws its own big
+cards from the same data. Settings saves each change the moment it's made;
+there is no submit. `/setup` only redirects. Student-facing copy never names a
+model, a key, a cost or the server: that detail goes to the log, the error's
+`code`, and `DEBUG_ERRORS`.
+
+**Sheets go through `components/ui/Sheet.tsx`.** It owns drag-to-dismiss,
+Escape, the focus trap and handing focus back to the opener. The composer and
+ChoiceSheet both use it; don't grow a second sheet.
+
 **Tutor turns read `prefsRef`, not the `prefs` state.** The opening turns are
 fired from inside `runAnalysis`, a callback created once on mount, so reading
 state there gets the first render's defaults. Measured: with plain state, Ask
@@ -253,8 +267,13 @@ which that endpoint doesn't document, so DeepSeek gets JSON mode + the schema in
 the prompt + the same Zod validation, with one repair round. The student's pick
 travels as the `x-ai-provider` header, added by `apiFetch` from
 `lib/aiChoice.ts` (its own storage key: it must never reach the prompt), and is
-honoured only for a configured provider. The switch learns what can be picked
-from `/api/providers` (behind the access gate, no model names), never from
+honoured only for a configured provider. The switch (the Tutor row in Settings
+and in the session popover) is one `useSyncExternalStore` store, `useAiChoice`,
+so both places always agree; it shows only when both providers are available,
+and shows what will actually run, not a stale saved pick. It applies to the next
+request only, so the popover is locked while anything is in flight, and nothing
+in a session is keyed on the provider. It learns what can be picked
+from `/api/providers` (once per page load; behind the access gate, no model names), never from
 `/api/health`, which is up/down only in public. A photo DeepSeek rejects (400/404/413/
 415/422, or twice-invalid output) is re-run on Claude when that key is set,
 otherwise a 422 `photo_unsupported` tells the student to type it. Auth, balance

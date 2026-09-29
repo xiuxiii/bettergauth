@@ -9,7 +9,7 @@ export const runtime = "nodejs";
  * Reads env directly (never constructs a provider, which throws without a key)
  * and never returns a key itself. Restart the server after changing env.
  *
- * The top-level fields describe the default provider. The setup page's model
+ * The top-level fields describe the default provider. The Settings model
  * switch does NOT read this (publicly it is just up/down); it uses the gated
  * /api/providers.
  */

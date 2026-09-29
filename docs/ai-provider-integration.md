@@ -210,7 +210,8 @@ How it works:
   returns unusable output for it, that single call is re-run on Claude when
   `ANTHROPIC_API_KEY` is set; otherwise the student gets a 422 asking them to
   type the problem. Auth, balance (402) and rate-limit errors never fall back.
-- **The switch.** The setup page has a DeepSeek / Claude choice, saved in the
+- **The switch.** Settings and the session popover have a DeepSeek / Claude
+  choice (shown only when both keys are set), saved in the
   browser and sent as the `x-ai-provider` header on every AI call. The server
   honours it only for a provider whose key is set.
 - **Thinking** is off on DeepSeek for now. Run `npm run eval` against both

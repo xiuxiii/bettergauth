@@ -11,7 +11,7 @@ import { DeepSeekProvider } from "@/lib/ai/deepseekProvider";
  *
  * Two providers, chosen per request:
  *   - The client's pick arrives as the `x-ai-provider` header (the switch on
- *     the setup page, lib/aiChoice.ts). It is honoured only when that
+ *     Settings, lib/aiChoice.ts). It is honoured only when that
  *     provider's key is configured; anything else gets the default.
  *   - The default is `AI_PROVIDER` when set, else DeepSeek when
  *     `DEEPSEEK_API_KEY` is set (it is far cheaper), else Anthropic. An

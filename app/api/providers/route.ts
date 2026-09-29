@@ -4,7 +4,7 @@ import { providerConfig } from "@/lib/ai/provider";
 export const runtime = "nodejs";
 
 /**
- * GET /api/providers — what the setup page's DeepSeek / Claude switch needs:
+ * GET /api/providers — what the DeepSeek / Claude switch in Settings needs:
  * which of the two can be picked, and which runs when nothing is picked.
  *
  * Behind the access gate (it is not in middleware's open paths), unlike

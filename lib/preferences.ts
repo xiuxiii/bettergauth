@@ -2,8 +2,8 @@ import type { TutorPreferences } from "@/lib/tutor/types";
 
 /**
  * Client-side persistence for the student's tutoring preferences. Stored in
- * localStorage (no database) and read/written from the setup page and the
- * in-session toggles. All access is guarded so SSR and blocked-storage contexts
+ * localStorage (no database) and read/written from Settings, the welcome tour
+ * and the session popover. All access is guarded so SSR and blocked-storage contexts
  * degrade to the default.
  */
 
