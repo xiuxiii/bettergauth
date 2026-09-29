@@ -49,6 +49,7 @@ export default function PracticeCard({
   saved,
   onChange,
   onSettled,
+  onBusyChange,
 }: {
   source: ProblemAnalysis;
   /** When set, this is a targeted retry of a recurring misconception. */
@@ -61,6 +62,8 @@ export default function PracticeCard({
   onChange?: (state: PracticeState) => void;
   /** Generation finished, with a problem or an error: the parent unlocks. */
   onSettled?: () => void;
+  /** An attempt is being evaluated (true) or has been answered (false). */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [phase, setPhase] = useState<Phase>(
     saved?.evaluation ? "done" : saved?.problem ? "solving" : "generating",
@@ -118,6 +121,7 @@ export default function PracticeCard({
     setSubmitted(attempt);
     setPhase("evaluating");
     setError(null);
+    onBusyChange?.(true);
     try {
       const res = await apiFetch("/api/practice/evaluate", {
         method: "POST",
@@ -139,6 +143,8 @@ export default function PracticeCard({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Evaluation failed.");
       setPhase("solving"); // let them retry the submission
+    } finally {
+      onBusyChange?.(false);
     }
   }
 

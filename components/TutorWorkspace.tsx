@@ -58,6 +58,7 @@ import ActionBar from "@/components/ActionBar";
 import AttemptComposer from "@/components/AttemptComposer";
 import PracticeCard, { type PracticeState } from "@/components/PracticeCard";
 import SessionToggles from "@/components/SessionToggles";
+import { GOAL_OPTIONS, STYLE_OPTIONS, optionOf } from "@/components/PreferenceFields";
 import RecurringBanner from "@/components/RecurringBanner";
 import Wordmark from "@/components/Wordmark";
 import {
@@ -885,6 +886,18 @@ export default function TutorWorkspace() {
   // gave up.
   const practicePendingRef = useRef(false);
   const [practicePending, setPracticePending] = useState(false);
+  // Practice cards evaluating an attempt, by message id. Settings stay locked
+  // until they answer, like a turn in flight.
+  const [evaluating, setEvaluating] = useState<ReadonlySet<string>>(new Set());
+  const setEvaluatingFor = useCallback((id: string, busy: boolean) => {
+    setEvaluating((prev) => {
+      if (prev.has(id) === busy) return prev;
+      const next = new Set(prev);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
 
   function handlePractice(focus?: PracticeFocus) {
     if (!analysis || turnBusy || practicePendingRef.current) return;
@@ -1006,7 +1019,9 @@ export default function TutorWorkspace() {
         topic={analysis ? analysis.concept || analysis.topic : undefined}
         prefs={prefs}
         onPrefsChange={updatePrefs}
-        prefsDisabled={turnBusy}
+        // Locked while anything is in flight: a change (above all a Tutor
+        // switch) applies to the next request, never halfway through one.
+        prefsDisabled={turnBusy || practicePending || evaluating.size > 0}
         showPrefs={!!analysis}
       />
 
@@ -1035,6 +1050,7 @@ export default function TutorWorkspace() {
                     onResolved={handlePracticeResolved}
                     saved={m.practiceState}
                     onChange={(state) => savePracticeState(m.id, state)}
+                    onBusyChange={(busy) => setEvaluatingFor(m.id, busy)}
                     onSettled={() => {
                       practicePendingRef.current = false;
                       setPracticePending(false);
@@ -1151,15 +1167,12 @@ export default function TutorWorkspace() {
   );
 }
 
-const HELP_LABEL: Record<TutorPreferences["assistanceStyle"], string> = {
-  hint_first: "Hints",
-  direct: "Direct",
-};
-const GOAL_LABEL: Record<TutorPreferences["goal"], string> = {
-  both: "Both",
-  understand: "Understand",
-  exam: "Exam",
-};
+/** The pill's summary, in the same words as Settings: "Hints · Both". */
+function prefsSummary(prefs: TutorPreferences): string {
+  const style = optionOf(STYLE_OPTIONS, prefs.assistanceStyle);
+  const goal = optionOf(GOAL_OPTIONS, prefs.goal);
+  return [style?.short ?? style?.label, goal?.short ?? goal?.label].filter(Boolean).join(" · ");
+}
 
 function TopBar({
   onBack,
@@ -1222,7 +1235,7 @@ function TopBar({
           >
             <Settings2 size={16} strokeWidth={1.75} aria-hidden="true" />
             <span className="hidden sm:inline">
-              {HELP_LABEL[prefs.assistanceStyle]} · {GOAL_LABEL[prefs.goal]}
+              {prefsSummary(prefs)}
             </span>
             <span className="sr-only sm:hidden">Session preferences</span>
             <ChevronDown
@@ -1237,7 +1250,7 @@ function TopBar({
             <div
               role="dialog"
               aria-label="Session preferences"
-              className="absolute right-0 top-full z-30 mt-2 w-72 animate-pop-in rounded-lg border border-hairline bg-surface p-3 shadow-raised"
+              className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,calc(100vw-1rem))] animate-pop-in rounded-lg border border-hairline bg-surface shadow-raised"
             >
               <SessionToggles
                 prefs={prefs}
