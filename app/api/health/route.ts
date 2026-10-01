@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { providerConfig } from "@/lib/ai/provider";
 import { debugAllowed } from "@/lib/debugAccess";
+import { rateLimitStoreKind } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -34,6 +35,7 @@ export async function GET(req: Request) {
       error: `Unknown AI_PROVIDER "${config.aiProvider}". Use "anthropic" or "deepseek", or unset it.`,
       providers: config.providers,
       photoFallback: config.photoFallback,
+      rateLimitStore: rateLimitStoreKind(),
     });
   }
 
@@ -46,5 +48,6 @@ export async function GET(req: Request) {
     default: id,
     providers: config.providers,
     photoFallback: config.photoFallback,
+    rateLimitStore: rateLimitStoreKind(),
   });
 }

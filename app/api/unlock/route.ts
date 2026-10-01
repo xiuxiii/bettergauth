@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
   // Checked before the code is even looked at: past the limit, a right guess
   // gets the same 429 as a wrong one, so the limit can't be probed around.
-  const locked = unlockLocked(req);
+  const locked = await unlockLocked(req);
   if (locked) return locked;
 
   const body = (await req.json().catch(() => null)) as { code?: unknown } | null;
@@ -36,16 +36,16 @@ export async function POST(req: Request) {
   const match = submitted ? await matchCode(submitted) : null;
 
   if (!match) {
-    noteUnlockFailure(req);
+    await noteUnlockFailure(req);
     return NextResponse.json({ error: "Incorrect code." }, { status: 401 });
   }
   // Saying so is kinder than "incorrect": they were given this code, and need
   // to know to ask for a new one rather than retype it.
   if (isExpired(match)) {
-    noteUnlockFailure(req);
+    await noteUnlockFailure(req);
     return NextResponse.json({ error: "That code has expired." }, { status: 401 });
   }
-  clearUnlockFailures(req);
+  await clearUnlockFailures(req);
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set(ACCESS_COOKIE, await cookieFor(match), {

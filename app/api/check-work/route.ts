@@ -17,7 +17,7 @@ export const runtime = "nodejs";
  * stream, so they report real progress rather than a timer's guess.
  */
 export async function POST(req: Request) {
-  const limited = rateLimited(req);
+  const limited = await rateLimited(req);
   if (limited) return limited;
 
   try {

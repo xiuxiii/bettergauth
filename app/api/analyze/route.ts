@@ -19,7 +19,7 @@ const MAX_TEXT = 4000;
  * keys ever reach the browser.
  */
 export async function POST(req: Request) {
-  const limited = rateLimited(req);
+  const limited = await rateLimited(req);
   if (limited) return limited;
 
   try {

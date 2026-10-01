@@ -38,7 +38,7 @@ const STREAMING_ACTIONS: TutorAction[] = [
  * there is no status code left to send, hence the error frame.
  */
 export async function POST(req: Request) {
-  const limited = rateLimited(req);
+  const limited = await rateLimited(req);
   if (limited) return limited;
 
   try {

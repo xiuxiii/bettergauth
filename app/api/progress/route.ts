@@ -20,7 +20,7 @@ const MAX_CONCEPTS = 8;
  * cheap enough to offer as a button.
  */
 export async function POST(req: Request) {
-  const limited = rateLimited(req);
+  const limited = await rateLimited(req);
   if (limited) return limited;
 
   try {

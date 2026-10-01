@@ -12,7 +12,7 @@ export const runtime = "nodejs";
  * Returns: PracticeProblem (WITHOUT a solution — the student solves it first)
  */
 export async function POST(req: Request) {
-  const limited = rateLimited(req);
+  const limited = await rateLimited(req);
   if (limited) return limited;
 
   try {

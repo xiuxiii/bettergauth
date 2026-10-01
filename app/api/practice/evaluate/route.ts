@@ -14,7 +14,7 @@ export const runtime = "nodejs";
  * solution".
  */
 export async function POST(req: Request) {
-  const limited = rateLimited(req);
+  const limited = await rateLimited(req);
   if (limited) return limited;
 
   try {

@@ -58,7 +58,18 @@ Before sharing beyond people you trust:
   every edit to the list logs everyone out. `ACCESS_CODE` keeps working
   alongside the list as a code that never expires. If the list has a typo so
   that no entry parses, the gate stays closed — it never silently opens.
-- **Watch spend** in the Anthropic console and set a billing limit there.
+- **Make the daily cap real.** Each IP gets 150 AI calls a day
+  (`RATE_LIMIT_PER_DAY`), but on Vercel those counts live in each server
+  instance's memory until you add a shared store: Vercel → your project →
+  Storage → Create / Connect → **Upstash for Redis** (the free plan is plenty),
+  connect it to the project, then redeploy. It sets `KV_REST_API_URL` and
+  `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` / `_TOKEN`), and the app
+  picks them up. Check with `/api/health?code=<DEBUG_CODE>`: it should say
+  `"rateLimitStore":"redis"`. If Redis ever goes down, the app keeps working on
+  per-instance counts rather than locking everyone out.
+- **Watch spend** in the Anthropic and DeepSeek consoles and set a monthly
+  limit in each. That is the hard backstop; the app shows "The tutor is taking
+  a break" when one is hit.
 
 ## Debugging from your phone
 
