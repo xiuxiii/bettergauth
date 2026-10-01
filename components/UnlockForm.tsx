@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import MindGapMark from "@/components/MindGapMark";
@@ -87,6 +88,12 @@ export default function UnlockForm() {
             {busy ? "Checking…" : "Unlock"}
           </button>
         </form>
+        <Link
+          href="/privacy?back=/unlock"
+          className="mt-4 inline-flex min-h-11 items-center text-sm text-slate-500 underline-offset-4 transition hover:text-ink hover:underline"
+        >
+          How MindGap handles your data
+        </Link>
       </div>
     </main>
   );

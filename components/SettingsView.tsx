@@ -240,6 +240,12 @@ export default function SettingsView() {
           >
             Replay welcome tour
           </Link>
+          <Link
+            href="/privacy?back=/settings"
+            className="flex h-11 items-center rounded-md px-3 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-ink"
+          >
+            Privacy
+          </Link>
           {historyCount > 0 && pending?.key !== "all" &&
             (confirmClear ? (
               <div className="mt-1 w-full">

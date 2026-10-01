@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -657,7 +658,11 @@ function DoneSlide({ prefs }: { prefs: TutorPreferences }) {
         ))}
       </ul>
       <p className="mt-6 animate-rise text-xs text-slate-500" style={delay(850)}>
-        Change any of this later in <span className="font-medium">Settings</span>.
+        Change any of this later in <span className="font-medium">Settings</span>.{" "}
+        <Link href="/privacy" className="font-medium underline underline-offset-4 hover:text-ink">
+          What gets shared
+        </Link>
+        .
       </p>
     </div>
   );

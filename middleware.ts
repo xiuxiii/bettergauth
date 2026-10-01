@@ -9,7 +9,8 @@ import { ACCESS_COOKIE, accessConfig, checkCookie } from "@/lib/accessToken";
  * (in the Vercel dashboard, no laptop needed). See docs/deploy.md.
  */
 
-const OPEN_PATHS = new Set(["/unlock", "/api/unlock", "/api/health"]);
+// /privacy is readable before unlocking, so a student or parent can check it first.
+const OPEN_PATHS = new Set(["/unlock", "/api/unlock", "/api/health", "/privacy"]);
 
 export async function middleware(req: NextRequest) {
   // Off only when neither ACCESS_CODE nor ACCESS_CODES is set.

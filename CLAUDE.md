@@ -163,7 +163,20 @@ SettingsRow, SegmentedControl, ChoiceSheet); the welcome tour draws its own big
 cards from the same data. Settings saves each change the moment it's made;
 there is no submit. `/setup` only redirects. Student-facing copy never names a
 model, a key, a cost or the server: that detail goes to the log, the error's
-`code`, and `DEBUG_ERRORS`.
+`code`, and `DEBUG_ERRORS`. The one deliberate exception is `/privacy`, which
+names the companies that receive a student's photos and words (Anthropic,
+DeepSeek), because that's its job.
+
+**`/privacy` describes the live routing, so keep it true.** The page is a
+server component that reads `providerConfig()` and words it through
+`tutorRouting` (`lib/privacyCopy.ts`, unit-tested per configuration), so it
+only names providers that are configured and says when DeepSeek hands a
+request to Claude. Those rules mirror `getProvider` and the DeepSeek fallback:
+change the routing in `lib/ai/provider.ts` or `deepseekProvider.ts`, and update
+`tutorRouting` and its tests in the same commit. The page is open before the
+access gate (middleware `OPEN_PATHS`) so a parent can read it first, and is
+linked from the unlock page, the tour's last slide, Settings and the home
+footer.
 
 **Sheets go through `components/ui/Sheet.tsx`.** It owns drag-to-dismiss,
 Escape, the focus trap and handing focus back to the opener. The composer and

@@ -41,6 +41,12 @@ export default function HomePage() {
 
       <footer className="mt-10 text-center text-xs text-slate-500">
         <p>Physics · Chemistry · Math</p>
+        <Link
+          href="/privacy"
+          className="mt-1 inline-flex min-h-11 items-center px-2 underline-offset-4 transition hover:text-ink hover:underline"
+        >
+          Privacy
+        </Link>
       </footer>
     </main>
   );
