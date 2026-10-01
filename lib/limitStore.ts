@@ -13,6 +13,8 @@
  * doesn't, so a Redis blip never locks every student out.
  */
 
+import { redisPipeline, withTimeout, type RedisCommand } from "@/lib/redisRest";
+
 export type Count = { count: number; resetAt: number };
 
 export interface LimitStore {
@@ -59,8 +61,6 @@ export class MemoryStore implements LimitStore {
   }
 }
 
-type PipelineReply = { result?: unknown; error?: string }[];
-
 /**
  * Upstash Redis over REST: each operation is one POST to `/pipeline`.
  *
@@ -74,23 +74,10 @@ export class RedisRestStore implements LimitStore {
     private token: string,
     private prefix = "mg:rl:",
     private fetchImpl: typeof fetch = fetch,
-  ) {
-    this.url = url.replace(/\/+$/, "");
-  }
+  ) {}
 
-  private async pipeline(commands: (string | number)[][]): Promise<unknown[]> {
-    const res = await this.fetchImpl(`${this.url}/pipeline`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(commands.map((c) => c.map(String))),
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`redis ${res.status}`);
-    const replies = (await res.json()) as PipelineReply;
-    if (!Array.isArray(replies)) throw new Error("redis: unexpected reply");
-    const failed = replies.find((r) => r?.error);
-    if (failed) throw new Error(`redis: ${failed.error}`);
-    return replies.map((r) => r.result);
+  private pipeline(commands: RedisCommand[]): Promise<unknown[]> {
+    return redisPipeline(this.url, this.token, commands, this.fetchImpl);
   }
 
   async incr(key: string, windowMs: number, now: number): Promise<Count> {
@@ -139,19 +126,11 @@ export class FallbackStore implements LimitStore {
   ) {}
 
   private async run<T>(op: (s: LimitStore) => Promise<T>): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      return await Promise.race([
-        op(this.primary),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error(`timed out after ${this.timeoutMs}ms`)), this.timeoutMs);
-        }),
-      ]);
+      return await withTimeout(op(this.primary), this.timeoutMs);
     } catch (err) {
       this.onError(err);
       return op(this.secondary);
-    } finally {
-      clearTimeout(timer);
     }
   }
 

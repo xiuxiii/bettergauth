@@ -48,6 +48,7 @@ import {
   tutorSystemParts,
   tutorTurns,
 } from "@/lib/ai/shared";
+import { countFallback } from "@/lib/usageServer";
 
 /**
  * DeepSeek, through its OpenAI-compatible Chat Completions API.
@@ -377,6 +378,7 @@ export class DeepSeekProvider implements AIProvider {
     }
     if (!this.fallback) throw new PhotoUnsupportedError();
     console.log(`[ai] deepseek fallback → ${this.fallback.name} (${method})`);
+    countFallback(method);
     return onFallback(this.fallback);
   }
 
@@ -564,6 +566,7 @@ export class DeepSeekProvider implements AIProvider {
       // just sees Claude's reply land instead of an error card.
       console.warn("[ai] deepseek could not answer (tutor stream)", err);
       console.log(`[ai] deepseek fallback → ${this.fallback.name} (tutorStream)`);
+      countFallback("tutorStream");
       yield { type: "done", turn: await this.fallback.tutor(request) };
       return;
     }
@@ -602,6 +605,7 @@ export class DeepSeekProvider implements AIProvider {
       }
       if (!this.fallback) throw new PhotoUnsupportedError();
       console.log(`[ai] deepseek fallback → ${this.fallback.name} (checkWork)`);
+      countFallback("checkWork");
       yield* this.fallback.checkWorkStream(request);
       return;
     }

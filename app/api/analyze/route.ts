@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
+import { trackUsage, type Usage } from "@/lib/usageServer";
 import { IMAGE_DATA_URL, UNSUPPORTED_IMAGE } from "@/lib/api/schemas";
 
 export const runtime = "nodejs";
@@ -21,7 +22,11 @@ const MAX_TEXT = 4000;
 export async function POST(req: Request) {
   const limited = await rateLimited(req);
   if (limited) return limited;
+  const usage = trackUsage(req, "analyze");
+  return usage.done(await handle(req, usage));
+}
 
+async function handle(req: Request, usage: Usage): Promise<Response> {
   try {
     const body = await req.json().catch(() => null);
     const image = body?.image;
@@ -48,9 +53,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const analysis = await getProvider(req).analyzeProblem(
+    const analysis = await usage.provider(getProvider(req)).analyzeProblem(
       hasImage ? { imageDataUrl: image } : { problemText: text },
     );
+    usage.add(hasImage ? "session.photo" : "session.text");
+    if (analysis.hasStemContent === false) usage.add("turnedAway");
     return NextResponse.json(analysis);
   } catch (err) {
     return errorResponse(err, "Could not analyze the problem. Please try again.");

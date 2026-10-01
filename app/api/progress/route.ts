@@ -3,6 +3,7 @@ import type { ProgressConcept } from "@/lib/tutor/types";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
+import { trackUsage, type Usage } from "@/lib/usageServer";
 
 export const runtime = "nodejs";
 
@@ -22,7 +23,11 @@ const MAX_CONCEPTS = 8;
 export async function POST(req: Request) {
   const limited = await rateLimited(req);
   if (limited) return limited;
+  const usage = trackUsage(req, "progress");
+  return usage.done(await handle(req, usage));
+}
 
+async function handle(req: Request, usage: Usage): Promise<Response> {
   try {
     const body = await req.json().catch(() => null);
     const raw = body?.concepts;
@@ -59,7 +64,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const summary = await getProvider(req).summarizeProgress({ concepts });
+    const summary = await usage.provider(getProvider(req)).summarizeProgress({ concepts });
     return NextResponse.json({ summary });
   } catch (err) {
     return errorResponse(err, "Could not build a summary. Please try again.");

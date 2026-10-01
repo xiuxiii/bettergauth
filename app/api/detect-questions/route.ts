@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
+import { trackUsage, type Usage } from "@/lib/usageServer";
 import { debugAllowed } from "@/lib/debugAccess";
 import { IMAGE_DATA_URL, UNSUPPORTED_IMAGE } from "@/lib/api/schemas";
 
@@ -24,7 +25,11 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   const limited = await rateLimited(req);
   if (limited) return limited;
+  const usage = trackUsage(req, "detect");
+  return usage.done(await handle(req, usage));
+}
 
+async function handle(req: Request, usage: Usage): Promise<Response> {
   try {
     const body = await req.json().catch(() => null);
     const image = body?.image;
@@ -48,13 +53,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const detection = await getProvider(req).detectQuestions({
+    const detection = await usage.provider(getProvider(req)).detectQuestions({
       imageDataUrl: image,
       width,
       height,
     });
     // The raw model output rides along only for the ?debug=boxes view, and
     // only where debugging is allowed (see debugAllowed).
+    usage.add("detect");
     const { debug, ...result } = detection;
     const wantsDebug = body?.debug === true;
     const allowed = wantsDebug && debugAllowed(body?.debugCode);

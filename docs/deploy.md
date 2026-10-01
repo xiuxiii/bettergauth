@@ -67,6 +67,13 @@ Before sharing beyond people you trust:
   picks them up. Check with `/api/health?code=<DEBUG_CODE>`: it should say
   `"rateLimitStore":"redis"`. If Redis ever goes down, the app keeps working on
   per-instance counts rather than locking everyone out.
+- **See how it's being used.** With Upstash connected, open
+  `/api/usage?code=<DEBUG_CODE>` (while logged in past the access gate). It
+  shows, per day: how many devices, sessions (photo or typed), checks and
+  their verdicts, hint/explain/go-deeper turns, solves, practice, which tutor
+  ran, average response times, errors, and how often the limits were hit.
+  Anonymous by design: no problem text, photos or IP addresses are stored.
+  Kept 90 days.
 - **Watch spend** in the Anthropic and DeepSeek consoles and set a monthly
   limit in each. That is the hard backstop; the app shows "The tutor is taking
   a break" when one is hit.

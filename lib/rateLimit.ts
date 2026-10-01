@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { constantTimeEqual } from "@/lib/accessToken";
+import { clientId as clientKey, evalBypass } from "@/lib/clientId";
+import { countUsage } from "@/lib/usageServer";
 import {
   FallbackStore,
   MemoryStore,
@@ -10,6 +11,7 @@ import {
   unlockLockedUntil,
   type LimitStore,
 } from "@/lib/limitStore";
+import { redisEnv } from "@/lib/redisRest";
 
 /**
  * Rate limits for the AI routes and the access gate. Every AI route is a model
@@ -27,7 +29,8 @@ import {
  * - With UPSTASH_REDIS_REST_URL + _TOKEN (or Vercel's KV_REST_API_URL +
  *   _TOKEN), in that shared Redis: one count across every instance, surviving
  *   cold starts, so the daily cap is a real ceiling. Clients are keyed by a
- *   hash of their IP, so the store never holds a student's address. If Redis
+ *   keyed hash of their IP (lib/clientId.ts), so the store never holds a
+ *   student's address. If Redis
  *   is slow or down, each request falls back to memory (fail open) and logs.
  * - Without them, in module memory: per warm instance on Vercel and reset by a
  *   cold start, so a brake rather than a ceiling. Fine for local dev.
@@ -48,13 +51,6 @@ export function rateLimitStoreKind(): "redis" | "memory" {
   return redisEnv() ? "redis" : "memory";
 }
 
-function redisEnv(): { url: string; token: string } | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL?.trim() || process.env.KV_REST_API_URL?.trim();
-  const token =
-    process.env.UPSTASH_REDIS_REST_TOKEN?.trim() || process.env.KV_REST_API_TOKEN?.trim();
-  return url && token ? { url, token } : null;
-}
-
 function getStore(): LimitStore {
   if (store) return store;
   const redis = redisEnv();
@@ -73,34 +69,6 @@ function getStore(): LimitStore {
       )
     : memory;
   return store;
-}
-
-function clientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  return (
-    xff?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
-  );
-}
-
-/** The client's key in the store: a hash of the IP, never the IP itself. */
-async function clientKey(req: Request): Promise<string> {
-  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(clientIp(req)));
-  return Array.from(new Uint8Array(bytes.slice(0, 16)), (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-/**
- * The eval runner's way past the limiter: `npm run eval` fires several paid
- * calls per case and would otherwise eat the day's cap. Honoured only when the
- * server has EVAL_BYPASS_TOKEN set AND the request's x-eval-bypass header
- * matches it; with the env var unset (the default, production included) the
- * header does nothing.
- */
-function evalBypass(req: Request): boolean {
-  const token = process.env.EVAL_BYPASS_TOKEN?.trim();
-  const sent = req.headers.get("x-eval-bypass");
-  return !!token && !!sent && constantTimeEqual(sent, token);
 }
 
 function tooMany(message: string, resetAt: number, now: number): NextResponse {
@@ -129,6 +97,7 @@ export async function rateLimited(req: Request): Promise<NextResponse | null> {
     now,
   );
   if (verdict.ok) return null;
+  countUsage(req, { [`limited.${verdict.reason}`]: 1 });
 
   if (verdict.reason === "minute") {
     return tooMany(

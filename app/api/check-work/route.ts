@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
+import { trackUsage, type Usage } from "@/lib/usageServer";
 import { CheckWorkRequestSchema, parseBody } from "@/lib/api/schemas";
+import type { WorkCheck } from "@/lib/tutor/types";
 
 export const runtime = "nodejs";
 
@@ -19,7 +21,11 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   const limited = await rateLimited(req);
   if (limited) return limited;
+  const usage = trackUsage(req, "check");
+  return usage.done(await handle(req, usage));
+}
 
+async function handle(req: Request, usage: Usage): Promise<Response> {
   try {
     const parsed = await parseBody(
       req,
@@ -29,8 +35,10 @@ export async function POST(req: Request) {
     if (!parsed.ok) return parsed.response;
     const body = parsed.data;
     const retryOf = body.retryOf;
+    usage.add("check");
+    if (retryOf) usage.add("check.retry");
 
-    const events = getProvider(req).checkWorkStream({
+    const events = usage.provider(getProvider(req)).checkWorkStream({
       problem: body.problem,
       attempt: {
         text: body.attempt.text,
@@ -52,12 +60,28 @@ export async function POST(req: Request) {
         ? line({ t: "stage", stage: e.stage })
         : line({ t: "done", check: e.check });
 
+    // The verdict is only known at the end, so this call is counted there.
+    const tally = (e: { type: string; check?: WorkCheck }) => {
+      if (e.type !== "done" || !e.check) return;
+      usage.add(`verdict.${e.check.verdict}`);
+      if (e.check.firstError) usage.add(`category.${e.check.firstError.category}`);
+    };
+    usage.stream();
+    let failed = false;
+
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
-          if (!first.done) controller.enqueue(frame(first.value));
-          for await (const event of events) controller.enqueue(frame(event));
+          if (!first.done) {
+            tally(first.value);
+            controller.enqueue(frame(first.value));
+          }
+          for await (const event of events) {
+            tally(event);
+            controller.enqueue(frame(event));
+          }
         } catch (err) {
+          failed = true;
           console.error("check-work stream failed", err);
           controller.enqueue(
             line({
@@ -66,6 +90,7 @@ export async function POST(req: Request) {
             }),
           );
         } finally {
+          await usage.flush(failed ? 500 : 200);
           controller.close();
         }
       },

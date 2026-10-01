@@ -46,7 +46,7 @@ paid calls through the rate limiter: set `EVAL_BYPASS_TOKEN` on both sides.
 | `ACCESS_SECRET` | Key for the access cookie, which names a code by an HMAC id and never contains it (`lib/accessToken.ts`). Unset = the key is `ACCESS_CODE`, else derived from the list — so **set it when using `ACCESS_CODES`**, or every list edit logs everyone out. |
 | `RATE_LIMIT_PER_MIN` | Per-IP fixed window, default 30. A burst brake. |
 | `RATE_LIMIT_PER_DAY` | Per-IP 24h cap, default 150 — the real spend ceiling. Counts only admitted requests. A true global cap only with the shared store below; without it, per warm instance. |
-| `UPSTASH_REDIS_REST_URL` / `_TOKEN` (or Vercel's `KV_REST_API_URL` / `_TOKEN`) | Shared store for the minute, day and unlock-guess counts (`lib/limitStore.ts`, Upstash REST, no SDK), keyed by a hash of the IP. Unset = in memory per warm instance, reset by a cold start. If Redis is slow (>800ms) or down, each request falls back to memory and one line is logged a minute: fail open on purpose. `/api/health?code=` reports `rateLimitStore`. |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` (or Vercel's `KV_REST_API_URL` / `_TOKEN`) | Shared store for the minute, day and unlock-guess counts (`lib/limitStore.ts`, Upstash REST via `lib/redisRest.ts`, no SDK), keyed by an HMAC of the IP (`lib/clientId.ts`), and for the usage counts (`/api/usage`). Unset = in memory per warm instance, reset by a cold start. If Redis is slow (>800ms) or down, each request falls back to memory and one line is logged a minute: fail open on purpose. `/api/health?code=` reports `rateLimitStore`. |
 | `EVAL_BYPASS_TOKEN` | Lets `npm run eval` skip the rate limiter: requests whose `x-eval-bypass` header matches it aren't counted. Unset (the default, and production unless you set it) = the header is ignored. Set the same value in the runner's env. |
 | `DEBUG_CODE` | Unlocks debug detail in production: `?debug=boxes&code=<it>` in the cropper (raw detection output), and the provider/model details on `/api/health?code=<it>` (publicly it returns only `{ ok }`). Unset = never in production; always on outside production (`lib/debugAccess.ts`). |
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |
@@ -168,6 +168,18 @@ model, a key, a cost or the server: that detail goes to the log, the error's
 **Sheets go through `components/ui/Sheet.tsx`.** It owns drag-to-dismiss,
 Escape, the focus trap and handing focus back to the opener. The composer and
 ChoiceSheet both use it; don't grow a second sheet.
+
+**Usage is counted on the server, anonymously, per day.** Each AI route is
+wrapped: `POST` rate-limits, starts `trackUsage(req, route)` and calls the
+route's `handle`; the route adds what only it knows (`verdict.*`, `turn.*`,
+`resolved`, …). The counter names are a typed union in `lib/usage.ts`
+(`tests/usage.types.ts` proves a typo fails `tsc`). Writes happen after the
+response (`after`) or, in the two streaming routes, just before the stream
+closes, so counting never slows a student down, and a slow store is dropped,
+never awaited past 800ms. Nothing identifying is stored: no text, photos,
+IPs or session ids, only daily counters and a HyperLogLog of device HMACs,
+kept 90 days. Eval traffic (a valid `x-eval-bypass`) isn't counted.
+`GET /api/usage?code=<DEBUG_CODE>&days=14` reads it (404 without the code).
 
 **Tutor turns read `prefsRef`, not the `prefs` state.** The opening turns are
 fired from inside `runAnalysis`, a callback created once on mount, so reading
