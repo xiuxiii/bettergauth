@@ -62,6 +62,12 @@ export function providerConfig() {
     },
     /** Who reads a photo DeepSeek can't. */
     photoFallback: deepseek && anthropic ? ("anthropic" as const) : null,
+    /**
+     * Whether students get the DeepSeek / Claude switch in Settings and the
+     * session popover. Off unless TUTOR_SWITCH=on: Claude is the expensive
+     * one, so by default it is only DeepSeek's automatic backup.
+     */
+    tutorSwitch: env("TUTOR_SWITCH")?.toLowerCase() === "on",
   };
 }
 

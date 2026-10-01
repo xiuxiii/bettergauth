@@ -52,6 +52,7 @@ paid calls through the rate limiter: set `EVAL_BYPASS_TOKEN` on both sides.
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |
 | `DEBUG_TOKENS` | Logs per-call token usage, including whether prompt caching is hitting. |
 | `AI_PROVIDER` | Default provider, `deepseek` or `anthropic`. Unset = DeepSeek if its key is set, else Anthropic. Any other value throws on the first AI call. |
+| `TUTOR_SWITCH` | `on` shows students the DeepSeek / Claude switch in Settings and the session popover (needs both keys). Unset = no switch: DeepSeek answers and Claude is only its automatic backup, because Claude costs far more. Doesn't affect `npm run eval -- --provider`. |
 | `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_VISION` | Model (default `deepseek-flash`, which takes photos), endpoint, and `off` to send every photo straight to Claude. |
 
 Vercel applies env vars **at build time** — after adding one, redeploy or it won't
@@ -294,7 +295,8 @@ the prompt + the same Zod validation, with one repair round. The student's pick
 travels as the `x-ai-provider` header, added by `apiFetch` from
 `lib/aiChoice.ts` (its own storage key: it must never reach the prompt), and is
 honoured only for a configured provider. The switch (the Tutor row in Settings
-and in the session popover) is one `useSyncExternalStore` store, `useAiChoice`,
+and in the session popover) is OFF unless `TUTOR_SWITCH=on`: DeepSeek is the
+tutor and Claude the backup, by cost. When on, it is one `useSyncExternalStore` store, `useAiChoice`,
 so both places always agree; it shows only when both providers are available,
 and shows what will actually run, not a stale saved pick. It applies to the next
 request only, so the popover is locked while anything is in flight, and nothing

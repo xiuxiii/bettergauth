@@ -53,6 +53,8 @@ export function saveAiChoice(choice: AiChoice): void {
 /** What /api/providers reports. */
 export type ProviderStatus = {
   default: AiChoice | null;
+  /** Whether students may pick (TUTOR_SWITCH=on and both set up). */
+  switchable?: boolean;
   available: Record<AiChoice, boolean>;
 };
 
@@ -100,8 +102,9 @@ export const AI_LABELS: Record<AiChoice, string> = {
 /**
  * The DeepSeek / Claude switch.
  *   - `options` lists only providers the server has a key for.
- *   - `switchable` is true only when both are available; otherwise the control
- *     is not shown at all (never a disabled "Not set up" option).
+ *   - `switchable` is true only when the owner turned the switch on
+ *     (TUTOR_SWITCH=on) and both are available; otherwise the control is not
+ *     shown at all (never a disabled "Not set up" option).
  *   - `choice` is what will actually run: the saved pick if the server can
  *     honour it, else the server's default, never a stale saved value.
  * A switch applies from the next request: `apiFetch` reads the saved value on
@@ -132,7 +135,7 @@ export function useAiChoice(): {
   return {
     choice,
     options,
-    switchable: options.length === 2,
+    switchable: options.length === 2 && status?.switchable === true,
     choose: chooseAiChoice,
   };
 }

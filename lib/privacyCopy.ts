@@ -4,8 +4,9 @@
  * can't drift from what the app actually does; the rules mirror getProvider
  * and the DeepSeek fallback in lib/ai/provider.ts:
  *
- * - The student's pick in Settings → Tutor is honoured when both are set up;
- *   otherwise the default (AI_PROVIDER, else DeepSeek when its key is set).
+ * - The default answers (AI_PROVIDER, else DeepSeek when its key is set).
+ *   Students can pick the other in Settings → Tutor only when the owner has
+ *   turned that switch on (TUTOR_SWITCH=on) and both are set up.
  * - DeepSeek hands a photo it can't read, or an answer it can't produce, to
  *   Claude when Claude is set up. DEEPSEEK_VISION=off sends every photo
  *   straight to Claude (or nowhere, when there is no Claude).
@@ -21,6 +22,8 @@ export type RoutingConfig = {
   defaultProvider: ProviderId | null;
   /** false when DEEPSEEK_VISION=off. */
   deepseekVision: boolean;
+  /** Whether students get the Tutor switch (TUTOR_SWITCH=on). */
+  studentSwitch: boolean;
 };
 
 export const PROVIDER_INFO: Record<
@@ -63,10 +66,19 @@ export function tutorRouting(cfg: RoutingConfig): { providers: ProviderId[]; lin
 
   const first = cfg.defaultProvider === "anthropic" ? "anthropic" : "deepseek";
   const other = first === "anthropic" ? "deepseek" : "anthropic";
-  const lines = [
-    `${PROVIDER_INFO[first].product} answers unless you choose ${PROVIDER_INFO[other].product} in Settings → Tutor.`,
-    "When DeepSeek is answering and can't read a photo or can't come up with an answer, that request is sent to Claude instead.",
-  ];
+  // Claude by default with no switch: DeepSeek never receives anything.
+  if (!cfg.studentSwitch && first === "anthropic") {
+    return { providers: ["anthropic"], lines: ["Claude answers everything."] };
+  }
+  const lines = cfg.studentSwitch
+    ? [
+        `${PROVIDER_INFO[first].product} answers unless you choose ${PROVIDER_INFO[other].product} in Settings → Tutor.`,
+        "When DeepSeek is answering and can't read a photo or can't come up with an answer, that request is sent to Claude instead.",
+      ]
+    : [
+        "DeepSeek answers everything.",
+        "When DeepSeek can't read a photo or can't come up with an answer, that request is sent to Claude instead.",
+      ];
   if (!cfg.deepseekVision) lines.push("Photos always go to Claude, never to DeepSeek.");
   return { providers, lines };
 }
