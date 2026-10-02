@@ -33,6 +33,20 @@ checked against regexes, e.g. units in a dispute). The photos are rendered by
 a tilted, dim one, a multi-part one and a not-homework one. Each case is several
 paid calls through the rate limiter: set `EVAL_BYPASS_TOKEN` on both sides.
 
+The same evals run from a phone at **`/owner?code=<DEBUG_CODE>`** (behind the
+access gate; 404 without the code): status (keys, tutor, detection switches,
+rate-limit/usage store, eval bypass), the last 14 days of usage, and five
+one-tap runs (box placement on DeepSeek / Claude / DeepSeek + grid, checking
+work on DeepSeek / Claude) with a Copy results button. Case execution
+(`evals/runCase.mjs`) and the printed lines (`evals/format.mjs`) are shared by
+the CLI and `/api/owner/eval`, so the page and `npm run eval` print the same
+thing; change a case kind there, not in `run.mjs`. `/api/owner/eval` runs one
+case per request against the deploy's own routes (forwarding the gate cookie
+and, when set, the bypass header), and `next.config.mjs` ships `evals/cases`
+and `evals/images` with it. The page calls the owner routes with its own
+fetch, NOT `apiFetch`, which would add a saved tutor pick (`x-ai-provider`)
+and steer the run to the wrong provider.
+
 ## Environment
 
 | Var | Effect |

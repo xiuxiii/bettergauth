@@ -67,6 +67,13 @@ Before sharing beyond people you trust:
   picks them up. Check with `/api/health?code=<DEBUG_CODE>`: it should say
   `"rateLimitStore":"redis"`. If Redis ever goes down, the app keeps working on
   per-instance counts rather than locking everyone out.
+- **The owner page.** Set `DEBUG_CODE` (any long random string) and
+  `EVAL_BYPASS_TOKEN` (another one) in Vercel, redeploy, unlock the app, then
+  open `/owner?code=<DEBUG_CODE>`. It shows what's configured (with a warning
+  if Upstash isn't connected), the last 14 days of usage, and buttons that run
+  the evals on the live app: box placement and checking work, on each tutor.
+  A run takes a few minutes; tap **Copy results** and paste it to your
+  developer.
 - **See how it's being used.** With Upstash connected, open
   `/api/usage?code=<DEBUG_CODE>` (while logged in past the access gate). It
   shows, per day: how many devices, sessions (photo or typed), checks and
