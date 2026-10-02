@@ -25,7 +25,10 @@
  * detect cases run one /api/detect-questions on the whole page.
  * Plain Node, no dependencies. Cases live in evals/cases/*.json; see
  * evals/score.mjs for the format. The photos are rendered by
- * evals/make-images.mjs and committed.
+ * evals/make-images.mjs and committed. Running one case is
+ * evals/runCase.mjs and the printed lines are evals/format.mjs, both shared
+ * with the owner page (/owner, app/api/owner/eval): change them there and
+ * the page reports the same thing.
  *
  * Every case is several paid calls through the app's rate limiter. Set
  * EVAL_BYPASS_TOKEN to the same value here and on the server to skip the
@@ -36,6 +39,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { formatResult, formatSummary } from "./format.mjs";
+import { KINDS, kindOf, runCase } from "./runCase.mjs";
 import {
   normLabel, scoreCase, scoreDetect, scoreNotStem, scoreTutor, signed, strayQuotes, summarize,
 } from "./score.mjs";
@@ -47,13 +52,11 @@ const flag = (name) => {
   return i >= 0 ? args[i + 1] : undefined;
 };
 
-const KINDS = ["check", "notStem", "tutor", "detect"];
 const KIND = flag("--kind");
 if (KIND !== undefined && !KINDS.includes(KIND)) {
   console.error(`--kind must be one of ${KINDS.join(", ")}`);
   process.exit(2);
 }
-const kindOf = (c) => c.kind ?? "check";
 
 if (args.includes("--selftest")) {
   selftest();
@@ -85,169 +88,37 @@ const headers = {
   ...(PROVIDER ? { "x-ai-provider": PROVIDER } : {}),
 };
 
-async function post(route, body) {
-  const res = await fetch(`${BASE}${route}`, { method: "POST", headers, body: JSON.stringify(body) });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`${route} ${res.status}: ${text.slice(0, 200)}`);
-  return text;
-}
+// How runCase (evals/runCase.mjs, shared with the owner page) reaches the app
+// and reads a case's photo.
+const post = (route, body) =>
+  fetch(`${BASE}${route}`, { method: "POST", headers, body: JSON.stringify(body) });
 
-/** /api/check-work streams NDJSON: stage frames, then one done (or error). */
-function lastCheck(ndjson) {
-  for (const line of ndjson.split("\n").filter(Boolean)) {
-    const f = JSON.parse(line);
-    if (f.t === "done") return f.check;
-    if (f.t === "error") throw new Error(`check-work: ${f.message}`);
-  }
-  throw new Error("check-work: stream ended without a result");
-}
-
-function imageDataUrl(rel) {
+async function readImage(rel) {
   const buf = fs.readFileSync(path.join(HERE, "..", rel));
   const type = rel.endsWith(".png") ? "image/png" : "image/jpeg";
   return `data:${type};base64,${buf.toString("base64")}`;
 }
 
-/** /api/tutor streams NDJSON for conversational turns: deltas, then done. */
-function lastTurn(ndjson) {
-  for (const line of ndjson.split("\n").filter(Boolean)) {
-    const f = JSON.parse(line);
-    if (f.t === "done") return f.turn;
-    if (f.t === "error") throw new Error(`tutor: ${f.message}`);
-  }
-  throw new Error("tutor: stream ended without a result");
-}
-
-let saidNoGrid = false;
-
-async function runCase(c) {
-  const t0 = Date.now();
-  if (c.kind === "detect") {
-    let rel = c.image;
-    if (GRID && c.gridImage) rel = c.gridImage;
-    else if (GRID && !saidNoGrid) {
-      saidNoGrid = true;
-      console.log(`  (--grid: ${c.id} has no gridImage, sending its plain image; said once)`);
-    }
-    const detection = JSON.parse(
-      await post("/api/detect-questions", {
-        image: imageDataUrl(rel),
-        width: c.width,
-        height: c.height,
-        ...(GRID ? { grid: true } : {}),
-      }),
-    );
-    return { ...scoreDetect(c, detection), ms: Date.now() - t0, detection };
-  }
-  if (c.kind === "tutor") {
-    const turn = lastTurn(
-      await post("/api/tutor", {
-        problem: c.problem,
-        history: c.history.map((m, i) => ({ id: `h${i}`, createdAt: i, ...m })),
-        action: c.action ?? "ask",
-        studentText: c.studentText,
-      }),
-    );
-    return { ...scoreTutor(c, turn.message), ms: Date.now() - t0, reply: turn.message };
-  }
-  const photo = c.image ? imageDataUrl(c.image) : null;
-  const analysis = JSON.parse(
-    await post("/api/analyze", photo ? { image: photo } : { text: c.text ?? c.problem }),
-  );
-  if (c.kind === "notStem") {
-    return { ...scoreNotStem(c, analysis), ms: Date.now() - t0 };
-  }
-  const attempt = photo
-    ? { imageDataUrl: photo }
-    : c.attempt.image
-      ? { imageDataUrl: imageDataUrl(c.attempt.image) }
-      : { text: c.attempt.text };
-  const check = lastCheck(await post("/api/check-work", { problem: analysis, attempt }));
-  return { ...scoreCase(c, check, analysis), ms: Date.now() - t0, check, label: analysis.concept };
-}
-
-const mark = (b) => (b === null ? "·" : b ? "✓" : "✗");
-
 console.log(
   `Running ${cases.length} case(s) against ${BASE}${PROVIDER ? ` (provider: ${PROVIDER})` : ""}${GRID ? " (grid)" : ""}\n`,
 );
 const results = [];
+let saidNoGrid = false;
 for (const c of cases) {
-  try {
-    const r = await runCase(c);
-    results.push(r);
-    const secs = `${(r.ms / 1000).toFixed(1)}s`;
-    if (r.kind === "notStem") {
-      console.log(`${mark(r.turnedAway)} ${c.id.padEnd(31)} ${r.turnedAway ? "turned away" : "TUTORED A NON-PROBLEM"}  ${secs}`);
-      continue;
-    }
-    if (r.kind === "detect") {
-      const notes = [r.missing && `missing ${r.missing}`, r.extra && `extra ${r.extra}`].filter(Boolean);
-      const iouText = r.meanIoU === null ? "n/a" : r.meanIoU.toFixed(2);
-      console.log(
-        `${mark(r.hits === r.total)} ${c.id.padEnd(31)} detect ${r.hits}/${r.total} hit  IoU ${iouText}  dy ${signed(r.meanDy)}  ${secs}${notes.length ? "  ← " + notes.join(", ") : ""}`,
-      );
-      for (const q of r.questions) {
-        if (!q.found) {
-          console.log(`  ✗ ${q.label}  not found`);
-          continue;
-        }
-        const off = q.hit ? "" : `  dy ${signed(q.dy)}${Math.abs(q.dx) > 0.02 ? `  dx ${signed(q.dx)}` : ""}`;
-        console.log(`  ${mark(q.hit)} ${q.label}  IoU ${q.iou.toFixed(2)}${off}`);
-      }
-      continue;
-    }
-    if (r.kind === "tutor") {
-      const why = [
-        r.missing.length && `missing ${r.missing.join(" | ")}`,
-        r.forbidden.length && `said ${r.forbidden.join(" | ")}`,
-      ].filter(Boolean);
-      console.log(`${mark(r.passed)} ${c.id.padEnd(31)} tutor reply  ${secs}${why.length ? "  ← " + why.join("; ") : ""}`);
-      continue;
-    }
-    const notes = [
-      r.falseAlarm && "FALSE ALARM",
-      r.missed && "missed error",
-      r.answerLeaks.length && `answer leaked in ${r.answerLeaks.join(", ")}`,
-      r.labelSpoilers.length && `label "${r.label}" reveals ${r.labelSpoilers.join(", ")}`,
-      r.headlineLeak?.length && `headline gives away: ${r.headlineLeak.join(", ")}`,
-      r.strayQuotes?.length && `stray quote in ${r.strayQuotes.join(", ")}`,
-    ].filter(Boolean);
-    console.log(
-      `${mark(r.verdictRight)} ${c.id.padEnd(31)} ${r.verdict.padEnd(17)} cat ${mark(r.categoryRight)} line ${mark(r.lineRight)}  ${(r.ms / 1000).toFixed(1)}s${notes.length ? "  ← " + notes.join("; ") : ""}`,
-    );
-  } catch (err) {
-    results.push({ id: c.id, kind: kindOf(c), failed: true, error: String(err.message ?? err) });
-    console.log(`! ${c.id.padEnd(31)} ${err.message ?? err}`);
+  if (GRID && c.kind === "detect" && !c.gridImage && !saidNoGrid) {
+    saidNoGrid = true;
+    console.log(`  (--grid: ${c.id} has no gridImage, sending its plain image; said once)`);
   }
+  const r = await runCase(c, { post, readImage, grid: GRID });
+  results.push(r);
+  for (const line of formatResult(r)) console.log(line);
 }
 
-const s = summarize(results);
 // A detect-only run would print a page of n/a for the other kinds.
-if (KIND !== "detect") console.log(`
-Verdict accuracy     ${s.verdictAccuracy}
-False "you're wrong" ${s.falseAlarmRate}   (correct attempts judged wrong — the number to keep at 0)
-Missed errors        ${s.missedErrorRate}
-First-error category ${s.categoryMatch}
-First-error line     ${s.lineMatch}
-Answer leaks         ${s.answerLeaks} case(s)   (final answer before "Show the rest")
-Label spoilers       ${s.labelSpoilers} case(s)   (concept label names the method)
-Headline leaks       ${s.headlineLeaks} case(s)   (headline says what's wrong, not just where)
-Stray quotes         ${s.strayQuotes} case(s)   (a field ending in a dangling ' or ")
-Not-homework         ${s.notStemTurnedAway} turned away
-Tutor replies        ${s.tutorPassed} passed
-`);
-if (results.some((r) => r.kind === "detect")) {
-  console.log(`${KIND === "detect" ? "\n" : ""}Detection hits       ${s.detectHitRate}   (label found, centre inside, IoU >= 0.5)
-Detection mean IoU   ${s.detectMeanIoU}   (a missing label counts as 0)
-Detection mean dy    ${s.detectMeanDy}   (page heights; negative = boxes too high)
-Detection mean dx    ${s.detectMeanDx}   (page widths; negative = boxes too far left)
-Detection missing    ${s.detectMissing}   (true questions with no predicted label)
-Detection extra      ${s.detectExtra}   (predicted labels matching no true question)`);
-}
-if (s.failedToRun) console.log(`\n${s.failedToRun} case(s) failed to run.`);
+for (const line of formatSummary(results, { detectOnly: KIND === "detect" })) console.log(line);
 
 if (JSON_OUT) {
+  const s = summarize(results);
   fs.writeFileSync(JSON_OUT, JSON.stringify({ base: BASE, at: new Date().toISOString(), summary: s, results }, null, 2));
   console.log(`Wrote ${JSON_OUT}`);
 }
