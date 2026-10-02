@@ -3,6 +3,7 @@ import "server-only";
 import type { AIProvider } from "@/lib/ai/types";
 import { AnthropicProvider } from "@/lib/ai/anthropicProvider";
 import { DeepSeekProvider } from "@/lib/ai/deepseekProvider";
+import { evalBypass } from "@/lib/clientId";
 
 /**
  * Provider factory — the single place a provider is chosen and constructed.
@@ -18,6 +19,9 @@ import { DeepSeekProvider } from "@/lib/ai/deepseekProvider";
  *     Anthropic-only deploy therefore behaves exactly as before.
  *
  * With both keys set, DeepSeek hands any photo it can't read to Claude.
+ *
+ * Question detection can be pinned to one provider (DETECT_PROVIDER), apart
+ * from the tutor: see getDetectionProvider.
  */
 export type ProviderId = "anthropic" | "deepseek";
 
@@ -34,6 +38,9 @@ export function providerConfig() {
   const aiProvider = env("AI_PROVIDER")?.toLowerCase();
   const anthropic = !!env("ANTHROPIC_API_KEY");
   const deepseek = !!env("DEEPSEEK_API_KEY");
+
+  const detect = env("DETECT_PROVIDER")?.toLowerCase();
+  const configured = { anthropic, deepseek };
 
   const defaultProvider: ProviderId | null =
     aiProvider === undefined
@@ -68,6 +75,24 @@ export function providerConfig() {
      * one, so by default it is only DeepSeek's automatic backup.
      */
     tutorSwitch: env("TUTOR_SWITCH")?.toLowerCase() === "on",
+    /**
+     * DETECT_PROVIDER: who finds the questions on a photo, whoever tutors.
+     * null (today's behaviour: the tutor's provider) when unset, unknown or
+     * naming a provider with no key. Unlike AI_PROVIDER an unknown value
+     * doesn't throw: this is an experiment switch, and a typo in it must not
+     * take the cropper down.
+     */
+    detectProvider:
+      (detect === "anthropic" || detect === "deepseek") && configured[detect]
+        ? (detect as ProviderId)
+        : null,
+    /**
+     * DETECT_GRID=on: the cropper draws a labelled coordinate grid on the
+     * image it sends for detection (lib/detectGrid.ts) and the prompt says to
+     * read coordinates off it. Off until `npm run eval -- --kind detect`
+     * shows it places boxes better.
+     */
+    detectGrid: env("DETECT_GRID")?.toLowerCase() === "on",
   };
 }
 
@@ -95,6 +120,34 @@ export function getProvider(req?: Request): AIProvider {
     );
   }
   return build(id);
+}
+
+/**
+ * The provider for question detection (/api/detect-questions).
+ *
+ *   1. An eval request (valid x-eval-bypass) naming a configured provider in
+ *      x-ai-provider gets that one, so `npm run eval -- --provider X` can
+ *      still compare the two even with DETECT_PROVIDER set. A student's pick
+ *      is NOT honoured here when DETECT_PROVIDER is set: detection is a
+ *      measured layout task, not the tutor they chose to talk to.
+ *   2. DETECT_PROVIDER, when set and configured.
+ *   3. Otherwise exactly what the tutor uses (getProvider).
+ *
+ * DeepSeek's own photo fallback to Claude still applies inside it.
+ */
+export function getDetectionProvider(req: Request): AIProvider {
+  const config = providerConfig();
+  if (evalBypass(req)) {
+    const requested = req.headers.get(PROVIDER_HEADER)?.trim().toLowerCase();
+    if (
+      (requested === "anthropic" || requested === "deepseek") &&
+      config.providers[requested].configured
+    ) {
+      return build(requested);
+    }
+  }
+  if (config.detectProvider) return build(config.detectProvider);
+  return getProvider(req);
 }
 
 function build(id: ProviderId): AIProvider {

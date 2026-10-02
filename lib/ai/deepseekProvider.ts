@@ -40,6 +40,7 @@ import {
   TutorSolutionSchema,
   WorkCheckSchema,
   checkWorkText,
+  detectUserText,
   evaluatePracticeText,
   generatePracticeText,
   guardNotStem,
@@ -397,7 +398,7 @@ export class DeepSeekProvider implements AIProvider {
             {
               role: "user",
               content: withImage(
-                `This image is exactly ${request.width} x ${request.height} pixels. Locate every question in it and give each box in pixel coordinates within those bounds.`,
+                detectUserText(request),
                 request.imageDataUrl,
               ),
             },
@@ -414,6 +415,7 @@ export class DeepSeekProvider implements AIProvider {
             height: request.height,
             raw: out.questions.map(({ label, x1, y1, x2, y2 }) => ({ label, x1, y1, x2, y2 })),
             primaryIndex: out.primaryIndex,
+            grid: request.grid === true,
           },
         };
       },

@@ -10,6 +10,11 @@
  * - DeepSeek hands a photo it can't read, or an answer it can't produce, to
  *   Claude when Claude is set up. DEEPSEEK_VISION=off sends every photo
  *   straight to Claude (or nowhere, when there is no Claude).
+ * - DETECT_PROVIDER pins question detection (finding the questions on a
+ *   photo, getDetectionProvider) to one provider whoever tutors. DeepSeek
+ *   there still obeys DEEPSEEK_VISION=off and hands photos to Claude. When
+ *   that sends a photo somewhere it wouldn't otherwise go first, it gets its
+ *   own line, and that company is named.
  *
  * Pure, so `npm test` checks every configuration.
  */
@@ -24,6 +29,8 @@ export type RoutingConfig = {
   deepseekVision: boolean;
   /** Whether students get the Tutor switch (TUTOR_SWITCH=on). */
   studentSwitch: boolean;
+  /** DETECT_PROVIDER when set AND configured (providerConfig), else null. */
+  detectProvider: ProviderId | null;
 };
 
 export const PROVIDER_INFO: Record<
@@ -48,6 +55,49 @@ export const PROVIDER_INFO: Record<
 
 /** The companies that can receive anything, and how requests are shared out. */
 export function tutorRouting(cfg: RoutingConfig): { providers: ProviderId[]; lines: string[] } {
+  const base = tutorOnlyRouting(cfg);
+  const reader = detectionReader(cfg);
+  if (!reader) return base;
+
+  // Who reads a photo first without DETECT_PROVIDER. With the student switch
+  // on (which needs both), a student can move the tutor away from the
+  // detection provider, so the line is always needed then.
+  const both = cfg.anthropic && cfg.deepseek;
+  const switchable = both && cfg.studentSwitch;
+  const photosFirst: ProviderId | null = !both
+    ? cfg.anthropic
+      ? "anthropic"
+      : cfg.deepseekVision
+        ? "deepseek"
+        : null
+    : cfg.defaultProvider === "anthropic" || !cfg.deepseekVision
+      ? "anthropic"
+      : "deepseek";
+  if (reader === photosFirst && !switchable) return base;
+
+  const name = PROVIDER_INFO[reader].product;
+  const line = switchable
+    ? `To find the questions on a photo, ${name} reads it, whichever you choose in Settings → Tutor.`
+    : `To find the questions on a photo, ${name} reads it.`;
+  const providers = (["anthropic", "deepseek"] as const).filter(
+    (p) => base.providers.includes(p) || p === reader,
+  );
+  return { providers, lines: [...base.lines, line] };
+}
+
+/**
+ * Who actually reads a photo for detection under DETECT_PROVIDER: DeepSeek
+ * with DEEPSEEK_VISION=off passes it to Claude, or to no one.
+ */
+function detectionReader(cfg: RoutingConfig): ProviderId | null {
+  const p = cfg.detectProvider;
+  if (!p || !cfg[p]) return null;
+  if (p === "deepseek" && !cfg.deepseekVision) return cfg.anthropic ? "anthropic" : null;
+  return p;
+}
+
+/** The routing of everything but detection's DETECT_PROVIDER override. */
+function tutorOnlyRouting(cfg: RoutingConfig): { providers: ProviderId[]; lines: string[] } {
   const providers = (["anthropic", "deepseek"] as const).filter((p) => cfg[p]);
   if (providers.length === 0) return { providers: [], lines: [] };
 

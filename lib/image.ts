@@ -18,6 +18,7 @@
 
 import { fileToDataUrl } from "@/lib/utils";
 import type { NormalizedRect } from "@/lib/tutor/types";
+import { drawDetectGrid } from "@/lib/detectGrid";
 
 /**
  * Longest edge, px. Sized to the model's own ceiling rather than guessed: on the
@@ -218,9 +219,15 @@ export async function fileToNormalizedJpeg(file: File): Promise<string> {
  *
  * The rects come back normalised, so they still map onto the full-resolution
  * original at crop time exactly as before.
+ *
+ * `grid` (DETECT_GRID=on) draws the labelled coordinate grid of
+ * lib/detectGrid.ts onto THIS canvas, after the downscale, so its labels are
+ * in the pixel space of the image actually sent. Only the sent copy gets it;
+ * the preview the student crops is untouched.
  */
 export async function imageForDetection(
   dataUrl: string,
+  opts?: { grid?: boolean },
 ): Promise<{ image: string; width: number; height: number }> {
   const img = await loadImageEl(dataUrl);
   const canvas = scaledCanvas(
@@ -229,6 +236,10 @@ export async function imageForDetection(
     img.naturalHeight,
     DETECT_MAX_DIM,
   );
+  if (opts?.grid) {
+    const ctx = canvas.getContext("2d");
+    if (ctx) drawDetectGrid(ctx, canvas.width, canvas.height);
+  }
   return {
     image: canvasToJpeg(canvas),
     width: canvas.width,

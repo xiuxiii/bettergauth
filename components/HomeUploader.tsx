@@ -12,6 +12,7 @@ import {
 import type { NormalizedRect } from "@/lib/tutor/types";
 import { cropSourceToJpeg, fileToNormalizedJpeg } from "@/lib/image";
 import { hasPreferences, storageAvailable } from "@/lib/preferences";
+import { prefetchProviders } from "@/lib/aiChoice";
 import { ArrowRight, Camera, Upload } from "lucide-react";
 import { ErrorState, Spinner } from "@/components/States";
 import CameraScanner from "@/components/CameraScanner";
@@ -53,6 +54,14 @@ export default function HomeUploader() {
   useEffect(() => {
     if (storageAvailable() && !hasPreferences()) router.replace("/welcome");
   }, [router]);
+
+  // The cropper's detection call needs one server flag (DETECT_GRID, from
+  // /api/providers) before it can send. Fetching it while the student is still
+  // aiming the camera means it is already known when the cropper opens, so
+  // detection never waits on it.
+  useEffect(() => {
+    prefetchProviders();
+  }, []);
 
   /** Hand the confirmed crop to the workspace. */
   function go(dataUrl: string, question?: string, workLikely = false) {

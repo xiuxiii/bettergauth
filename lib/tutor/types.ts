@@ -142,6 +142,12 @@ export interface DetectQuestionsRequest {
    */
   width: number;
   height: number;
+  /**
+   * The client drew the labelled coordinate grid on this image
+   * (lib/detectGrid.ts, DETECT_GRID=on); the prompt then says to read the
+   * coordinates off it.
+   */
+  grid?: boolean;
 }
 
 /**
@@ -176,6 +182,8 @@ export interface DetectionDebug {
   height: number;
   raw: { label: string; x1: number; y1: number; x2: number; y2: number }[];
   primaryIndex: number;
+  /** Whether the prompt was told about a drawn coordinate grid. */
+  grid?: boolean;
 }
 
 export type Role = "student" | "tutor";

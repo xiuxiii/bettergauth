@@ -3,7 +3,7 @@
  * itself can be checked against canned responses (`node evals/run.mjs
  * --selftest`) before its numbers are trusted.
  *
- * A case (evals/cases/*.json), one of three kinds:
+ * A case (evals/cases/*.json), one of four kinds:
  *
  * check (default) — analyze, then check-work, the way the app does:
  *   id, problem, and either attempt: { text } (analyzed as typed text) or
@@ -24,6 +24,15 @@
  *   id, kind: "tutor", problem (a ProblemAnalysis), history, studentText,
  *   action? (default "ask"), mustMatch?: regex[], mustNotMatch?: regex[]
  *   (case-insensitive, against the reply text)
+ *
+ * detect — question detection on a photographed page; do the boxes land on
+ *   the right questions:
+ *   id, kind: "detect", image, gridImage? (the same page with a grid drawn
+ *   on, sent instead with --grid), width, height (the image's true pixels),
+ *   questions: [{ label: "27", rect: { x, y, w, h } }]   (normalized 0..1,
+ *   x,y = top-left). A true question is a hit when a predicted question has
+ *   the same label (see normLabel), its centre lies inside the true rect and
+ *   IoU >= 0.5. A missing label counts as IoU 0.
  */
 
 /** Words that say nothing about WHAT went wrong, only where or how it reads. */
@@ -182,12 +191,83 @@ export function scoreTutor(c, reply) {
   };
 }
 
+/**
+ * The question number and part letter a label names, so the model's
+ * "Question 27", "Q27", "27." and the case's "27" compare equal, and
+ * "3(b)", "Q 3 (b)" and "3b" too. A label with no number is kept as its
+ * lowercase letters and digits.
+ */
+export function normLabel(label) {
+  const s = String(label ?? "").toLowerCase();
+  const m = s.match(/(\d+)\s*(?:\(\s*([a-z])\s*\)|([a-z])(?![a-z]))?/);
+  if (!m) return s.replace(/[^a-z0-9]/g, "");
+  return m[1].replace(/^0+(?=\d)/, "") + (m[2] ?? m[3] ?? "");
+}
+
+function iou(a, b) {
+  const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  const inter = ix * iy;
+  const union = a.w * a.h + b.w * b.h - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+
+/**
+ * Score one detection against a detect case's true questions.
+ * dx / dy are the predicted centre minus the true centre, as fractions of the
+ * page (negative dy = the box sits too high), only where the label matched.
+ */
+export function scoreDetect(c, detection) {
+  const predicted = (detection?.questions ?? []).filter((q) => q?.rect);
+  const truthKeys = new Set(c.questions.map((q) => normLabel(q.label)));
+  const questions = c.questions.map((t) => {
+    const p = predicted.find((q) => normLabel(q.label) === normLabel(t.label));
+    if (!p) return { label: t.label, found: false, hit: false, iou: 0, dx: null, dy: null };
+    const tr = t.rect, pr = p.rect;
+    const cx = pr.x + pr.w / 2, cy = pr.y + pr.h / 2;
+    const centerIn = cx >= tr.x && cx <= tr.x + tr.w && cy >= tr.y && cy <= tr.y + tr.h;
+    const v = iou(tr, pr);
+    return {
+      label: t.label,
+      found: true,
+      predictedLabel: p.label,
+      hit: centerIn && v >= 0.5,
+      iou: v,
+      dx: cx - (tr.x + tr.w / 2),
+      dy: cy - (tr.y + tr.h / 2),
+    };
+  });
+  const found = questions.filter((q) => q.found);
+  return {
+    id: c.id,
+    kind: "detect",
+    questions,
+    hits: questions.filter((q) => q.hit).length,
+    total: questions.length,
+    meanIoU: mean(questions.map((q) => q.iou)),
+    meanDy: mean(found.map((q) => q.dy)),
+    meanDx: mean(found.map((q) => q.dx)),
+    missing: questions.length - found.length,
+    extra: predicted.filter((q) => !truthKeys.has(normLabel(q.label))).length,
+  };
+}
+
 const pct = (n, d) => (d ? `${Math.round((100 * n) / d)}%` : "n/a");
+
+const fixed = (x, d) => (x === null ? "n/a" : x.toFixed(d));
+/** Signed, 3 decimals: "+0.012", "-0.054". */
+export const signed = (x) => (x === null || x === undefined ? "n/a" : `${x >= 0 ? "+" : "-"}${Math.abs(x).toFixed(3)}`);
 
 export function summarize(results) {
   const ran = results.filter((r) => !r.failed);
   const notStem = ran.filter((r) => r.kind === "notStem");
   const tutor = ran.filter((r) => r.kind === "tutor");
+  const detect = ran.filter((r) => r.kind === "detect");
+  const detectQs = detect.flatMap((r) => r.questions);
+  const detectFound = detectQs.filter((q) => q.found);
+  const detectHits = detectQs.filter((q) => q.hit).length;
   const ok = ran.filter((r) => !r.kind || r.kind === "check");
   const correctCases = ok.filter((r) => r.expectedCorrect);
   const errorCases = ok.filter((r) => !r.expectedCorrect);
@@ -207,5 +287,12 @@ export function summarize(results) {
     strayQuotes: ok.filter((r) => r.strayQuotes?.length).length,
     notStemTurnedAway: `${notStem.filter((r) => r.turnedAway).length}/${notStem.length}`,
     tutorPassed: `${tutor.filter((r) => r.passed).length}/${tutor.length}`,
+    // Detection, pooled over every true question in every detect case.
+    detectHitRate: `${detectHits}/${detectQs.length} (${pct(detectHits, detectQs.length)})`,
+    detectMeanIoU: fixed(mean(detectQs.map((q) => q.iou)), 2),
+    detectMeanDy: signed(mean(detectFound.map((q) => q.dy))),
+    detectMeanDx: signed(mean(detectFound.map((q) => q.dx))),
+    detectMissing: detect.reduce((n, r) => n + r.missing, 0),
+    detectExtra: detect.reduce((n, r) => n + r.extra, 0),
   };
 }

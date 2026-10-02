@@ -53,6 +53,8 @@ paid calls through the rate limiter: set `EVAL_BYPASS_TOKEN` on both sides.
 | `DEBUG_TOKENS` | Logs per-call token usage, including whether prompt caching is hitting. |
 | `AI_PROVIDER` | Default provider, `deepseek` or `anthropic`. Unset = DeepSeek if its key is set, else Anthropic. Any other value throws on the first AI call. |
 | `TUTOR_SWITCH` | `on` shows students the DeepSeek / Claude switch in Settings and the session popover (needs both keys). Unset = no switch: DeepSeek answers and Claude is only its automatic backup, because Claude costs far more. Doesn't affect `npm run eval -- --provider`. |
+| `DETECT_PROVIDER` | `anthropic` or `deepseek`: question detection (`/api/detect-questions`) on that provider whoever tutors (`getDetectionProvider`). Unset, unknown or not configured = the tutor's provider, as before. An eval request (valid `x-eval-bypass`) can still pick via `x-ai-provider`. `/privacy` names it. Off until the detect eval decides. |
+| `DETECT_GRID` | `on` = the cropper draws a labelled 10% coordinate grid (`lib/detectGrid.ts`) on the image it sends for detection and the prompt says to read coordinates off it. Reaches the client through `/api/providers`. Off until the detect eval decides. |
 | `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_VISION` | Model (default `deepseek-flash`, which takes photos), endpoint, and `off` to send every photo straight to Claude. |
 
 Vercel applies env vars **at build time** — after adding one, redeploy or it won't
@@ -122,6 +124,13 @@ it was paying 4661 visual tokens for a layout task, versus 2494 at 1600. The box
 come back in the pixel space of the image actually sent, so `imageForDetection`
 returns its own width/height: sending the preview's 2200px dimensions alongside a
 1600px image would scale every box by 0.73 and land them on the wrong questions.
+Box placement is measured by `npm run eval -- --kind detect` (with `--provider`,
+`--grid`), and both of its switches, `DETECT_PROVIDER` and `DETECT_GRID`, stay
+off until that eval says which helps. The grid is drawn only on the sent
+detection image, in its pixel space, never on the photo the student sees; its
+spec in `lib/detectGrid.ts` is shared with the eval's images, so change both
+together. Detection's provider must stay reflected in `/privacy` (`tutorRouting`
+takes `detectProvider`).
 
 **Every image path must go through `fileToNormalizedJpeg`.**
 A raw phone photo as a data URL is ~7.8MB of base64, over Vercel's 4.5MB request

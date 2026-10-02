@@ -4,7 +4,7 @@ import { importTs } from "./importTs.mjs";
 
 const { tutorRouting, PROVIDER_INFO } = await importTs("lib/privacyCopy.ts");
 
-const both = { anthropic: true, deepseek: true, defaultProvider: "deepseek", deepseekVision: true, studentSwitch: false };
+const both = { anthropic: true, deepseek: true, defaultProvider: "deepseek", deepseekVision: true, studentSwitch: false, detectProvider: null };
 const switchOn = { ...both, studentSwitch: true };
 
 test("no provider set up: nothing to name", () => {
@@ -59,6 +59,52 @@ test("switch on, Claude default (AI_PROVIDER=anthropic)", () => {
 
 test("switch on, DEEPSEEK_VISION=off: photos always go to Claude", () => {
   assert.match(tutorRouting({ ...switchOn, deepseekVision: false }).lines.join(" "), /Photos always go to Claude, never to DeepSeek\./);
+});
+
+// DETECT_PROVIDER: question detection pinned to one provider.
+
+const CLAUDE_DETECTS = "To find the questions on a photo, Claude reads it.";
+const DEEPSEEK_DETECTS = "To find the questions on a photo, DeepSeek reads it.";
+
+test("detection on the provider that already reads photos first: nothing changes", () => {
+  assert.deepEqual(tutorRouting({ ...both, detectProvider: "deepseek" }), tutorRouting(both));
+  const claudeDefault = { ...both, defaultProvider: "anthropic" };
+  assert.deepEqual(tutorRouting({ ...claudeDefault, detectProvider: "anthropic" }), tutorRouting(claudeDefault));
+  const claudeOnly = { ...both, deepseek: false, defaultProvider: "anthropic" };
+  assert.deepEqual(tutorRouting({ ...claudeOnly, detectProvider: "anthropic" }), tutorRouting(claudeOnly));
+  const deepseekOnly = { ...both, anthropic: false };
+  assert.deepEqual(tutorRouting({ ...deepseekOnly, detectProvider: "deepseek" }), tutorRouting(deepseekOnly));
+  // Vision off already sends every photo to Claude.
+  const visionOff = { ...both, deepseekVision: false };
+  assert.deepEqual(tutorRouting({ ...visionOff, detectProvider: "anthropic" }), tutorRouting(visionOff));
+});
+
+test("DeepSeek tutors, Claude detects: Claude's part is disclosed", () => {
+  const r = tutorRouting({ ...both, detectProvider: "anthropic" });
+  assert.deepEqual(r.providers, ["anthropic", "deepseek"]);
+  assert.deepEqual(r.lines, [...tutorRouting(both).lines, CLAUDE_DETECTS]);
+});
+
+test("Claude tutors, DeepSeek detects: DeepSeek is named and its part disclosed", () => {
+  const r = tutorRouting({ ...both, defaultProvider: "anthropic", detectProvider: "deepseek" });
+  assert.deepEqual(r.providers, ["anthropic", "deepseek"]);
+  assert.deepEqual(r.lines, ["Claude answers everything.", DEEPSEEK_DETECTS]);
+});
+
+test("DeepSeek detects with DEEPSEEK_VISION=off: the photo still goes to Claude, so no new line", () => {
+  const r = tutorRouting({ ...both, defaultProvider: "anthropic", deepseekVision: false, detectProvider: "deepseek" });
+  assert.deepEqual(r, { providers: ["anthropic"], lines: ["Claude answers everything."] });
+});
+
+test("switch on: the detection provider is said to hold whichever tutor is picked", () => {
+  const r = tutorRouting({ ...switchOn, detectProvider: "deepseek" });
+  assert.equal(r.lines.at(-1), "To find the questions on a photo, DeepSeek reads it, whichever you choose in Settings → Tutor.");
+  assert.match(tutorRouting({ ...switchOn, detectProvider: "anthropic" }).lines.at(-1), /^To find the questions on a photo, Claude reads it, whichever/);
+});
+
+test("one provider with TUTOR_SWITCH=on: no switch exists, so no Settings wording", () => {
+  const deepseekOnly = { ...switchOn, anthropic: false };
+  assert.deepEqual(tutorRouting({ ...deepseekOnly, detectProvider: "deepseek" }), tutorRouting(deepseekOnly));
 });
 
 test("each provider names its company, country and an https policy link", () => {

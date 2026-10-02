@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getProvider } from "@/lib/ai/provider";
+import { getDetectionProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
 import { trackUsage, type Usage } from "@/lib/usageServer";
@@ -10,17 +10,23 @@ export const runtime = "nodejs";
 
 /**
  * POST /api/detect-questions
- * Body: { image: string, width: number, height: number,
+ * Body: { image: string, width: number, height: number, grid?: true,
  *         debug?: true, debugCode?: string }
  *   image          — data URL of the full photographed page
  *   width, height  — that image's pixel dimensions; the model is asked for
  *                    boxes in absolute pixels and they are converted back here
+ *   grid           — the client drew the labelled coordinate grid on the image
+ *                    (DETECT_GRID=on, lib/detectGrid.ts), so the prompt tells
+ *                    the model to read coordinates off it
  * Returns: QuestionDetection — normalised boxes for each question found, plus
  *   the model's raw pixel output under `debug` when the body asks for it
  *
  * Powers the capture-time crop step. The client treats a failure here as
  * "no detection" and falls back to a local ink bounding box, so this route is
  * never on the critical path for analysis itself.
+ *
+ * Runs on getDetectionProvider, which DETECT_PROVIDER can point away from the
+ * tutor's provider.
  */
 export async function POST(req: Request) {
   const limited = await rateLimited(req);
@@ -53,10 +59,13 @@ async function handle(req: Request, usage: Usage): Promise<Response> {
       );
     }
 
-    const detection = await usage.provider(getProvider(req)).detectQuestions({
+    const detection = await usage.provider(getDetectionProvider(req)).detectQuestions({
       imageDataUrl: image,
       width,
       height,
+      // Only an explicit true: the grid sentence describes lines that must
+      // actually be on the image, so anything else means a clean photo.
+      grid: body?.grid === true,
     });
     // The raw model output rides along only for the ?debug=boxes view, and
     // only where debugging is allowed (see debugAllowed).

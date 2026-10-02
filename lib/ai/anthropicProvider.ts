@@ -41,6 +41,7 @@ import {
   TutorSolutionSchema,
   WorkCheckSchema,
   checkWorkText,
+  detectUserText,
   evaluatePracticeText,
   generatePracticeText,
   guardNotStem,
@@ -110,7 +111,7 @@ export class AnthropicProvider implements AIProvider {
             imageBlock(request.imageDataUrl),
             {
               type: "text",
-              text: `This image is exactly ${request.width} x ${request.height} pixels. Locate every question in it and give each box in pixel coordinates within those bounds.`,
+              text: detectUserText(request),
             },
           ],
         },
@@ -128,6 +129,7 @@ export class AnthropicProvider implements AIProvider {
         height: request.height,
         raw: out.questions.map(({ label, x1, y1, x2, y2 }) => ({ label, x1, y1, x2, y2 })),
         primaryIndex: out.primaryIndex,
+        grid: request.grid === true,
       },
     };
   }

@@ -24,5 +24,6 @@ export async function GET() {
       deepseek: config.providers.deepseek.configured,
       anthropic: config.providers.anthropic.configured,
     },
+    detectGrid: config.detectGrid,
   });
 }

@@ -8,11 +8,21 @@
  *   npm run eval -- --base http://localhost:3100 --only projectile
  *   npm run eval -- --json out.json  also write the per-case results
  *   npm run eval -- --provider anthropic   pin a provider (default: the app's)
+ *   npm run eval -- --kind detect    only one kind: check | notStem | tutor | detect
  *   npm run eval -- --selftest       check the scorer itself; no app, no key
+ *                                    (with --kind, only that kind's checks)
+ *
+ * Question detection (do the boxes land on the right questions):
+ *   npm run eval -- --kind detect --provider deepseek
+ *   npm run eval -- --kind detect --provider anthropic
+ *   npm run eval -- --kind detect --provider deepseek --grid
+ *       --grid sends each case's gridImage (the page with a grid drawn on)
+ *       and grid: true; a case without one sends its plain image.
  *
  * A check case runs /api/analyze, then /api/check-work — on the typed text,
  * or on a photo exactly as the app does (analyze the photo, check the same
- * photo). notStem cases run analyze only; tutor cases run one /api/tutor turn.
+ * photo). notStem cases run analyze only; tutor cases run one /api/tutor turn;
+ * detect cases run one /api/detect-questions on the whole page.
  * Plain Node, no dependencies. Cases live in evals/cases/*.json; see
  * evals/score.mjs for the format. The photos are rendered by
  * evals/make-images.mjs and committed.
@@ -26,7 +36,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { scoreCase, scoreNotStem, scoreTutor, strayQuotes, summarize } from "./score.mjs";
+import {
+  normLabel, scoreCase, scoreDetect, scoreNotStem, scoreTutor, signed, strayQuotes, summarize,
+} from "./score.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -34,6 +46,14 @@ const flag = (name) => {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : undefined;
 };
+
+const KINDS = ["check", "notStem", "tutor", "detect"];
+const KIND = flag("--kind");
+if (KIND !== undefined && !KINDS.includes(KIND)) {
+  console.error(`--kind must be one of ${KINDS.join(", ")}`);
+  process.exit(2);
+}
+const kindOf = (c) => c.kind ?? "check";
 
 if (args.includes("--selftest")) {
   selftest();
@@ -46,13 +66,16 @@ const JSON_OUT = flag("--json");
 const COOKIE = process.env.EVAL_COOKIE; // for a gated deploy: stem_access=...
 // Same header as the setup page's switch (lib/aiChoice.ts).
 const PROVIDER = flag("--provider");
+// Detect only: send the case's gridImage and ask the route for grid mode.
+const GRID = args.includes("--grid");
 
 const cases = fs
   .readdirSync(path.join(HERE, "cases"))
   .filter((f) => f.endsWith(".json"))
   .sort()
   .map((f) => JSON.parse(fs.readFileSync(path.join(HERE, "cases", f), "utf8")))
-  .filter((c) => !ONLY || c.id.includes(ONLY));
+  .filter((c) => !ONLY || c.id.includes(ONLY))
+  .filter((c) => !KIND || kindOf(c) === KIND);
 
 const BYPASS = process.env.EVAL_BYPASS_TOKEN;
 const headers = {
@@ -95,8 +118,27 @@ function lastTurn(ndjson) {
   throw new Error("tutor: stream ended without a result");
 }
 
+let saidNoGrid = false;
+
 async function runCase(c) {
   const t0 = Date.now();
+  if (c.kind === "detect") {
+    let rel = c.image;
+    if (GRID && c.gridImage) rel = c.gridImage;
+    else if (GRID && !saidNoGrid) {
+      saidNoGrid = true;
+      console.log(`  (--grid: ${c.id} has no gridImage, sending its plain image; said once)`);
+    }
+    const detection = JSON.parse(
+      await post("/api/detect-questions", {
+        image: imageDataUrl(rel),
+        width: c.width,
+        height: c.height,
+        ...(GRID ? { grid: true } : {}),
+      }),
+    );
+    return { ...scoreDetect(c, detection), ms: Date.now() - t0, detection };
+  }
   if (c.kind === "tutor") {
     const turn = lastTurn(
       await post("/api/tutor", {
@@ -126,7 +168,9 @@ async function runCase(c) {
 
 const mark = (b) => (b === null ? "·" : b ? "✓" : "✗");
 
-console.log(`Running ${cases.length} case(s) against ${BASE}${PROVIDER ? ` (provider: ${PROVIDER})` : ""}\n`);
+console.log(
+  `Running ${cases.length} case(s) against ${BASE}${PROVIDER ? ` (provider: ${PROVIDER})` : ""}${GRID ? " (grid)" : ""}\n`,
+);
 const results = [];
 for (const c of cases) {
   try {
@@ -135,6 +179,22 @@ for (const c of cases) {
     const secs = `${(r.ms / 1000).toFixed(1)}s`;
     if (r.kind === "notStem") {
       console.log(`${mark(r.turnedAway)} ${c.id.padEnd(31)} ${r.turnedAway ? "turned away" : "TUTORED A NON-PROBLEM"}  ${secs}`);
+      continue;
+    }
+    if (r.kind === "detect") {
+      const notes = [r.missing && `missing ${r.missing}`, r.extra && `extra ${r.extra}`].filter(Boolean);
+      const iouText = r.meanIoU === null ? "n/a" : r.meanIoU.toFixed(2);
+      console.log(
+        `${mark(r.hits === r.total)} ${c.id.padEnd(31)} detect ${r.hits}/${r.total} hit  IoU ${iouText}  dy ${signed(r.meanDy)}  ${secs}${notes.length ? "  ← " + notes.join(", ") : ""}`,
+      );
+      for (const q of r.questions) {
+        if (!q.found) {
+          console.log(`  ✗ ${q.label}  not found`);
+          continue;
+        }
+        const off = q.hit ? "" : `  dy ${signed(q.dy)}${Math.abs(q.dx) > 0.02 ? `  dx ${signed(q.dx)}` : ""}`;
+        console.log(`  ${mark(q.hit)} ${q.label}  IoU ${q.iou.toFixed(2)}${off}`);
+      }
       continue;
     }
     if (r.kind === "tutor") {
@@ -157,13 +217,14 @@ for (const c of cases) {
       `${mark(r.verdictRight)} ${c.id.padEnd(31)} ${r.verdict.padEnd(17)} cat ${mark(r.categoryRight)} line ${mark(r.lineRight)}  ${(r.ms / 1000).toFixed(1)}s${notes.length ? "  ← " + notes.join("; ") : ""}`,
     );
   } catch (err) {
-    results.push({ id: c.id, failed: true, error: String(err.message ?? err) });
+    results.push({ id: c.id, kind: kindOf(c), failed: true, error: String(err.message ?? err) });
     console.log(`! ${c.id.padEnd(31)} ${err.message ?? err}`);
   }
 }
 
 const s = summarize(results);
-console.log(`
+// A detect-only run would print a page of n/a for the other kinds.
+if (KIND !== "detect") console.log(`
 Verdict accuracy     ${s.verdictAccuracy}
 False "you're wrong" ${s.falseAlarmRate}   (correct attempts judged wrong — the number to keep at 0)
 Missed errors        ${s.missedErrorRate}
@@ -175,7 +236,16 @@ Headline leaks       ${s.headlineLeaks} case(s)   (headline says what's wrong, n
 Stray quotes         ${s.strayQuotes} case(s)   (a field ending in a dangling ' or ")
 Not-homework         ${s.notStemTurnedAway} turned away
 Tutor replies        ${s.tutorPassed} passed
-${s.failedToRun ? `\n${s.failedToRun} case(s) failed to run.` : ""}`);
+`);
+if (results.some((r) => r.kind === "detect")) {
+  console.log(`${KIND === "detect" ? "\n" : ""}Detection hits       ${s.detectHitRate}   (label found, centre inside, IoU >= 0.5)
+Detection mean IoU   ${s.detectMeanIoU}   (a missing label counts as 0)
+Detection mean dy    ${s.detectMeanDy}   (page heights; negative = boxes too high)
+Detection mean dx    ${s.detectMeanDx}   (page widths; negative = boxes too far left)
+Detection missing    ${s.detectMissing}   (true questions with no predicted label)
+Detection extra      ${s.detectExtra}   (predicted labels matching no true question)`);
+}
+if (s.failedToRun) console.log(`\n${s.failedToRun} case(s) failed to run.`);
 
 if (JSON_OUT) {
   fs.writeFileSync(JSON_OUT, JSON.stringify({ base: BASE, at: new Date().toISOString(), summary: s, results }, null, 2));
@@ -195,7 +265,9 @@ function selftest() {
     continueFrom: "t ≈ 2.04 s",
   };
   const checks = [];
-  const t = (name, cond) => { checks.push([name, cond]); };
+  // Each check is tagged with its case kind, so --selftest --kind runs only those.
+  let group = "check";
+  const t = (name, cond) => { checks.push([name, cond, group]); };
 
   let r = scoreCase(wrongCase, good, { concept: "Projectile time of flight" });
   t("good diagnosis scores right on every axis", r.verdictRight && r.categoryRight && r.lineRight && !r.answerLeaks.length && !r.labelSpoilers.length && !r.falseAlarm);
@@ -241,20 +313,75 @@ function selftest() {
   t("a real closing quote mid-field isn't", strayQuotes({ ...good, headline: 'It says "use g", then stops.' }).length === 0);
 
   // A7: the not-homework and tutor-reply kinds.
+  group = "notStem";
   t("not-homework turned away passes", scoreNotStem({ id: "n" }, { hasStemContent: false }).turnedAway);
   t("not-homework tutored fails", !scoreNotStem({ id: "n" }, { hasStemContent: true }).turnedAway);
+  group = "tutor";
   const unitCase = { id: "u", mustMatch: ["\\bJ\\b|joule"], mustNotMatch: ["(answer|unit|units) (is|are) (in )?(N|newtons)\\b"] };
   t("tutor reply in joules passes", scoreTutor(unitCase, "Not quite: kg·m²/s² is a joule, so it's 4.0 J.").passed);
   t("tutor reply agreeing on newtons fails", !scoreTutor(unitCase, "Yes, the unit is newtons.").passed);
+  group = "check";
   const mixed = summarize([scoreNotStem({ id: "n" }, { hasStemContent: false }), scoreTutor(unitCase, "4.0 J"), scoreCase(rightCase, { verdict: "correct", headline: "", strength: "", continueFrom: "" })]);
   t("summary keeps kinds apart", mixed.notStemTurnedAway === "1/1" && mixed.tutorPassed === "1/1" && mixed.verdictAccuracy === "100%");
   t("summary counts headline leaks", summarize([scoreCase(fallCase, { verdict: "error_found", headline: "Line 2 uses a distance as a time.", strength: "", firstError: fallErr, continueFrom: "" })]).headlineLeaks === 1);
 
+  // Detection: an inline truth (two columns, two questions each), not the
+  // case files, so the scorer is checked even before any detect case exists.
+  group = "detect";
+  const truth = {
+    id: "d", kind: "detect", width: 1000, height: 1400,
+    questions: [
+      { label: "1", rect: { x: 0.05, y: 0.10, w: 0.40, h: 0.20 } },
+      { label: "2", rect: { x: 0.05, y: 0.35, w: 0.40, h: 0.20 } },
+      { label: "3", rect: { x: 0.55, y: 0.10, w: 0.40, h: 0.20 } },
+      { label: "4", rect: { x: 0.55, y: 0.35, w: 0.40, h: 0.20 } },
+    ],
+  };
+  const asPredicted = (qs) => ({
+    hasStemContent: true,
+    primaryIndex: 0,
+    questions: qs.map((q) => ({ label: `Question ${q.label}`, rect: { ...q.rect }, hasWorking: false })),
+  });
+  const close = (a, b) => Math.abs(a - b) < 1e-9;
+
+  let d = scoreDetect(truth, asPredicted(truth.questions));
+  t("detect: perfect boxes are all hits, IoU 1", d.hits === 4 && d.total === 4 && close(d.meanIoU, 1) && close(d.meanDy, 0) && d.missing === 0 && d.extra === 0);
+
+  d = scoreDetect(truth, asPredicted(truth.questions.map((q) => ({ ...q, rect: { ...q.rect, y: q.rect.y - q.rect.h } }))));
+  t("detect: every box one question too high → 0 hits, negative dy", d.hits === 0 && d.meanDy < 0 && close(d.meanDy, -0.2) && signed(d.meanDy) === "-0.200");
+
+  const swapped = asPredicted(truth.questions);
+  [swapped.questions[0].label, swapped.questions[1].label] = [swapped.questions[1].label, swapped.questions[0].label];
+  d = scoreDetect(truth, swapped);
+  t("detect: right boxes, labels swapped → those two are misses", d.hits === 2 && !d.questions[0].hit && !d.questions[1].hit && d.questions[2].hit && d.questions[3].hit);
+
+  const gap = asPredicted(truth.questions.slice(0, 3));
+  gap.questions.push({ label: "Q9", rect: { x: 0.55, y: 0.6, w: 0.4, h: 0.2 }, hasWorking: false });
+  d = scoreDetect(truth, gap);
+  t("detect: one missing, one invented → missing 1, extra 1", d.missing === 1 && d.extra === 1 && d.hits === 3 && d.questions[3].iou === 0);
+
+  for (const [raw, want] of [
+    ["Question 27", "27"], ["Q27", "27"], ["27.", "27"], ["3(b)", "3b"],
+    ["Q 3 (b)", "3b"], ["12a", "12a"], ["12 (a)", "12a"],
+  ]) {
+    t(`detect: label "${raw}" → "${want}"`, normLabel(raw) === want);
+  }
+
+  const ds = summarize([
+    scoreDetect(truth, asPredicted(truth.questions)),
+    scoreDetect(truth, swapped),
+    { id: "x", kind: "detect", failed: true },
+  ]);
+  t("detect summary: pooled hit rate, missing, extra", ds.detectHitRate === "6/8 (75%)" && ds.detectMissing === 0 && ds.detectExtra === 0 && ds.failedToRun === 1);
+  const noDetect = summarize([scoreNotStem({ id: "n" }, { hasStemContent: false })]);
+  t("detect summary: no detect cases leaves the others alone", noDetect.detectHitRate === "0/0 (n/a)" && noDetect.detectMeanIoU === "n/a" && noDetect.notStemTurnedAway === "1/1" && noDetect.verdictAccuracy === "n/a");
+
   let failed = 0;
-  for (const [name, cond] of checks) {
+  for (const [name, cond] of checks.filter(([, , k]) => !KIND || k === KIND)) {
     console.log(`${cond ? "✓" : "✗"} ${name}`);
     if (!cond) failed++;
   }
-  console.log(`\n${checks.length - failed} passed, ${failed} failed`);
+  const ran = checks.filter(([, , k]) => !KIND || k === KIND).length;
+  console.log(`\n${ran - failed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 }

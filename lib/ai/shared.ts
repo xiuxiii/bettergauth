@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import type {
   CheckWorkRequest,
+  DetectQuestionsRequest,
   EvaluatePracticeRequest,
   GeneratePracticeRequest,
   ProblemAnalysis,
@@ -248,6 +249,21 @@ Pages photographed as a two-page spread have independent columns: read each colu
 Label each entry with the number printed at the start of that question ("Question 5", "Q5", "3(b)"). If a region has no printed number of its own, do not return it. Return only questions you can actually see a number for; five correct boxes are far better than eight with three in the wrong place.
 
 If the photo shows a single problem, or only a fragment of one, return exactly one box around it. Set primaryIndex to the question most likely intended: the most complete, central one, or the only one.`;
+
+/**
+ * Appended to the detection USER message when the client drew the coordinate
+ * grid (DETECT_GRID=on, lib/detectGrid.ts). Deliberately not in DETECT_SYSTEM:
+ * that is Claude's cached system prefix, and it must stay byte-identical for
+ * the grid-off default.
+ */
+export const DETECT_GRID_NOTE =
+  "The image has a ruler drawn on it: faint red grid lines every 10% of the width and height, each labelled at both ends with its position in pixels. Read each box's coordinates off those labelled lines rather than estimating them.";
+
+/** The detection user message's text, shared by both providers. */
+export function detectUserText(request: DetectQuestionsRequest): string {
+  const text = `This image is exactly ${request.width} x ${request.height} pixels. Locate every question in it and give each box in pixel coordinates within those bounds.`;
+  return request.grid ? `${text} ${DETECT_GRID_NOTE}` : text;
+}
 
 export const ANALYZE_SYSTEM = `You extract a single high-school STEM problem from a photo and classify it.
 

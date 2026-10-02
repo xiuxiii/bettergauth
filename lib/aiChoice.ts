@@ -56,6 +56,8 @@ export type ProviderStatus = {
   /** Whether students may pick (TUTOR_SWITCH=on and both set up). */
   switchable?: boolean;
   available: Record<AiChoice, boolean>;
+  /** DETECT_GRID=on: draw the coordinate grid on the detection image. */
+  detectGrid?: boolean;
 };
 
 const listeners = new Set<() => void>();
@@ -88,6 +90,55 @@ function loadProviders() {
     });
 }
 
+/** Subscribe to the provider status, starting its one fetch if needed. */
+function subscribeProviders(listener: () => void) {
+  loadProviders();
+  return subscribe(listener);
+}
+
+/**
+ * Start the /api/providers fetch now, ahead of anything that needs it. The
+ * home page calls this so the cropper's detection call doesn't wait on it.
+ */
+export function prefetchProviders(): void {
+  if (typeof window !== "undefined") loadProviders();
+}
+
+/** Whether question detection should send the gridded image. False until known. */
+export function useDetectGrid(): boolean {
+  const status = useSyncExternalStore(
+    subscribeProviders,
+    () => providers,
+    () => undefined,
+  );
+  return status?.detectGrid === true;
+}
+
+/**
+ * The same flag, for code that must decide once rather than re-render: the
+ * cropper's detection call. Resolves as soon as the status is known, or with
+ * false after `ms`, so a slow /api/providers costs at most that delay and a
+ * failed one means "no grid" (today's behaviour).
+ */
+export function detectGridWithin(ms: number): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  loadProviders();
+  if (providers !== undefined) return Promise.resolve(providers?.detectGrid === true);
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      listeners.delete(onChange);
+      resolve(providers?.detectGrid === true);
+    };
+    // notify() also fires for a Tutor switch; only the status arriving counts.
+    const onChange = () => {
+      if (providers !== undefined) finish();
+    };
+    const timer = setTimeout(finish, ms);
+    listeners.add(onChange);
+  });
+}
+
 /** Save the choice and tell every mounted control. */
 export function chooseAiChoice(choice: AiChoice): void {
   saveAiChoice(choice);
@@ -118,10 +169,7 @@ export function useAiChoice(): {
 } {
   const saved = useSyncExternalStore(subscribe, loadAiChoice, () => null);
   const status = useSyncExternalStore(
-    (l) => {
-      loadProviders();
-      return subscribe(l);
-    },
+    subscribeProviders,
     () => providers,
     () => undefined,
   );

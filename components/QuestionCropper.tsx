@@ -10,6 +10,7 @@ import type {
 } from "@/lib/tutor/types";
 import { detectContentRectNormalized, imageForDetection } from "@/lib/image";
 import { apiFetch } from "@/lib/apiClient";
+import { detectGridWithin, useDetectGrid } from "@/lib/aiChoice";
 import { enterSends } from "@/lib/utils";
 import { Spinner } from "@/components/States";
 
@@ -22,11 +23,29 @@ const AUTO_PAD = 0.015; // breathing room around a detected question
 const DETECT_TIMEOUT_MS = 8000;
 
 /**
+ * How long detection waits to learn whether to draw the coordinate grid
+ * (DETECT_GRID). The home page prefetches it, so it is normally known already;
+ * this only bounds a slow or failed /api/providers, after which detection goes
+ * out without the grid.
+ */
+const GRID_FLAG_WAIT_MS = 300;
+
+/**
  * Last detection result, so backing out of the cropper and re-entering with the
  * same photo doesn't re-pay the call. One slot, not a Map: these data URLs are
  * megabytes, and holding a history of them is how you run a phone out of memory.
+ *
+ * `grid` records whether that call sent the gridded image, but is NOT part of
+ * the match: the flag can only go from unknown to known within a page load, so
+ * a mismatch means the first call gave up waiting for it, and re-paying for
+ * the same photo just because the flag turned up later is the double bill
+ * this cache exists to prevent. Either answer is a real detection.
  */
-let lastDetection: { image: string; result: QuestionDetection } | null = null;
+let lastDetection: {
+  image: string;
+  grid: boolean;
+  result: QuestionDetection;
+} | null = null;
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n));
@@ -140,7 +159,15 @@ export default function QuestionCropper({
   );
   const [debugInfo, setDebugInfo] = useState<DetectionDebug | null>(null);
   const [debugDenied, setDebugDenied] = useState(false);
-  const [debugSent, setDebugSent] = useState<{ w: number; h: number } | null>(null);
+  const [debugSent, setDebugSent] = useState<{
+    w: number;
+    h: number;
+    grid: boolean;
+  } | null>(null);
+  // DETECT_GRID as the server reports it. Detection itself decides once, via
+  // detectGridWithin below; this is only for the debug line, to tell "flag
+  // off" from "flag arrived too late to be used".
+  const gridFlag = useDetectGrid();
 
   // Phase 1: seed a real box immediately, with no network.
   //
@@ -187,10 +214,21 @@ export default function QuestionCropper({
           // `image`, so without this every back-and-forth re-paid the call.
           result = lastDetection.result;
         } else {
+          // Whether to draw the coordinate grid is decided ONCE, here, and the
+          // flag is deliberately not an effect dependency: if it changed
+          // between renders, a dependency would abort an in-flight call and
+          // send a second one, paying twice for the same photo. It is
+          // prefetched on the home page, so this normally resolves at once;
+          // the wait only bounds a slow /api/providers, which then costs at
+          // most GRID_FLAG_WAIT_MS and means a clean image.
+          const grid = await detectGridWithin(GRID_FLAG_WAIT_MS);
+          if (cancelled) return;
           // Detection gets its own, smaller image — and the dimensions that go
-          // with THAT image, since the boxes come back in its pixel space.
-          const shrunk = await imageForDetection(image);
-          if (debugBoxes) setDebugSent({ w: shrunk.width, h: shrunk.height });
+          // with THAT image, since the boxes come back in its pixel space. The
+          // grid, when on, is drawn on this copy only; the photo on screen
+          // stays clean.
+          const shrunk = await imageForDetection(image, { grid });
+          if (debugBoxes) setDebugSent({ w: shrunk.width, h: shrunk.height, grid });
           const res = await apiFetch("/api/detect-questions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -198,13 +236,14 @@ export default function QuestionCropper({
               image: shrunk.image,
               width: shrunk.width,
               height: shrunk.height,
+              ...(grid ? { grid: true } : {}),
               ...(debugBoxes ? { debug: true, debugCode } : {}),
             }),
             signal: controller.signal,
           });
           if (res.ok) {
             result = (await res.json()) as QuestionDetection;
-            lastDetection = { image, result };
+            lastDetection = { image, grid, result };
             if (debugBoxes) {
               setDebugInfo(result.debug ?? null);
               setDebugDenied(!!result.debugDenied);
@@ -528,6 +567,7 @@ export default function QuestionCropper({
             info={debugInfo}
             denied={debugDenied}
             sent={debugSent}
+            gridFlag={gridFlag}
             preview={img}
             detecting={detecting}
           />
@@ -765,12 +805,14 @@ function DebugPanel({
   info,
   denied,
   sent,
+  gridFlag,
   preview,
   detecting,
 }: {
   info: DetectionDebug | null;
   denied: boolean;
-  sent: { w: number; h: number } | null;
+  sent: { w: number; h: number; grid: boolean } | null;
+  gridFlag: boolean;
   preview: { w: number; h: number };
   detecting: boolean;
 }) {
@@ -778,7 +820,8 @@ function DebugPanel({
   return (
     <div className="absolute inset-x-2 top-2 z-20 max-h-[45%] overflow-auto rounded-sm bg-black/80 p-2 font-mono text-[10px] leading-4 text-white">
       <p>
-        preview {preview.w}×{preview.h} · sent {sent ? `${sent.w}×${sent.h}` : "?"}
+        preview {preview.w}×{preview.h} · sent {sent ? `${sent.w}×${sent.h}` : "?"} · grid{" "}
+        {sent ? (sent.grid ? "sent" : "not sent") : "?"} (flag {gridFlag ? "on" : "off"})
       </p>
       {denied ? (
         <p>debug not allowed: add &amp;code=… (the server&apos;s DEBUG_CODE)</p>

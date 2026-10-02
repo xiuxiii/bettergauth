@@ -32,6 +32,7 @@ export default async function PrivacyPage({
     defaultProvider: config.defaultProvider,
     deepseekVision: config.providers.deepseek.vision,
     studentSwitch: config.tutorSwitch,
+    detectProvider: config.detectProvider,
   });
 
   return (
