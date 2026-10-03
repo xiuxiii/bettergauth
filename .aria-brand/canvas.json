@@ -1,9 +1,0 @@
-{
-  "artboards": [
-    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 760, "h": 960 },
-    { "file": "Type.dc.html", "x": 860, "y": 0, "w": 760, "h": 820 },
-    { "file": "Components.dc.html", "x": 860, "y": 940, "w": 760, "h": 900 },
-    { "file": "Palette.dc.html", "x": 1720, "y": 0, "w": 760, "h": 560 }
-  ],
-  "launch": { "view": "canvas" }
-}
