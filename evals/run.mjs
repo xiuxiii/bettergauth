@@ -7,7 +7,8 @@
  *   npm run eval                     all cases, against http://localhost:3000
  *   npm run eval -- --base http://localhost:3100 --only projectile
  *   npm run eval -- --json out.json  also write the per-case results
- *   npm run eval -- --provider anthropic   pin a provider (default: the app's)
+ *   npm run eval -- --provider anthropic   pin a provider (default: the app's;
+ *                                    honoured only with EVAL_BYPASS_TOKEN, below)
  *   npm run eval -- --kind detect    only one kind: check | notStem | tutor | detect
  *   npm run eval -- --selftest       check the scorer itself; no app, no key
  *                                    (with --kind, only that kind's checks)
@@ -81,6 +82,16 @@ const cases = fs
   .filter((c) => !KIND || kindOf(c) === KIND);
 
 const BYPASS = process.env.EVAL_BYPASS_TOKEN;
+// Without a bypass the pin is a student's x-ai-provider header, which the app
+// ignores unless TUTOR_SWITCH=on (and detection with DETECT_PROVIDER set
+// ignores always): the run would measure the default under this name.
+if (PROVIDER && !BYPASS) {
+  console.warn(
+    `Warning: --provider ${PROVIDER} without EVAL_BYPASS_TOKEN. The app honours the pick only for` +
+      " eval requests (or with TUTOR_SWITCH=on), so this may measure the default provider." +
+      " Set EVAL_BYPASS_TOKEN to the same value here and on the server.\n",
+  );
+}
 const headers = {
   "Content-Type": "application/json",
   ...(COOKIE ? { Cookie: COOKIE } : {}),

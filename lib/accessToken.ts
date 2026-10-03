@@ -154,6 +154,14 @@ async function keyFor(): Promise<string> {
   return signingKey(process.env.ACCESS_CODE?.trim() ?? "", codes.map((c) => c.code));
 }
 
+/**
+ * The cookie's signing key, for another keyed hash that needs a server
+ * secret (lib/clientId.ts). Empty when no code is configured.
+ */
+export function accessSigningKey(): Promise<string> {
+  return keyFor();
+}
+
 export function isExpired(code: AccessCode, now = Date.now()): boolean {
   return code.expiresAt !== null && now >= code.expiresAt;
 }

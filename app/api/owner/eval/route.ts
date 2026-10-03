@@ -1,9 +1,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { debugAllowed } from "@/lib/debugAccess";
+import { providerConfig } from "@/lib/ai/provider";
+import { pinnedRunProblem } from "@/lib/ai/choose";
+import { debugGate } from "@/lib/rateLimit";
 import { formatResult } from "@/evals/format.mjs";
-import { runCase } from "@/evals/runCase.mjs";
+import { kindOf, runCase } from "@/evals/runCase.mjs";
 import { loadCases } from "../evalCases";
 import { NO_STORE, notFound } from "../shared";
 
@@ -49,11 +51,15 @@ async function readEvalImage(rel: string): Promise<string> {
  * The case calls this app's own routes over HTTP, with the caller's cookie
  * (the access gate) and, when EVAL_BYPASS_TOKEN is set, the bypass header, so
  * eval runs skip the rate limiter and aren't counted as student usage.
- * 404 without the code; 400 for an unknown case or provider.
+ * 404 without the code; 400 for an unknown case or provider; 409 when the
+ * run is pinned to a provider this deploy would quietly not use (no
+ * EVAL_BYPASS_TOKEN: pinnedRunProblem, lib/ai/choose.ts).
  */
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
-  if (!debugAllowed(body?.code)) return notFound();
+  const debug = await debugGate(req, body?.code);
+  if (debug.limited) return debug.limited;
+  if (!debug.allowed) return notFound();
 
   const provider = body?.provider ?? undefined;
   if (provider !== undefined && provider !== "anthropic" && provider !== "deepseek") {
@@ -73,10 +79,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unknown case." }, { status: 400, headers: NO_STORE });
     }
 
-    const origin = new URL(req.url).origin;
-    const cookie = req.headers.get("cookie");
     const bypass = process.env.EVAL_BYPASS_TOKEN?.trim();
-    const signal = AbortSignal.timeout(DEADLINE_MS);
+    if (provider) {
+      const config = providerConfig();
+      const problem = pinnedRunProblem({
+        provider,
+        detect: kindOf(c) === "detect",
+        bypass: !!bypass,
+        configured: {
+          anthropic: config.providers.anthropic.configured,
+          deepseek: config.providers.deepseek.configured,
+        },
+        defaultProvider: config.defaultProvider,
+        tutorSwitch: config.tutorSwitch,
+        detectProvider: config.detectProvider,
+      });
+      if (problem) {
+        return NextResponse.json({ error: problem }, { status: 409, headers: NO_STORE });
+      }
+    }
+
+    // Where the case's requests go. They carry the owner's gate cookie and
+    // the bypass token, so never to wherever the Host / X-Forwarded-* headers
+    // say: off Vercel those are whatever the client sent. On Vercel the
+    // routed URL is the deploy's own; elsewhere this server, on loopback.
+    const origin = process.env.VERCEL
+      ? new URL(req.url).origin
+      : `http://127.0.0.1:${process.env.PORT || 3000}`;
+    const cookie = req.headers.get("cookie");
+    // The owner's Stop (the request aborting) stops the case's paid calls too.
+    const signal = AbortSignal.any([req.signal, AbortSignal.timeout(DEADLINE_MS)]);
     const post = (path: string, payload: unknown) =>
       fetch(new URL(path, origin), {
         method: "POST",

@@ -3,7 +3,7 @@ import type { ProgressConcept } from "@/lib/tutor/types";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
-import { trackUsage, type Usage } from "@/lib/usageServer";
+import { trackUsage, usageScope, type Usage } from "@/lib/usageServer";
 
 export const runtime = "nodejs";
 
@@ -21,10 +21,12 @@ const MAX_CONCEPTS = 8;
  * cheap enough to offer as a button.
  */
 export async function POST(req: Request) {
-  const limited = await rateLimited(req);
-  if (limited) return limited;
-  const usage = trackUsage(req, "progress");
-  return usage.done(await handle(req, usage));
+  return usageScope(req, async () => {
+    const limited = await rateLimited(req);
+    if (limited) return limited;
+    const usage = trackUsage(req, "progress");
+    return usage.done(await handle(req, usage));
+  });
 }
 
 async function handle(req: Request, usage: Usage): Promise<Response> {

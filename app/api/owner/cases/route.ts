@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { debugAllowed } from "@/lib/debugAccess";
+import { debugGate } from "@/lib/rateLimit";
 import { kindOf } from "@/evals/runCase.mjs";
 import { loadCases } from "../evalCases";
 import { NO_STORE, notFound } from "../shared";
@@ -13,7 +13,9 @@ export const dynamic = "force-dynamic";
  * /api/owner/eval. hasGrid: a detect case with a gridImage. 404 without the code.
  */
 export async function GET(req: Request) {
-  if (!debugAllowed(new URL(req.url).searchParams.get("code"))) return notFound();
+  const debug = await debugGate(req, new URL(req.url).searchParams.get("code"));
+  if (debug.limited) return debug.limited;
+  if (!debug.allowed) return notFound();
   try {
     const cases = (await loadCases()).map((c) => ({
       id: c.id,

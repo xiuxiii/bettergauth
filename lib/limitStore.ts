@@ -10,7 +10,7 @@
  *   integration provisions). One shared count for every instance, so the
  *   daily cap is real. A few lines of fetch, no SDK.
  * FallbackStore puts the two together: Redis when it answers, memory when it
- * doesn't, so a Redis blip never locks every student out.
+ * doesn't (and for 30s after), so a Redis blip never locks every student out.
  */
 
 import { redisPipeline, withTimeout, type RedisCommand } from "@/lib/redisRest";
@@ -111,24 +111,37 @@ function ttl(pttl: unknown, fallback: number): number {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
+/** How long FallbackStore stays on the local store after the shared one fails. */
+export const FALLBACK_COOLDOWN_MS = 30_000;
+
 /**
  * The shared store when it answers within `timeoutMs`, else the local one.
  * Failing open is deliberate: during a Redis outage the limits drop back to
  * per-instance brakes rather than turning every student away. The provider
  * consoles' spend limits are the hard backstop.
+ *
+ * After a failure or timeout the shared store is skipped for `cooldownMs`,
+ * then tried again: a hung Redis otherwise added a timeout to every call a
+ * request makes (three per AI request, ~2.4s).
  */
 export class FallbackStore implements LimitStore {
+  private skipUntil = 0;
+
   constructor(
     private primary: LimitStore,
     private secondary: LimitStore,
     private timeoutMs: number,
     private onError: (err: unknown) => void,
+    private cooldownMs = FALLBACK_COOLDOWN_MS,
+    private now: () => number = Date.now,
   ) {}
 
   private async run<T>(op: (s: LimitStore) => Promise<T>): Promise<T> {
+    if (this.now() < this.skipUntil) return op(this.secondary);
     try {
       return await withTimeout(op(this.primary), this.timeoutMs);
     } catch (err) {
+      this.skipUntil = this.now() + this.cooldownMs;
       this.onError(err);
       return op(this.secondary);
     }

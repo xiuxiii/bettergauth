@@ -2,8 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { importTs } from "./importTs.mjs";
 
-const { dayKey, lastDays, MemoryUsageStore, RedisUsageStore, callCounts, summarizeDay, SLOW_MS, KEEP_DAYS } =
-  await importTs("lib/usage.ts");
+const {
+  dayKey, lastDays, MemoryUsageStore, RedisUsageStore, callCounts, summarizeDay, SLOW_MS, KEEP_DAYS, CLIENT_CLOSED,
+} = await importTs("lib/usage.ts");
 
 /** Upstash's /pipeline for the commands the usage store sends. */
 function fakeRedis() {
@@ -61,6 +62,13 @@ test("a call's counters: count, time, provider, slow, error", () => {
   assert.equal(slowFail["slow.tutor"], 1);
   assert.equal(slowFail["error.tutor.502"], 1);
   assert.equal(callCounts("analyze", 10, 200, "something-else")["provider.something-else"], undefined);
+});
+
+test("a stream the client closed is counted as cancelled, not as an error", () => {
+  const counts = callCounts("check", 3000, CLIENT_CLOSED, "deepseek");
+  assert.equal(counts["cancelled.check"], 1);
+  assert.equal(counts["n.check"], 1);
+  assert.deepEqual(Object.keys(counts).filter((k) => k.startsWith("error.")), []);
 });
 
 for (const [name, make] of [

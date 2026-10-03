@@ -51,11 +51,20 @@ export type UsageCounter =
   | `n.${UsageRoute}`
   | `slow.${UsageRoute}`
   | `error.${UsageRoute}.${number}`
+  | `cancelled.${UsageRoute}`
   | "limited.minute"
   | "limited.day"
   | `fallback.${string}`;
 
 export type Counts = Partial<Record<UsageCounter, number>>;
+
+/**
+ * The status a stream is finished with when the client went away first (nginx's
+ * "client closed request"). Counted as `cancelled.<route>`, not as an error:
+ * a student closing the app, or the cropper dropping an early check it turned
+ * out not to need, is not the server failing.
+ */
+export const CLIENT_CLOSED = 499;
 
 /** A call slower than this is counted as slow for its route. */
 export const SLOW_MS = 10_000;
@@ -158,7 +167,8 @@ export function callCounts(
 ): Counts {
   const counts: Counts = { [`n.${route}`]: 1, [`ms.${route}`]: Math.max(0, Math.round(ms)) };
   if (ms > SLOW_MS) counts[`slow.${route}`] = 1;
-  if (status >= 400) counts[`error.${route}.${status}`] = 1;
+  if (status === CLIENT_CLOSED) counts[`cancelled.${route}`] = 1;
+  else if (status >= 400) counts[`error.${route}.${status}`] = 1;
   if (provider === "deepseek" || provider === "anthropic") counts[`provider.${provider}`] = 1;
   return counts;
 }

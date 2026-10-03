@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { NetworkError, readApiError } from "@/lib/apiClient";
+import { pinnedRunProblem } from "@/lib/ai/choose";
 import { EmptyState, Spinner } from "@/components/States";
 import SettingsGroup from "@/components/ui/SettingsGroup";
 import {
@@ -479,7 +480,9 @@ function StatusSection({ status: s }: { status: OwnerStatus }) {
           icon={FlaskConical}
           label="Eval bypass"
           value={s.evalBypass ? "Set" : "Not set"}
-          description={s.evalBypass ? "Test runs skip the limits" : "Test runs count as use"}
+          description={
+            s.evalBypass ? "Test runs skip the limits" : "Test runs count as use and can't pin a tutor"
+          }
           tone={s.evalBypass ? "ok" : "warn"}
         />
       </SettingsGroup>
@@ -493,7 +496,8 @@ function StatusSection({ status: s }: { status: OwnerStatus }) {
       {!s.evalBypass && (
         <Callout>
           Set EVAL_BYPASS_TOKEN in Vercel so test runs don&apos;t use your daily limit or show up in
-          usage.
+          usage. Without it the app ignores a run&apos;s DeepSeek / Claude pick, so runs pinned to
+          the other provider are off.
         </Callout>
       )}
     </div>
@@ -598,15 +602,30 @@ function RunRow({
   const configured = status.providers[spec.provider];
   const list = cases.state === "ok" ? casesFor(spec, cases.data) : [];
 
+  // The server refuses a pinned run it would quietly put on another provider
+  // (no EVAL_BYPASS_TOKEN); say so here instead of failing every case.
+  const pinIgnored =
+    configured &&
+    !!pinnedRunProblem({
+      provider: spec.provider,
+      detect: spec.group === "detect",
+      bypass: status.evalBypass,
+      configured: status.providers,
+      defaultProvider: status.tutor,
+      tutorSwitch: status.tutorSwitch,
+      detectProvider: status.detectProvider,
+    });
+
   let note: string;
   if (!configured) note = `No ${PROVIDER_NAME[spec.provider]} key`;
+  else if (pinIgnored) note = "Needs EVAL_BYPASS_TOKEN to pin the tutor";
   else if (cases.state === "loading") note = "Loading cases…";
   else if (cases.state === "error") note = "Couldn't load the cases";
   else if (!list.length) note = "No cases";
   else if (active && run) note = `Running ${Math.min(run.done + 1, run.total)} of ${run.total}`;
   else note = caseCountText(spec, list);
 
-  const canRun = configured && list.length > 0 && !busy;
+  const canRun = configured && !pinIgnored && list.length > 0 && !busy;
 
   return (
     <div className="flex min-h-[52px] items-center gap-3 px-4 py-3">

@@ -12,6 +12,7 @@ export const ok: UsageCounter[] = [
   "turn.go_deeper",
   "practice.incorrect",
   "error.check.502",
+  "cancelled.tutor",
   "fallback.analyzeProblem",
 ];
 
@@ -19,5 +20,7 @@ export const ok: UsageCounter[] = [
 export const typo: UsageCounter = "sesion.photo";
 // @ts-expect-error nor is a verdict that doesn't exist
 export const verdict: UsageCounter = "verdict.maybe";
+// @ts-expect-error nor a cancelled route that doesn't exist
+export const cancelled: UsageCounter = "cancelled.chat";
 // @ts-expect-error nor a tutor action that doesn't exist
 export const counts: Counts = { "turn.solve_it": 1 };

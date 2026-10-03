@@ -12,6 +12,7 @@ import {
   type LimitStore,
 } from "@/lib/limitStore";
 import { redisEnv } from "@/lib/redisRest";
+import { checkDebugCode } from "@/lib/debugAccess";
 
 /**
  * Rate limits for the AI routes and the access gate. Every AI route is a model
@@ -23,7 +24,8 @@ import { redisEnv } from "@/lib/redisRest";
  * - per minute (RATE_LIMIT_PER_MIN, default 30): a burst brake.
  * - per day (RATE_LIMIT_PER_DAY, default 150): the actual spend ceiling. A
  *   minute cap alone still allows 43,200 calls a day from one IP.
- * Plus the gate's guess limit (10 wrong codes per 15 minutes).
+ * Plus the gate's guess limit (10 wrong codes per 15 minutes), which wrong
+ * debug codes count toward as well (debugGate).
  *
  * Where the counts live (lib/limitStore.ts):
  * - With UPSTASH_REDIS_REST_URL + _TOKEN (or Vercel's KV_REST_API_URL +
@@ -31,7 +33,8 @@ import { redisEnv } from "@/lib/redisRest";
  *   cold starts, so the daily cap is a real ceiling. Clients are keyed by a
  *   keyed hash of their IP (lib/clientId.ts), so the store never holds a
  *   student's address. If Redis
- *   is slow or down, each request falls back to memory (fail open) and logs.
+ *   is slow or down, requests fall back to memory (fail open) and log, and
+ *   Redis is left alone for 30s before it is tried again.
  * - Without them, in module memory: per warm instance on Vercel and reset by a
  *   cold start, so a brake rather than a ceiling. Fine for local dev.
  */
@@ -122,17 +125,20 @@ export async function rateLimited(req: Request): Promise<NextResponse | null> {
  * Before this, codes could be guessed as fast as requests could be sent.
  */
 
-/** A 429 when this client has used up its wrong guesses, else null. */
-export async function unlockLocked(req: Request): Promise<NextResponse | null> {
-  const now = Date.now();
-  const until = await unlockLockedUntil(getStore(), await clientKey(req), now);
-  if (until === null) return null;
+function tooManyGuesses(until: number, now: number): NextResponse {
   const minutes = Math.max(1, Math.ceil((until - now) / 60_000));
   return tooMany(
     `Too many wrong codes. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`,
     until,
     now,
   );
+}
+
+/** A 429 when this client has used up its wrong guesses, else null. */
+export async function unlockLocked(req: Request): Promise<NextResponse | null> {
+  const now = Date.now();
+  const until = await unlockLockedUntil(getStore(), await clientKey(req), now);
+  return until === null ? null : tooManyGuesses(until, now);
 }
 
 /** Count a wrong code against this client. */
@@ -143,4 +149,30 @@ export async function noteUnlockFailure(req: Request): Promise<void> {
 /** A correct code: start this client's count over. */
 export async function clearUnlockFailures(req: Request): Promise<void> {
   await clearUnlockFails(getStore(), await clientKey(req));
+}
+
+/**
+ * The owner routes' `?code=<DEBUG_CODE>` (/api/health, /api/usage,
+ * /api/owner/*), with wrong codes counted as wrong guesses: the same
+ * per-client limit as the access gate (checkDebugCode, lib/debugAccess.ts).
+ * `limited` is the 429 to return while this client is locked out.
+ */
+export async function debugGate(
+  req: Request,
+  presented: unknown,
+): Promise<{ allowed: boolean; limited: NextResponse | null }> {
+  const now = Date.now();
+  // Set by the lock check; `as` so TS doesn't narrow it to null for good.
+  let until = null as number | null;
+  const verdict = await checkDebugCode(presented, {
+    locked: async () => {
+      until = await unlockLockedUntil(getStore(), await clientKey(req), now);
+      return until !== null;
+    },
+    fail: () => noteUnlockFailure(req),
+  });
+  if (verdict === "locked" && until !== null) {
+    return { allowed: false, limited: tooManyGuesses(until, now) };
+  }
+  return { allowed: verdict === "allowed", limited: null };
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { providerConfig } from "@/lib/ai/provider";
-import { debugAllowed } from "@/lib/debugAccess";
-import { rateLimitStoreKind } from "@/lib/rateLimit";
+import { debugGate, rateLimitStoreKind } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -21,9 +20,10 @@ export async function GET(req: Request) {
 
   // Publicly just up/down: which provider and model the app runs on is
   // nobody's business but ours. The details show outside production, or with
-  // ?code=<DEBUG_CODE>.
-  const code = new URL(req.url).searchParams.get("code");
-  if (!debugAllowed(code)) return NextResponse.json({ ok: keyDetected });
+  // ?code=<DEBUG_CODE>. A wrong code counts as a wrong guess (debugGate).
+  const debug = await debugGate(req, new URL(req.url).searchParams.get("code"));
+  if (debug.limited) return debug.limited;
+  if (!debug.allowed) return NextResponse.json({ ok: keyDetected });
 
   if (!id) {
     return NextResponse.json({

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { providerConfig } from "@/lib/ai/provider";
-import { debugAllowed } from "@/lib/debugAccess";
-import { rateLimitStoreKind } from "@/lib/rateLimit";
+import { debugGate, rateLimitStoreKind } from "@/lib/rateLimit";
 import { usageStoreKind } from "@/lib/usageServer";
 import { NO_STORE, notFound } from "../shared";
 
@@ -15,7 +14,9 @@ export const dynamic = "force-dynamic";
  * Never a key, a model name or the bypass token. 404 without the code.
  */
 export async function GET(req: Request) {
-  if (!debugAllowed(new URL(req.url).searchParams.get("code"))) return notFound();
+  const debug = await debugGate(req, new URL(req.url).searchParams.get("code"));
+  if (debug.limited) return debug.limited;
+  if (!debug.allowed) return notFound();
 
   const config = providerConfig();
   const id = config.defaultProvider;

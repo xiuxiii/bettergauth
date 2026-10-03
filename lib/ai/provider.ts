@@ -4,6 +4,7 @@ import type { AIProvider } from "@/lib/ai/types";
 import { AnthropicProvider } from "@/lib/ai/anthropicProvider";
 import { DeepSeekProvider } from "@/lib/ai/deepseekProvider";
 import { evalBypass } from "@/lib/clientId";
+import { chooseDetectionProvider, chooseProvider, type ProviderId } from "@/lib/ai/choose";
 
 /**
  * Provider factory — the single place a provider is chosen and constructed.
@@ -12,8 +13,9 @@ import { evalBypass } from "@/lib/clientId";
  *
  * Two providers, chosen per request:
  *   - The client's pick arrives as the `x-ai-provider` header (the switch on
- *     Settings, lib/aiChoice.ts). It is honoured only when that
- *     provider's key is configured; anything else gets the default.
+ *     Settings, lib/aiChoice.ts). It is honoured only with TUTOR_SWITCH=on
+ *     or on an eval request, and only for a provider whose key is
+ *     configured; anything else gets the default (lib/ai/choose.ts).
  *   - The default is `AI_PROVIDER` when set, else DeepSeek when
  *     `DEEPSEEK_API_KEY` is set (it is far cheaper), else Anthropic. An
  *     Anthropic-only deploy therefore behaves exactly as before.
@@ -23,7 +25,7 @@ import { evalBypass } from "@/lib/clientId";
  * Question detection can be pinned to one provider (DETECT_PROVIDER), apart
  * from the tutor: see getDetectionProvider.
  */
-export type ProviderId = "anthropic" | "deepseek";
+export type { ProviderId };
 
 export const PROVIDER_HEADER = "x-ai-provider";
 
@@ -98,27 +100,35 @@ export function providerConfig() {
 
 const cache: Partial<Record<ProviderId, AIProvider>> = {};
 
+/** What chooseProvider / chooseDetectionProvider need to know about a request. */
+function chooseOptions(req: Request | undefined, config: ReturnType<typeof providerConfig>) {
+  return {
+    requested: req?.headers.get(PROVIDER_HEADER),
+    configured: {
+      anthropic: config.providers.anthropic.configured,
+      deepseek: config.providers.deepseek.configured,
+    },
+    defaultProvider: config.defaultProvider,
+    tutorSwitch: config.tutorSwitch,
+    evalRequest: !!req && evalBypass(req),
+  };
+}
+
+function unknownProvider(config: ReturnType<typeof providerConfig>): Error {
+  return new Error(
+    `Unknown AI_PROVIDER "${config.aiProvider}". Use "anthropic" or "deepseek", or unset it.`,
+  );
+}
+
 /**
- * The provider for this request. Pass the route's `Request` so the student's
- * choice is honoured; without one, the default is used.
+ * The provider for this request. A student's pick (the x-ai-provider header)
+ * counts only with TUTOR_SWITCH=on, or on an eval request; otherwise the
+ * default runs (chooseProvider, lib/ai/choose.ts).
  */
 export function getProvider(req?: Request): AIProvider {
   const config = providerConfig();
-  const requested = req?.headers.get(PROVIDER_HEADER)?.trim().toLowerCase();
-
-  let id: ProviderId;
-  if (
-    (requested === "anthropic" || requested === "deepseek") &&
-    config.providers[requested].configured
-  ) {
-    id = requested;
-  } else if (config.defaultProvider) {
-    id = config.defaultProvider;
-  } else {
-    throw new Error(
-      `Unknown AI_PROVIDER "${config.aiProvider}". Use "anthropic" or "deepseek", or unset it.`,
-    );
-  }
+  const id = chooseProvider(chooseOptions(req, config));
+  if (!id) throw unknownProvider(config);
   return build(id);
 }
 
@@ -131,23 +141,18 @@ export function getProvider(req?: Request): AIProvider {
  *      is NOT honoured here when DETECT_PROVIDER is set: detection is a
  *      measured layout task, not the tutor they chose to talk to.
  *   2. DETECT_PROVIDER, when set and configured.
- *   3. Otherwise exactly what the tutor uses (getProvider).
+ *   3. Otherwise exactly what the tutor uses (the getProvider rule).
  *
  * DeepSeek's own photo fallback to Claude still applies inside it.
  */
 export function getDetectionProvider(req: Request): AIProvider {
   const config = providerConfig();
-  if (evalBypass(req)) {
-    const requested = req.headers.get(PROVIDER_HEADER)?.trim().toLowerCase();
-    if (
-      (requested === "anthropic" || requested === "deepseek") &&
-      config.providers[requested].configured
-    ) {
-      return build(requested);
-    }
-  }
-  if (config.detectProvider) return build(config.detectProvider);
-  return getProvider(req);
+  const id = chooseDetectionProvider({
+    ...chooseOptions(req, config),
+    detectProvider: config.detectProvider,
+  });
+  if (!id) throw unknownProvider(config);
+  return build(id);
 }
 
 function build(id: ProviderId): AIProvider {

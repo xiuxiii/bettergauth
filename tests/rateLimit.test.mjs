@@ -6,6 +6,7 @@ const {
   MemoryStore,
   RedisRestStore,
   FallbackStore,
+  FALLBACK_COOLDOWN_MS,
   admit,
   unlockLockedUntil,
   noteUnlockFail,
@@ -162,6 +163,44 @@ test("fallback: a failing or slow primary drops to the secondary and reports", a
   const b = new FallbackStore(slow, memory, 20, (e) => errors.push(e.message));
   assert.equal((await b.incr("k", 1000, 0)).count, 2);
   assert.match(errors[1], /timed out/);
+});
+
+test("fallback: after a timeout the primary is skipped for the cooldown, then retried", async () => {
+  const clock = { now: 1_000 };
+  let calls = 0;
+  let hang = true;
+  const primary = new MemoryStore();
+  const flaky = {
+    incr: (...a) => (calls++, hang ? new Promise(() => {}) : primary.incr(...a)),
+    peek: (...a) => (calls++, hang ? new Promise(() => {}) : primary.peek(...a)),
+    clear: (...a) => (calls++, hang ? new Promise(() => {}) : primary.clear(...a)),
+  };
+  const errors = [];
+  const store = new FallbackStore(flaky, new MemoryStore(), 30, (e) => errors.push(e.message), undefined, () => clock.now);
+
+  // First call: waits out the timeout, then answers from memory.
+  let t0 = Date.now();
+  assert.equal((await store.incr("k", 60_000, clock.now)).count, 1);
+  assert.ok(Date.now() - t0 >= 25, "the first call waits for the timeout");
+  assert.equal(calls, 1);
+  assert.equal(errors.length, 1);
+
+  // Within the cooldown: memory straight away, the primary not even asked.
+  clock.now += FALLBACK_COOLDOWN_MS - 1;
+  t0 = Date.now();
+  await store.peek("k", clock.now);
+  await store.incr("k", 60_000, clock.now);
+  assert.ok(Date.now() - t0 < 25, "no waiting during the cooldown");
+  assert.equal(calls, 1);
+  assert.equal(errors.length, 1);
+
+  // Cooldown over and the primary back: it is used again.
+  hang = false;
+  clock.now += 1;
+  await store.incr("k", 60_000, clock.now);
+  assert.equal(calls, 2);
+  assert.equal((await primary.peek("k", clock.now)).count, 1);
+  assert.equal(errors.length, 1);
 });
 
 test("fallback: a healthy primary is used and the secondary untouched", async () => {

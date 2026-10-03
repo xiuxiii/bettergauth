@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
-import { trackUsage, type Usage } from "@/lib/usageServer";
+import { trackUsage, usageScope, type Usage } from "@/lib/usageServer";
+import { CLIENT_CLOSED } from "@/lib/usage";
 import { TutorRequestSchema, parseBody } from "@/lib/api/schemas";
 import type { TutorAction, TutorRequest } from "@/lib/tutor/types";
 
@@ -39,10 +40,12 @@ const STREAMING_ACTIONS: TutorAction[] = [
  * there is no status code left to send, hence the error frame.
  */
 export async function POST(req: Request) {
-  const limited = await rateLimited(req);
-  if (limited) return limited;
-  const usage = trackUsage(req, "tutor");
-  return usage.done(await handle(req, usage));
+  return usageScope(req, async () => {
+    const limited = await rateLimited(req);
+    if (limited) return limited;
+    const usage = trackUsage(req, "tutor");
+    return usage.done(await handle(req, usage));
+  });
 }
 
 async function handle(req: Request, usage: Usage): Promise<Response> {
@@ -76,6 +79,9 @@ async function handle(req: Request, usage: Usage): Promise<Response> {
     const events = usage.provider(getProvider(req)).tutorStream(request);
     usage.stream();
     let failed = false;
+    // Once the client has gone, nothing more may be enqueued or closed (both
+    // throw on a cancelled stream), and the turn counts as cancelled.
+    let cancelled = false;
     const encoder = new TextEncoder();
     const line = (o: unknown) => encoder.encode(`${JSON.stringify(o)}\n`);
 
@@ -83,6 +89,7 @@ async function handle(req: Request, usage: Usage): Promise<Response> {
       async start(controller) {
         try {
           for await (const event of events) {
+            if (cancelled) break;
             if (event.type !== "delta" && event.turn.resolved) usage.add("resolved");
             controller.enqueue(
               event.type === "delta"
@@ -91,22 +98,28 @@ async function handle(req: Request, usage: Usage): Promise<Response> {
             );
           }
         } catch (err) {
-          failed = true;
-          // Headers are long gone, so the status code can't carry this.
-          console.error("tutor stream failed", err);
-          controller.enqueue(
-            line({
-              t: "error",
-              message: "The tutor stopped mid-answer. Please try again.",
-            }),
-          );
+          if (!cancelled) {
+            failed = true;
+            // Headers are long gone, so the status code can't carry this.
+            console.error("tutor stream failed", err);
+            controller.enqueue(
+              line({
+                t: "error",
+                message: "The tutor stopped mid-answer. Please try again.",
+              }),
+            );
+          }
         } finally {
-          await usage.flush(failed ? 500 : 200);
-          controller.close();
+          // Closed first, so a slow usage store can't hold the last frame:
+          // the write waits for this in `after`.
+          if (!cancelled) controller.close();
+          usage.end(cancelled ? CLIENT_CLOSED : failed ? 500 : 200);
         }
       },
       cancel() {
         // The student navigated away or started another turn; stop generating.
+        cancelled = true;
+        usage.end(CLIENT_CLOSED);
         void events.return?.(undefined);
       },
     });

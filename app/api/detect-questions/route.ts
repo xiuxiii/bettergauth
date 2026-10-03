@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDetectionProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
-import { trackUsage, type Usage } from "@/lib/usageServer";
+import { trackUsage, usageScope, type Usage } from "@/lib/usageServer";
 import { debugAllowed } from "@/lib/debugAccess";
 import { IMAGE_DATA_URL, UNSUPPORTED_IMAGE } from "@/lib/api/schemas";
 
@@ -29,10 +29,12 @@ export const runtime = "nodejs";
  * tutor's provider.
  */
 export async function POST(req: Request) {
-  const limited = await rateLimited(req);
-  if (limited) return limited;
-  const usage = trackUsage(req, "detect");
-  return usage.done(await handle(req, usage));
+  return usageScope(req, async () => {
+    const limited = await rateLimited(req);
+    if (limited) return limited;
+    const usage = trackUsage(req, "detect");
+    return usage.done(await handle(req, usage));
+  });
 }
 
 async function handle(req: Request, usage: Usage): Promise<Response> {

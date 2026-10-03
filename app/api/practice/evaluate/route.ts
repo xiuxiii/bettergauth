@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
-import { trackUsage, type Usage } from "@/lib/usageServer";
+import { trackUsage, usageScope, type Usage } from "@/lib/usageServer";
 import { EvaluatePracticeRequestSchema, parseBody } from "@/lib/api/schemas";
 
 export const runtime = "nodejs";
@@ -15,10 +15,12 @@ export const runtime = "nodejs";
  * solution".
  */
 export async function POST(req: Request) {
-  const limited = await rateLimited(req);
-  if (limited) return limited;
-  const usage = trackUsage(req, "practiceEvaluate");
-  return usage.done(await handle(req, usage));
+  return usageScope(req, async () => {
+    const limited = await rateLimited(req);
+    if (limited) return limited;
+    const usage = trackUsage(req, "practiceEvaluate");
+    return usage.done(await handle(req, usage));
+  });
 }
 
 async function handle(req: Request, usage: Usage): Promise<Response> {

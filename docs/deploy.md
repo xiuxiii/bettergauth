@@ -55,7 +55,8 @@ Before sharing beyond people you trust:
   cancelled or expired code stops working on their next tap, and they see
   "your access code expired". Set **`ACCESS_SECRET`** as well (any long random
   string): without it the cookies are signed with a key made from the codes, so
-  every edit to the list logs everyone out. `ACCESS_CODE` keeps working
+  every edit to the list logs everyone out. It also keys the scrambled IP
+  codes the rate limits use, so set it even with a single `ACCESS_CODE`. `ACCESS_CODE` keeps working
   alongside the list as a code that never expires. If the list has a typo so
   that no entry parses, the gate stays closed — it never silently opens.
 - **Make the daily cap real.** Each IP gets 150 AI calls a day
@@ -73,7 +74,8 @@ Before sharing beyond people you trust:
   if Upstash isn't connected), the last 14 days of usage, and buttons that run
   the evals on the live app: box placement and checking work, on each tutor.
   A run takes a few minutes; tap **Copy results** and paste it to your
-  developer.
+  developer. Without `EVAL_BYPASS_TOKEN` the runs on the tutor that isn't the
+  default stay greyed out: the app then ignores which tutor a run asks for.
 - **See how it's being used.** With Upstash connected, open
   `/api/usage?code=<DEBUG_CODE>` (while logged in past the access gate). It
   shows, per day: how many devices, sessions (photo or typed), checks and

@@ -42,8 +42,11 @@ work on DeepSeek / Claude) with a Copy results button. Case execution
 the CLI and `/api/owner/eval`, so the page and `npm run eval` print the same
 thing; change a case kind there, not in `run.mjs`. `/api/owner/eval` runs one
 case per request against the deploy's own routes (forwarding the gate cookie
-and, when set, the bypass header), and `next.config.mjs` ships `evals/cases`
-and `evals/images` with it. The page calls the owner routes with its own
+and, when set, the bypass header; off Vercel always on `127.0.0.1:$PORT`,
+never wherever the Host header points), stops when the page's Stop aborts it,
+and refuses (409) a run pinned to a provider the deploy would ignore without
+`EVAL_BYPASS_TOKEN` (`pinnedRunProblem`, `lib/ai/choose.ts`). `next.config.mjs`
+ships `evals/cases` and `evals/images` with it. The page calls the owner routes with its own
 fetch, NOT `apiFetch`, which would add a saved tutor pick (`x-ai-provider`)
 and steer the run to the wrong provider.
 
@@ -57,16 +60,16 @@ and steer the run to the wrong provider.
 | `DETECTION_MODEL` | Question detection only. Unset = same as `ANTHROPIC_MODEL`. Exists to A/B a faster model (e.g. `claude-haiku-4-5`) on the box-finding call without touching tutoring. |
 | `ACCESS_CODE` | Shared-access gate, a code that never expires. **Gate is off only when this AND `ACCESS_CODES` are unset**, so local dev just works. |
 | `ACCESS_CODES` | Per-person codes with expiries: `maya:2026-10-31, class:never` (date = through end of day UTC, or ISO time, or `never`). Expiry is read from the list on every request, so cancelling/extending applies to people already in. Nothing parses → gate stays **closed**, never open. |
-| `ACCESS_SECRET` | Key for the access cookie, which names a code by an HMAC id and never contains it (`lib/accessToken.ts`). Unset = the key is `ACCESS_CODE`, else derived from the list — so **set it when using `ACCESS_CODES`**, or every list edit logs everyone out. |
+| `ACCESS_SECRET` | Key for the access cookie, which names a code by an HMAC id and never contains it (`lib/accessToken.ts`). Unset = the key is `ACCESS_CODE`, else derived from the list — so **set it when using `ACCESS_CODES`**, or every list edit logs everyone out. Also the key for the IP hash (`lib/clientId.ts`; unset = `DEBUG_CODE`, then `ACCESS_CODE`, then the list): **set it in production**. |
 | `RATE_LIMIT_PER_MIN` | Per-IP fixed window, default 30. A burst brake. |
 | `RATE_LIMIT_PER_DAY` | Per-IP 24h cap, default 150 — the real spend ceiling. Counts only admitted requests. A true global cap only with the shared store below; without it, per warm instance. |
-| `UPSTASH_REDIS_REST_URL` / `_TOKEN` (or Vercel's `KV_REST_API_URL` / `_TOKEN`) | Shared store for the minute, day and unlock-guess counts (`lib/limitStore.ts`, Upstash REST via `lib/redisRest.ts`, no SDK), keyed by an HMAC of the IP (`lib/clientId.ts`), and for the usage counts (`/api/usage`). Unset = in memory per warm instance, reset by a cold start. If Redis is slow (>800ms) or down, each request falls back to memory and one line is logged a minute: fail open on purpose. `/api/health?code=` reports `rateLimitStore`. |
-| `EVAL_BYPASS_TOKEN` | Lets `npm run eval` skip the rate limiter: requests whose `x-eval-bypass` header matches it aren't counted. Unset (the default, and production unless you set it) = the header is ignored. Set the same value in the runner's env. |
-| `DEBUG_CODE` | Unlocks debug detail in production: `?debug=boxes&code=<it>` in the cropper (raw detection output), and the provider/model details on `/api/health?code=<it>` (publicly it returns only `{ ok }`). Unset = never in production; always on outside production (`lib/debugAccess.ts`). |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` (or Vercel's `KV_REST_API_URL` / `_TOKEN`) | Shared store for the minute, day and unlock-guess counts (`lib/limitStore.ts`, Upstash REST via `lib/redisRest.ts`, no SDK), keyed by an HMAC of the IP (`lib/clientId.ts`), and for the usage counts (`/api/usage`). Unset = in memory per warm instance, reset by a cold start. If Redis is slow (>800ms) or down, requests fall back to memory, Redis is skipped for 30s, and one line is logged a minute: fail open on purpose. `/api/health?code=` reports `rateLimitStore`. |
+| `EVAL_BYPASS_TOKEN` | Lets `npm run eval` skip the rate limiter: requests whose `x-eval-bypass` header matches it aren't counted. Unset (the default, and production unless you set it) = the header is ignored. Set the same value in the runner's env. Also what lets an eval pin a provider (`x-ai-provider`) when `TUTOR_SWITCH` is off, so `--provider` and the `/owner` runs need it. |
+| `DEBUG_CODE` | Unlocks debug detail in production: `?debug=boxes&code=<it>` in the cropper (raw detection output), and the provider/model details on `/api/health?code=<it>` (publicly it returns only `{ ok }`). Unset = never in production; always on outside production (`lib/debugAccess.ts`). A wrong code counts toward the same per-IP guess limit as a wrong access code (10 per 15 min, then 429), on `/api/health`, `/api/usage` and `/api/owner/*`. |
 | `DEBUG_ERRORS` | Surfaces the underlying error detail to the client. Off in normal use. |
 | `DEBUG_TOKENS` | Logs per-call token usage, including whether prompt caching is hitting. |
 | `AI_PROVIDER` | Default provider, `deepseek` or `anthropic`. Unset = DeepSeek if its key is set, else Anthropic. Any other value throws on the first AI call. |
-| `TUTOR_SWITCH` | `on` shows students the DeepSeek / Claude switch in Settings and the session popover (needs both keys). Unset = no switch: DeepSeek answers and Claude is only its automatic backup, because Claude costs far more. Doesn't affect `npm run eval -- --provider`. |
+| `TUTOR_SWITCH` | `on` shows students the DeepSeek / Claude switch in Settings and the session popover (needs both keys). Unset = no switch: DeepSeek answers and Claude is only its automatic backup, because Claude costs far more. Off, the server ignores `x-ai-provider` (`chooseProvider`, `lib/ai/choose.ts`) except on an eval request, so a pick saved while the switch was on, or set by hand, can't move spend to Claude. |
 | `DETECT_PROVIDER` | `anthropic` or `deepseek`: question detection (`/api/detect-questions`) on that provider whoever tutors (`getDetectionProvider`). Unset, unknown or not configured = the tutor's provider, as before. An eval request (valid `x-eval-bypass`) can still pick via `x-ai-provider`. `/privacy` names it. Off until the detect eval decides. |
 | `DETECT_GRID` | `on` = the cropper draws a labelled 10% coordinate grid (`lib/detectGrid.ts`) on the image it sends for detection and the prompt says to read coordinates off it. Reaches the client through `/api/providers`. Off until the detect eval decides. |
 | `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_VISION` | Model (default `deepseek-flash`, which takes photos), endpoint, and `off` to send every photo straight to Claude. |
@@ -198,7 +201,9 @@ only names providers that are configured and says when DeepSeek hands a
 request to Claude. Those rules mirror `getProvider` and the DeepSeek fallback:
 change the routing in `lib/ai/provider.ts` or `deepseekProvider.ts`, and update
 `tutorRouting` and its tests in the same commit. The page is open before the
-access gate (middleware `OPEN_PATHS`) so a parent can read it first, and is
+access gate (middleware `OPEN_PATHS`) so a parent can read it first (which is
+why its `?back=` goes through `safeBackPath`, `lib/safePath.ts`: a crafted
+link must never lead off-site), and is
 linked from the unlock page, the tour's last slide, Settings and the home
 footer.
 
@@ -207,13 +212,16 @@ Escape, the focus trap and handing focus back to the opener. The composer and
 ChoiceSheet both use it; don't grow a second sheet.
 
 **Usage is counted on the server, anonymously, per day.** Each AI route is
-wrapped: `POST` rate-limits, starts `trackUsage(req, route)` and calls the
-route's `handle`; the route adds what only it knows (`verdict.*`, `turn.*`,
-`resolved`, …). The counter names are a typed union in `lib/usage.ts`
-(`tests/usage.types.ts` proves a typo fails `tsc`). Writes happen after the
-response (`after`) or, in the two streaming routes, just before the stream
-closes, so counting never slows a student down, and a slow store is dropped,
-never awaited past 800ms. Nothing identifying is stored: no text, photos,
+wrapped: `POST` runs inside `usageScope` (so `countFallback`, deep in a
+provider, can tell eval traffic apart), rate-limits, starts
+`trackUsage(req, route)` and calls the route's `handle`; the route adds what
+only it knows (`verdict.*`, `turn.*`, `resolved`, …). The counter names are a
+typed union in `lib/usage.ts` (`tests/usage.types.ts` proves a typo fails
+`tsc`). Writes happen after the response (`after`), a stream's once it has
+closed (`usage.stream()` then `usage.end(status)`), so counting never slows a
+student down, and a slow store is dropped, never awaited past 800ms. A stream
+the client abandons ends as 499 and counts as `cancelled.<route>`, not an
+error, and `check` counts only checks that reached a verdict. Nothing identifying is stored: no text, photos,
 IPs or session ids, only daily counters and a HyperLogLog of device HMACs,
 kept 90 days. Eval traffic (a valid `x-eval-bypass`) isn't counted.
 `GET /api/usage?code=<DEBUG_CODE>&days=14` reads it (404 without the code).
@@ -317,7 +325,9 @@ which that endpoint doesn't document, so DeepSeek gets JSON mode + the schema in
 the prompt + the same Zod validation, with one repair round. The student's pick
 travels as the `x-ai-provider` header, added by `apiFetch` from
 `lib/aiChoice.ts` (its own storage key: it must never reach the prompt), and is
-honoured only for a configured provider. The switch (the Tutor row in Settings
+honoured only for a configured provider, and only when `TUTOR_SWITCH=on` or the
+request is an eval request (`chooseProvider` in `lib/ai/choose.ts`, unit-tested):
+hiding the switch isn't enough, the header comes from the browser. The switch (the Tutor row in Settings
 and in the session popover) is OFF unless `TUTOR_SWITCH=on`: DeepSeek is the
 tutor and Claude the backup, by cost. When on, it is one `useSyncExternalStore` store, `useAiChoice`,
 so both places always agree; it shows only when both providers are available,
