@@ -98,14 +98,15 @@ export default function QuestionCropper({
    * Hands back the chosen region, not a cropped image. The crop is applied to
    * the full-resolution original by the caller: `image` here is only the small
    * preview, and cropping it would throw away the detail the model needs to
-   * read handwriting.
+   * read handwriting. If it rejects, its message is shown here and the button
+   * works again, so the student can retry (or cancel) knowing why.
    */
   onConfirm: (result: {
     rect: NormalizedRect;
     question?: string;
     /** Detection saw handwritten working in the chosen question. */
     workLikely?: boolean;
-  }) => void;
+  }) => void | Promise<void>;
   onCancel: () => void;
   /** Back to the camera, for when the photo turned out not to be work at all.
    *  Falls back to onCancel when the caller has no capture to return to. */
@@ -371,17 +372,26 @@ export default function QuestionCropper({
 
   // --- Confirm / cancel ------------------------------------------------------
   const [cropping, setCropping] = useState(false);
+  const [cropError, setCropError] = useState<string | null>(null);
 
   const trimmedQuestion = question.trim();
   const canConfirm = !asking || trimmedQuestion.length > 0;
 
-  function confirm() {
+  async function confirm() {
     if (cropping || !canConfirm) return;
     setCropping(true);
+    setCropError(null);
     // A timing hint only (see TutorWorkspace): whether the question they chose
     // has working in it, so the check can start alongside the analysis.
     const workLikely = !asking && questions[selected]?.hasWorking === true;
-    onConfirm(asking ? { rect, question: trimmedQuestion } : { rect, workLikely });
+    try {
+      await onConfirm(asking ? { rect, question: trimmedQuestion } : { rect, workLikely });
+    } catch (err) {
+      // On success the page navigates away with the spinner still up; only a
+      // failure hands the button back.
+      setCropping(false);
+      setCropError(err instanceof Error ? err.message : "Could not use that crop. Please try again.");
+    }
   }
 
   useEffect(() => {
@@ -662,6 +672,11 @@ export default function QuestionCropper({
           <p className="text-base font-medium text-ink">{instruction}</p>
           {count && <p className="mt-0.5 text-xs text-slate-500">{count}</p>}
         </div>
+        {cropError && (
+          <p role="alert" className="mb-2 text-center text-sm text-danger-600">
+            {cropError}
+          </p>
+        )}
 
         <label className="mb-3 flex cursor-pointer items-center justify-between gap-3 rounded-md px-1 py-1">
           <span className="text-sm font-medium text-slate-700">
@@ -695,7 +710,7 @@ export default function QuestionCropper({
             onKeyDown={(e) => {
               if (enterSends(e)) {
                 e.preventDefault();
-                confirm();
+                void confirm();
               }
             }}
             rows={2}

@@ -80,7 +80,9 @@ export default function HomeUploader() {
   /**
    * Apply the region the student chose to the full-resolution original.
    * Falls back to the preview if the original somehow isn't around, so a
-   * confirm can never dead-end.
+   * confirm can never dead-end. A failure (the crop, or handing it over in
+   * sessionStorage) is thrown back to the cropper, which shows it: the home
+   * page's error card is hidden behind the cropper.
    */
   async function confirmCrop(
     rect: NormalizedRect,
@@ -96,7 +98,7 @@ export default function HomeUploader() {
       setSource(null);
     } catch {
       setBusy(false);
-      setError("Could not crop that photo. Please try again.");
+      throw new Error("Could not crop that photo. Please try again.");
     }
   }
 
@@ -235,7 +237,7 @@ export default function HomeUploader() {
             setScanning(true);
           }}
           onConfirm={({ rect, question, workLikely }) =>
-            void confirmCrop(rect, question, workLikely)
+            confirmCrop(rect, question, workLikely)
           }
         />
       )}
