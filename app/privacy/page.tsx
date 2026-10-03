@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { providerConfig } from "@/lib/ai/provider";
 import { PROVIDER_INFO, tutorRouting } from "@/lib/privacyCopy";
+import { safeBackPath } from "@/lib/safePath";
 
 // Read the provider setup on each request, so the page says what the app
 // does now rather than what it did at build time.
@@ -22,8 +23,9 @@ export default async function PrivacyPage({
   searchParams: Promise<{ back?: string }>;
 }) {
   const { back } = await searchParams;
-  // Same-origin paths only: "//evil.example" is a protocol-relative URL.
-  const backHref = back && back.startsWith("/") && !back.startsWith("//") ? back : "/";
+  // A path on this site only (safeBackPath): this page is open before the
+  // access gate, so a crafted back= must never lead off-site.
+  const backHref = safeBackPath(back);
 
   const config = providerConfig();
   const routing = tutorRouting({
