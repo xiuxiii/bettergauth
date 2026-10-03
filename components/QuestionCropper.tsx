@@ -88,17 +88,10 @@ function shortLabel(label: string) {
  */
 export default function QuestionCropper({
   image,
-  mode = "diagnose",
   onConfirm,
   onCancel,
   onRetake,
 }: {
-  /**
-   * "ask" is Ask mode: the student frames something and types a specific
-   * question about it. The frame may be a diagram with no printed question at
-   * all, so the copy talks about "what you're asking about".
-   */
-  mode?: "diagnose" | "ask";
   /** Normalized (upright, downscaled) photo of the page as a data URL. */
   image: string;
   /**
@@ -121,7 +114,7 @@ export default function QuestionCropper({
   // Ask mode is a switch on this screen, not a separate button on home: it is
   // the same capture either way, and deciding before seeing the photo was the
   // wrong moment to ask.
-  const [asking, setAsking] = useState(mode === "ask");
+  const [asking, setAsking] = useState(false);
   const [question, setQuestion] = useState("");
   // --- Detection -------------------------------------------------------------
   const [detecting, setDetecting] = useState(true);
@@ -378,7 +371,6 @@ export default function QuestionCropper({
 
   // --- Confirm / cancel ------------------------------------------------------
   const [cropping, setCropping] = useState(false);
-  const [cropError, setCropError] = useState<string | null>(null);
 
   const trimmedQuestion = question.trim();
   const canConfirm = !asking || trimmedQuestion.length > 0;
@@ -386,7 +378,6 @@ export default function QuestionCropper({
   function confirm() {
     if (cropping || !canConfirm) return;
     setCropping(true);
-    setCropError(null);
     // A timing hint only (see TutorWorkspace): whether the question they chose
     // has working in it, so the check can start alongside the analysis.
     const workLikely = !asking && questions[selected]?.hasWorking === true;
@@ -671,9 +662,6 @@ export default function QuestionCropper({
           <p className="text-base font-medium text-ink">{instruction}</p>
           {count && <p className="mt-0.5 text-xs text-slate-500">{count}</p>}
         </div>
-        {cropError && (
-          <p className="mb-2 text-center text-sm text-danger-600">{cropError}</p>
-        )}
 
         <label className="mb-3 flex cursor-pointer items-center justify-between gap-3 rounded-md px-1 py-1">
           <span className="text-sm font-medium text-slate-700">

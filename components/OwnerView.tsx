@@ -36,7 +36,6 @@ import {
   usageFields,
   type OwnerCase,
   type OwnerStatus,
-  type Provider,
   type RunId,
   type RunSpec,
   type UsageDay,

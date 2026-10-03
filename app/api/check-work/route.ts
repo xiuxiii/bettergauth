@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai/provider";
 import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";

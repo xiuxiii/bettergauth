@@ -112,7 +112,3 @@ export function canonicalConcept(label: string | undefined | null): string | nul
   if (!label) return null;
   return BY_KEY.get(label.trim().toLowerCase()) ?? null;
 }
-
-export function isCanonicalConcept(label: string | undefined | null): boolean {
-  return canonicalConcept(label) !== null;
-}

@@ -172,7 +172,7 @@ p {
   @apply overflow-x-auto overflow-y-hidden py-1;
 }
 
-/* Edge fade for horizontally scrolling rows (chip row in the ActionBar). */
+/* Edge fade for horizontally scrolling rows. */
 .scroll-fade {
   mask-image: linear-gradient(
     to right,
@@ -218,10 +218,6 @@ p {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-@keyframes fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
 @keyframes pop-in {
   from { opacity: 0; transform: scale(0.97); }
   to { opacity: 1; transform: scale(1); }
@@ -249,7 +245,6 @@ p {
    so fixed-position overlays inside a page wrapper stay viewport-relative. */
 .animate-rise { animation: rise 0.22s var(--ease-soft) backwards; }
 .animate-fade-in { animation: fade-in 0.2s var(--ease-soft) both; }
-.animate-fade-out { animation: fade-out 0.18s var(--ease-soft) both; }
 .animate-pop-in { animation: pop-in 0.2s var(--ease-soft) both; }
 .animate-flash { animation: flash 0.15s ease-out forwards; }
 .typing-dot { animation: dot-pulse 1.2s var(--ease-soft) infinite; }
@@ -330,7 +325,6 @@ p {
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
   .animate-fade-in,
-  .animate-fade-out,
   .animate-pop-in,
   .animate-flash,
   .typing-dot,

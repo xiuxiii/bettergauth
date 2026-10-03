@@ -134,15 +134,3 @@ export function rankConcepts(sessions: ProgressInput[]): ConceptProgress[] {
   out.sort((a, b) => b.errors - a.errors || b.lastSeen - a.lastSeen);
   return out;
 }
-
-/** Concepts the student has proven, across every session. */
-export function masteredConcepts(sessions: ProgressInput[]): string[] {
-  const seen = new Map<string, string>();
-  for (const s of sessions) {
-    for (const d of s.memory.demonstrated ?? []) {
-      const display = d.trim();
-      if (display && !seen.has(norm(display))) seen.set(norm(display), display);
-    }
-  }
-  return [...seen.values()];
-}

@@ -15,7 +15,7 @@ you a public URL in a few clicks.
      prefix it with `NEXT_PUBLIC_`, or it would ship to the browser)
    - optional `ANTHROPIC_MODEL` = `claude-opus-5`
 4. Deploy. When it's up, open `https://<your-app>.vercel.app/api/health` — it
-   should show `{"provider":"anthropic","keyDetected":true,…}`.
+   should show `{"ok":true}` (add `?code=<DEBUG_CODE>` for which provider and model).
 5. Share the URL. Friends run through setup, then upload a problem.
 
 Redeploys pick up new commits automatically. If you change an env var, trigger a
@@ -103,5 +103,5 @@ Variables), redeploy, and reproduce — then turn them off again:
 
 - Local (`npm run dev` / `start`) reads `.env.local` — good for solo testing.
 - Hosted (Vercel) reads the dashboard env vars — good for sharing.
-Both use the exact same code path; `/api/health` tells you which key each is
-using.
+Both use the exact same code path; `/api/health?code=<DEBUG_CODE>` tells you
+which key each is using.

@@ -6,8 +6,6 @@ step-by-step hand-holding. It hands over one small piece at a time so the studen
 fills the gap themselves, adapts to what they demonstrate, and gives a full
 worked solution on request.
 
-Runs on a real **Claude vision model**. Needs an Anthropic API key.
-
 ## Quick start
 
 ```bash
@@ -27,7 +25,7 @@ changing env (env is read at boot). See `.env.example` and
 - **Settings** (`app/settings/page.tsx`, `components/SettingsView.tsx`) —
   grouped rows (Tutoring, About you, App) that save as they change: help
   style, focus, grade, curriculum, appearance, and the DeepSeek / Claude switch
-  when both keys are set. First-run visitors get the same questions as the
+  when both keys are set and `TUTOR_SWITCH=on`. First-run visitors get the same questions as the
   welcome tour (`/welcome`). Preferences are stored in `localStorage` and folded
   into the tutor's system prompt. No subject picker — the model detects the
   subject. `/setup` redirects here.
@@ -44,8 +42,8 @@ changing env (env is read at boot). See `.env.example` and
   Ask mode. The confirmed crop then enters the normal analysis flow.
 - **Workspace** (`components/TutorWorkspace.tsx`) — shows the uploaded image, the
   detected problem, subject, and a safe label for the concept (the key idea
-  stays hidden until the gap is closed), then runs the session. The session popover (`SessionToggles`) flips help style, focus and the
-  tutor mid-problem, from the next request on. Loading / error / empty states throughout.
+  stays hidden until the gap is closed), then runs the session. The session popover (`SessionToggles`) flips help style and focus (and the
+  tutor, when `TUTOR_SWITCH=on`) mid-problem, from the next request on. Loading / error / empty states throughout.
 - **Chunked tutoring** — conceptual turns deliver ONE small piece, then a
   **Continue** button fetches the next. Free-text follow-ups are always
   available. The action bar shows at most three chips picked by the session's
@@ -76,7 +74,7 @@ UI (React components)  ─►  API routes (server)  ─►  AI provider abstract
 | Layer | Location | Responsibility |
 | --- | --- | --- |
 | UI | `components/`, `app/` | Rendering + interaction. Talks to the server via `fetch`; only consumes domain types. |
-| Tutoring logic | `lib/tutor/` | Domain types (`types.ts`), the engine/system prompt (`engine.ts`), and the state design (`state.ts`). |
+| Tutoring logic | `lib/tutor/` | Domain types (`types.ts`) and the engine/system prompt (`engine.ts`). |
 | AI provider | `lib/ai/` | `AIProvider` interface, `AnthropicProvider`, and a server-only `getProvider()` factory. |
 | Server boundary | `app/api/*` | The only code that constructs/calls a provider, so **keys never reach the client**. |
 
@@ -110,7 +108,7 @@ The real provider is implemented in `lib/ai/anthropicProvider.ts` (Anthropic SDK
   credits on a public URL). Unset = no gate. See `docs/deploy.md`.
 
 The full env list (rate limiting, debug flags) is in `.env.example` and the
-table in `CLAUDE.md`. Full schema and tuning notes:
+table in `CLAUDE.md`. Full schema:
 **`docs/ai-provider-integration.md`**. Deploying so
 others can test it: **`docs/deploy.md`**.
 

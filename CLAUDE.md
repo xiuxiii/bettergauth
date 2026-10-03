@@ -26,9 +26,10 @@ verdict accuracy, the **false "you're wrong" rate** (keep it at 0), first-error
 category/line, final-answer leaks before "Show the rest", and label spoilers.
 Pass `--base` for another port, `--provider deepseek|anthropic` to pin one. It
 is how to tune the thinking `effort`, and how to compare DeepSeek against Claude.
-Cases come in three kinds: `check` (typed text, or a photo analyzed and checked
-the way the app does), `notStem` (must be turned away) and `tutor` (one reply,
-checked against regexes, e.g. units in a dispute). The photos are rendered by
+Cases come in four kinds: `check` (typed text, or a photo analyzed and checked
+the way the app does), `notStem` (must be turned away), `tutor` (one reply,
+checked against regexes, e.g. units in a dispute) and `detect` (box placement,
+see below). The photos are rendered by
 `node evals/make-images.mjs` (needs Playwright; the JPEGs are committed) and include
 a tilted, dim one, a multi-part one and a not-homework one. Each case is several
 paid calls through the rate limiter: set `EVAL_BYPASS_TOKEN` on both sides.
@@ -318,7 +319,7 @@ status instead of vanishing into the stream.
 **Two providers, one set of prompts.** `lib/ai/shared.ts` holds every schema,
 system prompt and per-call message text; `anthropicProvider.ts` and
 `deepseekProvider.ts` only differ in transport. Change a prompt there and both
-get it (Claude's cached prefix is byte-identical to before the split). DeepSeek
+get it. DeepSeek
 goes through its OpenAI-compatible `/chat/completions`, NOT its
 Anthropic-compatible endpoint: every Claude call relies on structured outputs,
 which that endpoint doesn't document, so DeepSeek gets JSON mode + the schema in

@@ -68,7 +68,7 @@ const BASE = (flag("--base") ?? process.env.EVAL_BASE ?? "http://localhost:3000"
 const ONLY = flag("--only");
 const JSON_OUT = flag("--json");
 const COOKIE = process.env.EVAL_COOKIE; // for a gated deploy: stem_access=...
-// Same header as the setup page's switch (lib/aiChoice.ts).
+// Same header as the Tutor switch in Settings (lib/aiChoice.ts).
 const PROVIDER = flag("--provider");
 // Detect only: send the case's gridImage and ask the route for grid mode.
 const GRID = args.includes("--grid");

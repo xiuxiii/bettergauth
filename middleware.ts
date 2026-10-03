@@ -4,9 +4,7 @@ import { ACCESS_COOKIE, accessConfig, checkCookie } from "@/lib/accessToken";
 
 /**
  * Lightweight shared-access gate. Protects the app and AI routes behind a code
- * so a public URL can't drain the API key. It is OFF unless `ACCESS_CODE` is
- * set — so local dev and the current deploy keep working until you set the code
- * (in the Vercel dashboard, no laptop needed). See docs/deploy.md.
+ * so a public URL can't drain the API key. See docs/deploy.md.
  */
 
 // /privacy is readable before unlocking, so a student or parent can check it first.

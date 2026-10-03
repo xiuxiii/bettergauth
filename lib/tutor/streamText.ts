@@ -194,12 +194,8 @@ const BARE_MARKER = /(^|\n)[ \t]*(?:#{1,4}|[-*•]|\d+[.)])[ \t]*$/;
  * Granularity is deliberately word level, not line level. A paragraph is a
  * single line in the model's output, so holding back incomplete lines would hold
  * back whole paragraphs and defeat the point.
- *
- * Pass `done` for the final render: the text is complete, so it is returned whole.
  */
-export function safePrefix(text: string, done = false): string {
-  if (done) return text;
-
+export function safePrefix(text: string): string {
   // Order matters. The half-word trim has to happen FIRST: run last, it can cut
   // inside an already-complete `$F = ma$` and re-break the very balance the
   // other rules just established.

@@ -1,5 +1,5 @@
 // Domain types shared across UI, tutoring logic, and the AI provider layer.
-// Kept provider-agnostic on purpose so a real model can be swapped in later.
+// Kept provider-agnostic on purpose.
 
 import { canonicalConcept } from "@/lib/tutor/concepts";
 
@@ -18,7 +18,7 @@ export interface ProblemAnalysis {
    * is read as true, so an old record never reopens as "not a question".
    */
   hasStemContent?: boolean;
-  /** The problem text as detected from the image (OCR in a real provider). */
+  /** The problem text as detected from the image. */
   problemText: string;
   /** Subject classification. */
   subject: Subject;
@@ -268,8 +268,7 @@ export interface RememberedError {
 
 /**
  * Compact, mutable memory the tutor maintains and round-trips through
- * /api/tutor every turn — the working subset of the full TutorState
- * (lib/tutor/state.ts). This is what gives the tutor cross-turn memory:
+ * /api/tutor every turn. This is what gives the tutor cross-turn memory:
  * adapting depth, not re-teaching mastered concepts, and spotting a RECURRING
  * misconception (the same concept failing more than once).
  */

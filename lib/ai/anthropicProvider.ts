@@ -17,7 +17,6 @@ import type {
   ProgressRequest,
   QuestionDetection,
   SessionMemory,
-  TutorPreferences,
   TutorStreamEvent,
   TutorTurn,
   TutorRequest,

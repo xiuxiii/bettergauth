@@ -33,9 +33,7 @@ const config: Config = {
         ink: "rgb(var(--ink) / <alpha-value>)", // primary text
         hairline: "rgb(var(--hairline) / <alpha-value>)", // borders
         accent: {
-          DEFAULT: "#4E54DD",
           deep: "#3F44BE",
-          tint: "rgb(var(--brand-100) / <alpha-value>)",
         },
         // Warm neutral remap of Tailwind's slate scale
         slate: {

@@ -7,9 +7,8 @@ import { Spinner } from "@/components/States";
 
 /**
  * In-app camera scanner. Opens a live rear-camera stream (getUserMedia),
- * frames the problem, and captures a downscaled JPEG — no OS camera hand-off,
- * so it looks and behaves like a real scanner and never returns an oversized
- * file the analyzer can't read. Falls back to a file picker when the camera
+ * frames the problem, and captures a photo — no OS camera hand-off, so it
+ * looks and behaves like a real scanner. Falls back to a file picker when the camera
  * isn't available or permission is denied.
  */
 export default function CameraScanner({

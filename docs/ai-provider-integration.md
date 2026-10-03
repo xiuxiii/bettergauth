@@ -63,13 +63,12 @@ the critical path.
 
 ### `analyzeProblem(AnalyzeRequest) → ProblemAnalysis`
 ```
-AnalyzeRequest  { imageDataUrl: string,          // the (cropped) problem photo
-                  subjectHint?: Subject }        // optional: the subject picked in the capture step
+AnalyzeRequest  { imageDataUrl: string }        // the (cropped) problem photo
 ProblemAnalysis {
   problemText: string        // extracted problem (OCR)
   subject:     "Physics" | "Chemistry" | "Biology" | "Mathematics" | "Unknown"
   topic:       string        // e.g. "Conservation of mechanical energy"
-  concept:     string        // the governing principle (concept identification)
+  concept:     string
   confidence:  number        // 0..1
 }
 ```
@@ -97,23 +96,8 @@ as the system prompt so the model follows the tutoring philosophy.
 ```
 CheckWorkRequest { problem: ProblemAnalysis, attempt: StudentAttempt }
 StudentAttempt   { text?: string, imageDataUrl?: string }   // typed and/or photo
-WorkCheck {
-  verdict:  "correct" | "partially_correct" | "error_found"
-  strengths: string
-  firstError?: {                       // absent only when verdict === "correct"
-    category: "conceptual" | "model_selection" | "setup" | "procedural" | "arithmetic" | "units_notation"
-    severity: "minor" | "significant"
-    location: string
-    explanation: string
-    correction: string
-    conceptCorrect: boolean            // true ⇒ don't nitpick
-  }
-  continueFrom: string
-  summary: string
-}
 ```
-Instruct the model to find the **first meaningful error**, classify it, and not
-nitpick trivial slips when the concept is right.
+Instruct the model to find the **first meaningful error** and classify it.
 
 ### `generatePractice(GeneratePracticeRequest) → PracticeProblem`
 ```
@@ -141,12 +125,10 @@ PracticeEvaluation {
 
 ## How each maps to a Claude call
 
-Default model: **`claude-sonnet-5`** (vision-capable; cheaper than Opus). Pattern for every method
-(see the per-method TODOs in `lib/ai/anthropicProvider.ts`):
+Default model: **`claude-sonnet-5`** (vision-capable; cheaper than Opus). Pattern for every method:
 
 1. **System prompt** — `SYSTEM_INSTRUCTIONS` (`lib/tutor/engine.ts`) for
-   tutoring/analysis; a short task-specific system prompt for check-work and
-   practice.
+   tutoring; a short task-specific system prompt for every other call.
 2. **User content** — the text, plus for image inputs an image block:
    `{ type: "image", source: { type: "base64", media_type, data } }` built from
    the data URL.
@@ -169,9 +151,7 @@ The real provider is **implemented and wired**, not a stub:
   mirroring the domain type (`client.messages.parse` + `zodOutputFormat`), so
   only validated domain objects leave this module. `analyzeProblem`, `checkWork`,
   and `evaluatePractice` send the image as a base64 vision block.
-- **`lib/ai/provider.ts`** — constructs this provider from env. It is the only
-  provider; the `AIProvider` interface stays generic so another backend could be
-  added as another `case`.
+- **`lib/ai/provider.ts`** — constructs this provider from env.
 - Dependencies: `@anthropic-ai/sdk` and `zod`.
 
 ## What you must provide to run it
@@ -182,7 +162,7 @@ The real provider is **implemented and wired**, not a stub:
 - **`ANTHROPIC_MODEL`** *(optional)* — defaults to `claude-sonnet-5`. Override to
   pin a different vision-capable model (e.g. `claude-opus-5`).
 
-That's the entire configuration surface. No authentication, database, payment, or
+No authentication, database, payment, or
 other infrastructure is required or added. Confirm it's live at `/api/health`.
 
 ## DeepSeek (the default when its key is set)
@@ -211,16 +191,9 @@ How it works:
   `ANTHROPIC_API_KEY` is set; otherwise the student gets a 422 asking them to
   type the problem. Auth, balance (402) and rate-limit errors never fall back.
 - **The switch.** Settings and the session popover have a DeepSeek / Claude
-  choice (shown only when both keys are set), saved in the
+  choice (shown only when both keys are set and `TUTOR_SWITCH=on`), saved in the
   browser and sent as the `x-ai-provider` header on every AI call. The server
-  honours it only for a provider whose key is set.
-- **Thinking** is off on DeepSeek for now. Run `npm run eval` against both
+  honours it only for a provider whose key is set, and only when
+  `TUTOR_SWITCH=on` (or on an eval request).
+- Run `npm run eval` against both
   providers; the false "you're wrong" rate must stay at 0.
-
-## Tuning notes (optional)
-
-- Latency/cost: calls default to Opus 5 with high effort + adaptive thinking. If
-  responses feel slow, add `output_config: { effort: "medium", format: ... }` to
-  the calls, or set `ANTHROPIC_MODEL=claude-sonnet-5` for a cheaper/faster model.
-- All prompts live at the top of `anthropicProvider.ts` (task system prompts) and
-  in `lib/tutor/engine.ts` (`SYSTEM_INSTRUCTIONS`, used for tutoring).

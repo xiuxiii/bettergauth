@@ -10,8 +10,6 @@
  * prompt handed to the real provider.
  */
 
-import type { TutorMove } from "@/lib/tutor/state";
-
 /** The core teaching principles, embedded verbatim in the system prompt. */
 export const TUTORING_PRINCIPLES = [
   "Prioritize conceptual understanding over mechanical step-by-step algebra.",
@@ -29,6 +27,22 @@ export const TUTORING_PRINCIPLES = [
 // ---------------------------------------------------------------------------
 // The move set — the tutor's action space, with when-to-use and cost
 // ---------------------------------------------------------------------------
+
+/**
+ * Exactly one primary move is chosen per turn. These are the tutor's internal
+ * decisions; they are broader than the UI's `TutorAction` buttons (which are
+ * just student-triggered shortcuts that map onto some of these).
+ */
+export type TutorMove =
+  | "explain" // state the idea directly
+  | "conceptual_question" // ask ONE targeted question about a decision point
+  | "hint" // smallest nudge that unblocks the next step
+  | "address_misconception" // name the wrong model, contrast, correct it
+  | "worked_example" // demonstrate on a small parallel instance
+  | "let_continue" // acknowledge and hand control back
+  | "complete_solution" // full structured worked solution
+  | "similar_problem" // generate a fresh practice problem
+  | "consolidate"; // one-line takeaway that locks in the concept
 
 export interface MoveSpec {
   move: TutorMove;

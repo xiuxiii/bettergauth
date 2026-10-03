@@ -25,8 +25,6 @@ import { chooseDetectionProvider, chooseProvider, type ProviderId } from "@/lib/
  * Question detection can be pinned to one provider (DETECT_PROVIDER), apart
  * from the tutor: see getDetectionProvider.
  */
-export type { ProviderId };
-
 export const PROVIDER_HEADER = "x-ai-provider";
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {

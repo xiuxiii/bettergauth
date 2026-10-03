@@ -17,9 +17,8 @@ import type {
 } from "@/lib/tutor/types";
 
 /**
- * The provider abstraction — the single contract every model backend implements
- * (the real vision-capable provider today; another backend could be added
- * later). It is intentionally uniform: each
+ * The provider abstraction — the single contract every model backend implements.
+ * It is intentionally uniform: each
  * method takes ONE typed request and returns ONE typed domain object. The
  * frontend and API routes only ever see these domain types (in @/lib/tutor/
  * types), never a model's raw response — a real provider is responsible for

@@ -24,7 +24,6 @@ export default function SegmentedControl<T extends string>({
   onChange,
   options,
   labelledBy,
-  label,
   disabled,
   className = "",
 }: {
@@ -34,8 +33,6 @@ export default function SegmentedControl<T extends string>({
   options: readonly Segment<T>[];
   /** id of the visible label, when there is one. */
   labelledBy?: string;
-  /** Accessible name when there is no visible label. */
-  label?: string;
   disabled?: boolean;
   className?: string;
 }) {
@@ -61,7 +58,6 @@ export default function SegmentedControl<T extends string>({
     <div
       role="radiogroup"
       aria-labelledby={labelledBy}
-      aria-label={labelledBy ? undefined : label}
       aria-disabled={disabled || undefined}
       className={`grid auto-cols-fr grid-flow-col rounded-full bg-slate-100 p-0.5 ${className}`}
     >

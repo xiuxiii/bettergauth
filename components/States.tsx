@@ -32,8 +32,8 @@ export function Spinner({ className = "" }: { className?: string }) {
 }
 
 /**
- * The one eyebrow style. Card-level headers only ("Detected problem",
- * "Key concept", "Your problem", …) — section labels inside a card use plain
+ * The one eyebrow style. Card-level headers only ("Your problem", "Key idea",
+ * …) — section labels inside a card use plain
  * `text-xs font-medium text-slate-500` instead.
  */
 export function Eyebrow({

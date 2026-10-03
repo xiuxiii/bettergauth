@@ -55,9 +55,6 @@ export interface SessionRecord {
   thumb: string | null;
 }
 
-/** What the history list renders, without touching the photo store. */
-export type SessionSummary = Omit<SessionRecord, "messages" | "memory">;
-
 function hasIndexedDB(): boolean {
   try {
     return typeof indexedDB !== "undefined";

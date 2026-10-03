@@ -63,7 +63,7 @@ export default function ProblemCard({
             </span>
           )}
           {lowConfidence && (
-            <div className="max-md:basis-full max-md:ml-0">
+            <div className="max-md:basis-full">
               <span className="inline-flex items-center gap-1 rounded-full bg-warn-50 px-2.5 py-1 text-xs font-medium text-warn-700">
                 <CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />
                 Low confidence — check the text below

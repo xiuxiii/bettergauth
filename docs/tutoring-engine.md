@@ -8,7 +8,6 @@ an AI model. The machine-facing encoding lives in code:
 
 - `lib/tutor/engine.ts` — the `TUTORING_PRINCIPLES`, the move set, the decision
   ladder, the depth dial, and the assembled `SYSTEM_INSTRUCTIONS` string.
-- `lib/tutor/state.ts` — the structured state object (`TutorState`).
 
 Keep this doc and those files in sync: the doc explains *why*, the code encodes
 *what to do*.
@@ -53,8 +52,6 @@ student turn │ 1. UPDATE student model (understanding,      │
                               ▼
                    tutor turn + updated state
 ```
-
-Steps 1–4 mutate `TutorState`; step 5 renders it into a message.
 
 ---
 
@@ -131,7 +128,7 @@ honouring them is both efficient and honest.
 13. **Bottleneck cleared / done** → `consolidate`, then offer a similar problem
     or extension.
 
-Rule 7 and "never withhold" (§12) don't conflict: withholding means gating
+Rule 7 and "never withhold" (§10) don't conflict: withholding means gating
 something the student *asked for*, and every request sits above rule 7. An
 unprompted wrong claim asked for nothing, and one try later the tutor explains
 anyway.
@@ -298,7 +295,7 @@ question. Depth 1–3 by importance.
 ### 8.8 Asks for the answer
 **Trigger:** "just give me the answer / show the solution."
 **Behavior:** give the complete six-part solution now. You may name the key idea
-first, but do not gate. Set `solutionRevealed=true`.
+first, but do not gate.
 **Avoid:** withholding; a Socratic detour; guilt-tripping.
 
 - *Physics:* Provide it, concept-first: Key concept = energy conservation →
@@ -380,66 +377,7 @@ unlocks what would spoil the problem, like the key idea on the problem card.
 
 ---
 
-## 9. The state object
-
-Full types in `lib/tutor/state.ts`. Shape:
-
-```ts
-TutorState {
-  problem: {
-    subject, topic, principle, requiredConcepts[], assumptions[],
-    answerType, difficulty, solutionOutline[]   // decision points, not arithmetic
-  }
-  student: {
-    overallLevel,                 // "unknown" at start — assume capable, not beginner
-    concepts[]:  { concept, level, evidence, updatedTurn },
-    demonstrated[],               // proven-known; NEVER re-teach these
-    misconceptions[]: { id, concept, studentBelief, correctModel, status, evidenceTurn },
-    errors[]:    { turn, type, concept, description },
-    selfSufficiency,             // blocked | needs_nudge | independent
-    affect: { frustration, confidence, engagement },
-    explicitSignals[],           // "hint only", "in a hurry"
-    pace
-  }
-  session: {
-    goal,                        // understand | get_answer | practice | check_work
-    currentBottleneck: { kind, concept?, description },  // the turn aims here
-    depth,                       // 0..3
-    solutionRevealed,
-    turn,
-    moveHistory[]: { turn, move, targetConcept? }
-  }
-  next: { move, depth, targetConcept?, rationale }   // policy output; rationale is PRIVATE
-}
-```
-
-Two fields do the heaviest lifting:
-- `student.demonstrated[]` + `student.concepts[]` — the guard against re-teaching.
-- `session.currentBottleneck` — forces every turn to target one thing.
-
----
-
-## 10. State read/write protocol (for a real model)
-
-The engine is stateless per call; the state travels with the request.
-
-1. **App → model:** the developer message contains `SYSTEM_INSTRUCTIONS`; the
-   turn payload carries the current `TutorState` (JSON) + the conversation.
-2. **Model:** runs the per-turn loop, and returns:
-   - the **visible message** (and a structured solution or similar problem if that
-     move was chosen), plus
-   - the **updated `TutorState`** (with `next` filled in — its `rationale` is
-     private and never rendered).
-3. **App:** persists the returned state and passes it back on the next turn.
-
-This is a small, additive extension of the current `TutorRequest`/`TutorTurn`
-contract (`lib/tutor/types.ts`): add an optional `state` to the request and an
-updated `state` (+ `move`, `depth`) to the response. No UI changes are needed to
-start collecting it; the buttons already map to moves.
-
----
-
-## 11. Worked trace (physics, energy conservation)
+## 9. Worked trace (physics, energy conservation)
 
 | Turn | Student | Inferred update | Bottleneck | Move · depth | Tutor (abridged) |
 | --- | --- | --- | --- | --- | --- |
@@ -453,7 +391,7 @@ demonstrated, and the trivial algebra was never interrogated.
 
 ---
 
-## 12. Anti-patterns (hard nevers)
+## 10. Anti-patterns (hard nevers)
 
 - Asking a question you'd answer yourself in the next breath.
 - Breaking simple arithmetic/algebra into interactive micro-steps.
@@ -472,12 +410,7 @@ demonstrated, and the trivial algebra was never interrogated.
 
 ---
 
-## 13. Implementation path
+## 11. Implementation path
 
-1. `lib/tutor/state.ts` and `lib/tutor/engine.ts` encode this design;
-   `SYSTEM_INSTRUCTIONS` is the live system prompt used by `AnthropicProvider`.
-2. To use the full `TutorState` loop, pass the serialized state with each turn
-   and parse the updated state from the response (extend `TutorRequest` /
-   `TutorTurn` with an optional `state` field per §10). Today the provider drives
-   the philosophy from `SYSTEM_INSTRUCTIONS` + conversation history without
-   round-tripping the state object.
+`lib/tutor/engine.ts` encodes this design; `SYSTEM_INSTRUCTIONS` is the live
+tutoring system prompt (both providers, via `lib/ai/shared.ts`).
