@@ -16,6 +16,7 @@ import type { TutorPreferences } from "@/lib/tutor/types";
 import { DEFAULT_PREFERENCES, loadPreferences, savePreferences } from "@/lib/preferences";
 import { useAiChoice } from "@/lib/aiChoice";
 import { clearAll, listSessions } from "@/lib/history/db";
+import { safeBackPath } from "@/lib/safePath";
 import {
   CURRICULUM_OPTIONS,
   GOAL_OPTIONS,
@@ -103,10 +104,9 @@ export default function SettingsView() {
   }
 
   // Back to wherever "More settings" was opened from (a session), else home.
-  // Same-origin paths only: "//evil.example" is a protocol-relative URL.
+  // Same-origin paths only (safeBackPath).
   function back() {
-    const target = new URLSearchParams(window.location.search).get("back");
-    router.push(target && target.startsWith("/") && !target.startsWith("//") ? target : "/");
+    router.push(safeBackPath(new URLSearchParams(window.location.search).get("back")));
   }
 
   const goal = optionOf(GOAL_OPTIONS, prefs.goal);

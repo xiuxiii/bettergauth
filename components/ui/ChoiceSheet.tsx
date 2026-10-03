@@ -117,7 +117,11 @@ function Popover({
       role="dialog"
       aria-labelledby={titleId}
       onBlur={(e) => {
-        if (!ref.current?.contains(e.relatedTarget as Node | null) && e.relatedTarget) onClose();
+        const next = e.relatedTarget as Node | null;
+        // Focus moving to the row that opened it (the wrapper holds both) is
+        // left to that row's click, which toggles it shut. Closing here as
+        // well let the click open it straight back up.
+        if (next && !ref.current?.parentElement?.contains(next)) onClose();
       }}
       className="absolute right-2 top-full z-30 mt-1 w-72 animate-pop-in rounded-lg border border-hairline bg-surface p-1.5 shadow-raised"
     >

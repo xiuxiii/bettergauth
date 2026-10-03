@@ -1,9 +1,21 @@
 "use client";
 
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+// What Tab can land on. tabindex="-1" is excluded from every kind, not only
+// from bare [tabindex]: a listbox's unselected options are buttons with
+// tabindex -1, and counting them made the trap's "last" one Tab never reaches,
+// so Tab walked out of a modal sheet (and Escape went with it).
+const FOCUSABLE = [
+  "a[href]",
+  "button:not([disabled])",
+  'input:not([disabled]):not([type="hidden"])',
+  "textarea:not([disabled])",
+  "select:not([disabled])",
+  "[tabindex]",
+]
+  .map((s) => `${s}:not([tabindex="-1"]):not([hidden])`)
+  .join(", ");
 
 /**
  * Focus handling for a sheet or popover:
@@ -32,10 +44,17 @@ export function useDialogFocus(
     onEscapeRef.current = onEscape;
   });
 
+  // The opener is read during the first render, not in the effect below: by
+  // the time effects run, an autoFocus inside the dialog (the composer's
+  // textarea) has already taken focus, so the "opener" found there was that
+  // textarea, gone by the time the sheet closed.
+  const [opener] = useState(() =>
+    typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null,
+  );
+
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
-    const opener = document.activeElement as HTMLElement | null;
 
     if (!root.contains(document.activeElement)) {
       const first =
@@ -60,10 +79,14 @@ export function useDialogFocus(
       }
       const first = items[0];
       const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
+      const at = items.indexOf(document.activeElement as HTMLElement);
+      // at === -1: focus is on the panel itself or on an option reached with
+      // the arrow keys (tabindex -1), from where the browser's own Tab could
+      // step outside.
+      if (e.shiftKey && at <= 0) {
         e.preventDefault();
         last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
+      } else if (!e.shiftKey && (at === -1 || at === items.length - 1)) {
         e.preventDefault();
         first.focus();
       }
@@ -72,6 +95,10 @@ export function useDialogFocus(
     root.addEventListener("keydown", onKeyDown);
     return () => {
       root.removeEventListener("keydown", onKeyDown);
+      // Still in the document: React StrictMode's rehearsal unmount in dev,
+      // not a close. Handing focus back here would blur the dialog and close
+      // a popover the moment it opened.
+      if (root.isConnected) return;
       // Only when focus was still inside (or fell to <body> as the dialog was
       // removed): someone who tabbed out of a popover has moved on.
       const now = document.activeElement;
