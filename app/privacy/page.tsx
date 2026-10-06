@@ -158,6 +158,7 @@ export default async function PrivacyPage({
           <List
             items={[
               "Photograph just the problem. Keep names, faces and anything personal out of the frame.",
+              "Take photos with MindGap's own camera: they aren't added to your phone's gallery. A photo taken with your phone's camera app usually is.",
               "If you're under 13, check with a parent or guardian before using MindGap.",
             ]}
           />

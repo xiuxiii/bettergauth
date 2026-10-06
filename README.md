@@ -29,7 +29,7 @@ changing env (env is read at boot). See `.env.example` and
   welcome tour (`/welcome`). Preferences are stored in `localStorage` and folded
   into the tutor's system prompt. No subject picker — the model detects the
   subject. `/setup` redirects here.
-- **Home** (`app/page.tsx`) — "Snap a problem" / "Upload a photo", or type or
+- **Home** (`app/page.tsx`) — "Snap a problem" / "Choose from photos", or type or
   paste a problem (sent to `/api/analyze` as text). Below: recent sessions and
   the concepts to work on, each with "Practice this". Both photo paths open the
   **question cropper** (`components/QuestionCropper.tsx`): the questions on the

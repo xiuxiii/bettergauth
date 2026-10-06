@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { videoFrameToFile } from "@/lib/image";
 import { Image as ImageIcon, X } from "lucide-react";
 import { Spinner } from "@/components/States";
@@ -10,10 +11,18 @@ import { Spinner } from "@/components/States";
  * frames the problem, and captures a photo — no OS camera hand-off, so it
  * looks and behaves like a real scanner. Falls back to a file picker when the camera
  * isn't available or permission is denied.
+ *
+ * Every photo MindGap takes goes through here, never through the phone's own
+ * camera app (a file input's "Camera" option): that hand-off feels like leaving
+ * the app, and Android's camera app keeps a copy of every shot in the gallery.
+ *
+ * Rendered into <body>: it can open from inside a Sheet, whose transform would
+ * otherwise turn this fixed, full-screen overlay into one clipped to the sheet.
  */
 export default function CameraScanner({
   onCapture,
   onClose,
+  hint = "Fit the whole question in the frame",
 }: {
   /**
    * Hands back the capture as a File, at the highest resolution the device
@@ -23,6 +32,8 @@ export default function CameraScanner({
    */
   onCapture: (file: File) => void;
   onClose: () => void;
+  /** The instruction pill at the top. */
+  hint?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -75,6 +86,25 @@ export default function CameraScanner({
       cancelled = true;
       stopCamera();
     };
+  }, []);
+
+  // Focus moves in, and Escape is caught on the way down (capture phase) and
+  // stopped there: opened from a Sheet, the sheet would otherwise hear the
+  // same Escape and close underneath the camera.
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    closeRef.current?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onCloseRef.current();
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
   }, []);
 
   /**
@@ -137,8 +167,13 @@ export default function CameraScanner({
     onCapture(file);
   }
 
-  return (
-    <div className="fixed inset-0 z-50 !mt-0 flex flex-col bg-black text-white">
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Camera"
+      className="fixed inset-0 z-50 !mt-0 flex flex-col bg-black text-white"
+    >
       {/* live camera */}
       <video
         ref={videoRef}
@@ -156,6 +191,7 @@ export default function CameraScanner({
       <div className="pointer-events-none absolute inset-0 flex flex-col">
         <div className="flex items-start justify-between p-4 pt-[calc(env(safe-area-inset-top,0px)+16px)]">
           <button
+            ref={closeRef}
             onClick={onClose}
             className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur"
             aria-label="Close scanner"
@@ -163,7 +199,7 @@ export default function CameraScanner({
             <X size={18} strokeWidth={1.75} aria-hidden="true" />
           </button>
           <span className="rounded-full bg-black/40 px-3 py-1 text-xs font-medium backdrop-blur">
-            Fit the whole question in the frame
+            {hint}
           </span>
           <span className="h-11 w-11" />
         </div>
@@ -213,7 +249,7 @@ export default function CameraScanner({
           <button
             onClick={() => fileRef.current?.click()}
             className="flex h-12 w-12 items-center justify-center rounded-md border border-white/30 bg-white/10 backdrop-blur"
-            aria-label="Upload from library"
+            aria-label="Choose from your photos"
           >
             <ImageIcon size={18} strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -242,7 +278,8 @@ export default function CameraScanner({
         className="hidden"
         onChange={(e) => onPick(e.target.files?.[0])}
       />
-    </div>
+    </div>,
+    document.body,
   );
 }
 

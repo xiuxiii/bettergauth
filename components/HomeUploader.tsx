@@ -13,15 +13,15 @@ import type { NormalizedRect } from "@/lib/tutor/types";
 import { cropSourceToJpeg, fileToNormalizedJpeg } from "@/lib/image";
 import { hasPreferences, storageAvailable } from "@/lib/preferences";
 import { prefetchProviders } from "@/lib/aiChoice";
-import { ArrowRight, Camera, Upload } from "lucide-react";
+import { ArrowRight, Camera, Image as ImageIcon } from "lucide-react";
 import { ErrorState, Spinner } from "@/components/States";
 import CameraScanner from "@/components/CameraScanner";
 import QuestionCropper from "@/components/QuestionCropper";
 
 /**
  * Home entry point. One primary action, "Snap a problem", opens the in-app
- * camera scanner (a live viewfinder with framing, not the OS camera). Upload
- * picks from the library. Both normalize to a right-sized, upright JPEG, then
+ * camera scanner (a live viewfinder with framing, not the OS camera). "Choose from
+ * photos" picks from the library. Both normalize to a right-sized, upright JPEG, then
  * open the question cropper, where the student picks the question and can
  * switch on Ask mode. The confirmed crop is stashed in sessionStorage and we
  * route to the workspace where the analysis begins.
@@ -171,8 +171,8 @@ export default function HomeUploader() {
         onClick={() => uploadRef.current?.click()}
         className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-surface px-5 text-[15px] font-semibold text-slate-800 transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-60"
       >
-        <Upload size={18} strokeWidth={1.75} aria-hidden="true" />
-        Upload a photo
+        <ImageIcon size={18} strokeWidth={1.75} aria-hidden="true" />
+        Choose from photos
       </button>
 
       <form

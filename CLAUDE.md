@@ -208,6 +208,16 @@ link must never lead off-site), and is
 linked from the unlock page, the tour's last slide, Settings and the home
 footer.
 
+**Photos are taken with MindGap's own camera, never the phone's.** Every
+"take a photo" goes through `components/CameraScanner.tsx` (getUserMedia +
+`ImageCapture.takePhoto()`): Snap a problem on home, and `WorkPhotoPicker`
+for Check my work and practice answers. A bare `<input type="file">` is only
+for photos already on the phone ("Choose from photos"): its Android "Camera"
+option hands off to the phone's camera app, which felt like leaving the app
+and saved a copy of every homework photo to the gallery. No `capture`
+attribute anywhere. The scanner renders into `<body>` (a portal) because the
+Sheet's transform would otherwise clip its full-screen overlay.
+
 **Sheets go through `components/ui/Sheet.tsx`.** It owns drag-to-dismiss,
 Escape, the focus trap and handing focus back to the opener. The composer and
 ChoiceSheet both use it; don't grow a second sheet.

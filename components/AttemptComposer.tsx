@@ -1,12 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { ImagePlus } from "lucide-react";
+import { useState } from "react";
 import type { StudentAttempt } from "@/lib/tutor/types";
-import { fileToNormalizedJpeg } from "@/lib/image";
 import { Spinner } from "@/components/States";
 import RichText from "@/components/RichText";
 import Sheet from "@/components/ui/Sheet";
+import WorkPhotoPicker from "@/components/WorkPhotoPicker";
 
 /**
  * Bottom-sheet composer for "Check My Work". The student photographs their
@@ -43,29 +42,10 @@ export default function AttemptComposer({
         hint: "Snap your working and your answer — I'll find the first thing worth fixing.",
         submit: "Check it",
       };
-  const fileRef = useRef<HTMLInputElement>(null);
   const [image, setImage] = useState<string | null>(null);
   const [text, setText] = useState("");
-  const [readError, setReadError] = useState<string | null>(null);
 
   const canSubmit = (!!image || (!!retry && !!text.trim())) && !busy;
-
-  async function handleFile(file: File | undefined) {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setReadError("Please choose an image of your work.");
-      return;
-    }
-    setReadError(null);
-    try {
-      // Downscale + EXIF-upright, exactly like the capture path. A raw phone
-      // photo as a data URL is several MB of base64 and blew past the platform
-      // request limit, which came back as a 413 the client couldn't parse.
-      setImage(await fileToNormalizedJpeg(file));
-    } catch {
-      setReadError("Could not read that image. Try another photo.");
-    }
-  }
 
   function submit() {
     if (!canSubmit) return;
@@ -119,59 +99,9 @@ export default function AttemptComposer({
             </>
           )}
 
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => handleFile(e.target.files?.[0])}
-          />
-
-          {image ? (
-            <div className="rounded-md border border-hairline bg-paper p-2">
-              <div className="flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={image}
-                  alt="Your attempt"
-                  className="h-20 w-20 rounded-sm bg-slate-200 object-cover"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-ink">Photo attached</p>
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    className="mt-0.5 h-8 text-sm font-medium text-brand-700 underline-offset-4 hover:underline"
-                  >
-                    Retake
-                  </button>
-                </div>
-                <button
-                  onClick={() => setImage(null)}
-                  className="h-10 rounded-md px-3 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-ink"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* For a full check this is the only way in, so it is sized and
-               coloured like the action it is. On a retry the typed line above
-               leads, and the photo is the alternative. */
-            <button
-              onClick={() => fileRef.current?.click()}
-              className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-brand-300 bg-brand-50 px-4 text-brand-800 transition hover:border-brand-400 hover:bg-brand-100 ${retry ? "py-4" : "py-7"}`}
-            >
-              <ImagePlus size={retry ? 22 : 26} strokeWidth={1.5} aria-hidden="true" />
-              <span className="text-base font-semibold">
-                {retry ? "Or attach a photo" : "Attach a photo of your work"}
-              </span>
-              {!retry && (
-                <span className="text-xs text-brand-700">Your working and your final answer</span>
-              )}
-            </button>
-          )}
-
-          {readError && <p className="mt-2 text-sm text-danger-600">{readError}</p>}
+          {/* For a full check the photo is the only way in, so its tile is
+              the big one. On a retry the typed line above leads. */}
+          <WorkPhotoPicker image={image} onChange={setImage} secondary={!!retry} />
 
           {/* Sticky footer: the primary action stays visible however tall the
               sheet body gets, and clears the home indicator. */}
