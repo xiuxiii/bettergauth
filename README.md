@@ -20,6 +20,10 @@ Confirm the provider is live at `http://localhost:3000/api/health` →
 changing env (env is read at boot). See `.env.example` and
 `docs/ai-provider-integration.md`.
 
+Checks: `npm test` (unit), `npm run build && npm run e2e` (browser tests,
+mocked AI, no keys needed; needs Playwright installed globally), and
+`npm run eval` (real AI calls against a running app, see CLAUDE.md).
+
 ## What's built
 
 - **Settings** (`app/settings/page.tsx`, `components/SettingsView.tsx`) —

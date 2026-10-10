@@ -14,10 +14,20 @@ npx tsc --noEmit # typecheck
 npm test         # unit tests for pure lib/ logic (node:test, no deps)
 npm run eval     # check-work evals against a running app (needs a key)
 npm run eval -- --selftest   # the eval scorer on canned responses, no key
+npm run e2e      # browser tests against the production build (after npm run build)
 ```
 
 `npx tsc --noEmit && npm run lint && npm run build && npm test && node evals/run.mjs --selftest`
-is the verification gate. `npm test` covers pure logic only (`tests/*.test.mjs`
+is the verification gate; for any UI change, finish with `npm run e2e`.
+`npm run e2e` (`e2e/run.mjs`) runs every `e2e/*.e2e.mjs` spec in a phone-sized
+Chromium (with a fake camera) against `next start` servers it starts and stops
+itself, one per env profile (`PROFILES` in `e2e/harness.mjs`: default,
+TUTOR_SWITCH on, Claude only, access gate). `--only <spec>` runs one. Specs
+answer every AI route in the browser (`mock`); anything unmocked gets a 503
+and is printed, and the server's provider URLs point at a closed port, so the
+suite never spends credits. Screenshots and server logs land in `e2e/out/`
+(gitignored). Playwright isn't a dependency (Vercel builds stay lean): it
+loads from the global npm root, like `evals/make-images.mjs`. `npm test` covers pure logic only (`tests/*.test.mjs`
 import TypeScript through `tests/importTs.mjs`, which transpiles with the
 project's own `typescript`); keep testable rules in React-free files like
 `lib/richText.ts`. `npm run eval` (`evals/run.mjs`, plain Node) hits the running app's

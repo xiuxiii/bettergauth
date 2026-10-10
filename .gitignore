@@ -26,3 +26,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# browser test screenshots and server logs
+/e2e/out/
