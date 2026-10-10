@@ -23,6 +23,7 @@ import {
 } from "@/lib/preferences";
 import type { Theme } from "@/lib/theme";
 import Wordmark from "@/components/Wordmark";
+import { accountsEnabled } from "@/lib/supabase/config";
 import {
   CURRICULUM_OPTIONS,
   GOAL_OPTIONS,
@@ -664,6 +665,14 @@ function DoneSlide({ prefs }: { prefs: TutorPreferences }) {
         </Link>
         .
       </p>
+      {accountsEnabled() && (
+        <p className="mt-2 animate-rise text-xs text-slate-500" style={delay(900)}>
+          <Link href="/signin" className="font-medium underline underline-offset-4 hover:text-ink">
+            Sign in
+          </Link>{" "}
+          anytime to keep your history on every device.
+        </p>
+      )}
     </div>
   );
 }

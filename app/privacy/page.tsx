@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { providerConfig } from "@/lib/ai/provider";
-import { PROVIDER_INFO, tutorRouting } from "@/lib/privacyCopy";
+import { ACCOUNT_STORE, PROVIDER_INFO, accountCopy, tutorRouting } from "@/lib/privacyCopy";
+import { accountsEnabled } from "@/lib/supabase/config";
 import { safeBackPath } from "@/lib/safePath";
 
 // Read the provider setup on each request, so the page says what the app
 // does now rather than what it did at build time.
 export const dynamic = "force-dynamic";
 
-const UPDATED = "1 October 2026";
+const UPDATED = "10 October 2026";
 
 /**
  * What MindGap does with a student's photos and words, in plain language.
@@ -28,6 +29,7 @@ export default async function PrivacyPage({
   const backHref = safeBackPath(back);
 
   const config = providerConfig();
+  const accounts = accountCopy(accountsEnabled());
   const routing = tutorRouting({
     anthropic: config.providers.anthropic.configured,
     deepseek: config.providers.deepseek.configured,
@@ -53,10 +55,7 @@ export default async function PrivacyPage({
       </header>
 
       <p className="mb-6 px-1 text-[15px] leading-relaxed text-slate-700">
-        The short version: what you photograph and type is sent to an AI tutor
-        so it can answer you, and kept on this device as your history. MindGap
-        has no accounts, no ads and no tracking, and it doesn&apos;t keep your
-        problems.
+        {accounts.summary}
       </p>
 
       <div className="space-y-6">
@@ -133,25 +132,27 @@ export default async function PrivacyPage({
         </Section>
 
         <Section title="What MindGap itself keeps">
-          <List
-            items={[
-              "Nothing about your problems: no photos, no text, no conversations.",
-              "Daily totals, like how many problems were checked or how many hints were asked for, and roughly how many devices visited. They show whether MindGap is working and can't be traced back to you. Kept for 90 days.",
-              "To stop overuse, requests are counted against a scrambled code made from your connection, never the address itself. Those counts clear within a day.",
-              "If you entered an access code, a cookie remembers that it was accepted. It's the only cookie MindGap uses.",
-              "The company that hosts MindGap keeps short technical logs, like any website.",
-            ]}
-          />
+          <List items={accounts.keeps} />
         </Section>
 
+        {accounts.account && (
+          <Section title="With an account">
+            <List items={accounts.account} />
+            <a
+              href={ACCOUNT_STORE.policy}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`inline-flex min-h-11 items-center gap-1 ${linkCls}`}
+            >
+              {ACCOUNT_STORE.company}&apos;s privacy policy
+              <ExternalLink size={13} strokeWidth={1.75} aria-hidden="true" />
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
+          </Section>
+        )}
+
         <Section title="What MindGap never does">
-          <List
-            items={[
-              "Ask for an account, your name or your email.",
-              "Show ads, or sell anything about you.",
-              "Use trackers or analytics from other companies.",
-            ]}
-          />
+          <List items={accounts.never} />
         </Section>
 
         <Section title="Good habits">

@@ -12,15 +12,21 @@
  * then stops that server (by its own process, never `pkill -f`). Nothing
  * reaches a real AI: see harness.mjs. Screenshots go to e2e/out/.
  *
+ * A profile with its own NEXT_DIST_DIR (accounts) is built here, into that
+ * directory, whenever its build is missing or older than .next, so a fresh
+ * `npm run build` always brings it along. A profile pointing at the fake
+ * Supabase gets it started alongside (`t.supabase` in its specs).
+ *
  * Playwright isn't a project dependency (it would weigh on every Vercel
  * build): it is loaded from the global npm root, as evals/make-images.mjs does.
  */
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { FAKE_SUPABASE_URL, FakeSupabase } from "./fakeSupabase.mjs";
 import { OUT, PROFILES, ROOT, launchBrowser, loadPlaywright, newPage, serverEnv } from "./harness.mjs";
 
 const args = process.argv.slice(2);
@@ -73,6 +79,24 @@ function freePort() {
   });
 }
 
+const mtime = (f) => (fs.existsSync(f) ? fs.statSync(f).mtimeMs : 0);
+
+/** A profile's own build (NEXT_DIST_DIR), remade when older than .next. */
+function ensureBuild(profile) {
+  const dir = PROFILES[profile].NEXT_DIST_DIR;
+  if (!dir || BASE) return;
+  const id = path.join(ROOT, dir, "BUILD_ID");
+  if (mtime(id) >= mtime(path.join(ROOT, ".next", "BUILD_ID"))) return;
+  console.log(`\nBuilding the ${profile} profile into ${dir} (its env is baked in at build time)…`);
+  const r = spawnSync(process.execPath, [path.join(ROOT, "node_modules", "next", "dist", "bin", "next"), "build"], {
+    cwd: ROOT,
+    env: serverEnv(profile),
+    encoding: "utf8",
+  });
+  fs.writeFileSync(path.join(OUT, `build-${profile}.log`), `${r.stdout ?? ""}${r.stderr ?? ""}`);
+  if (r.status !== 0) throw new Error(`next build failed (${profile}); see e2e/out/build-${profile}.log`);
+}
+
 async function startServer(profile) {
   const port = await freePort();
   const log = fs.createWriteStream(path.join(OUT, `server-${profile}.log`));
@@ -104,6 +128,8 @@ let fail = 0;
 const failures = [];
 
 for (const profile of [...new Set(specs.map((s) => s.profile))]) {
+  ensureBuild(profile);
+  const supabase = PROFILES[profile].NEXT_PUBLIC_SUPABASE_URL === FAKE_SUPABASE_URL ? await new FakeSupabase().start() : null;
   const server = BASE ? { base: BASE.replace(/\/$/, ""), stop() {} } : await startServer(profile);
   try {
     for (const spec of specs.filter((s) => s.profile === profile)) {
@@ -112,6 +138,8 @@ for (const profile of [...new Set(specs.map((s) => s.profile))]) {
       const t = {
         base: server.base,
         out: OUT,
+        /** The fake Supabase (fakeSupabase.mjs), for the accounts profile. */
+        supabase,
         /** A fresh phone-sized page; closed when its test ends. */
         async page(opts) {
           const pg = await newPage(browser, server.base, opts);
@@ -152,6 +180,7 @@ for (const profile of [...new Set(specs.map((s) => s.profile))]) {
     }
   } finally {
     server.stop();
+    await supabase?.stop();
   }
 }
 

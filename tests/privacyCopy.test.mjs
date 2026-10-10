@@ -113,3 +113,28 @@ test("each provider names its company, country and an https policy link", () => 
     assert.match(p.policy, /^https:\/\//);
   }
 });
+
+const { accountCopy } = await importTs("lib/privacyCopy.ts");
+
+test("accounts off: the page says what it always did", () => {
+  const c = accountCopy(false);
+  assert.equal(c.account, null);
+  assert.match(c.keeps[0], /^Nothing about your problems/);
+  assert.match(c.keeps.join(" "), /only cookie MindGap uses/);
+  assert.match(c.never.join(" "), /Ask for an account/);
+});
+
+test("accounts on: no claim it keeps nothing, one cookie, or never asks for an account", () => {
+  const c = accountCopy(true);
+  const all = [...c.keeps, ...c.never, ...c.account].join(" ");
+  assert.doesNotMatch(all, /only cookie/);
+  assert.doesNotMatch(all, /^Nothing about your problems/m);
+  assert.doesNotMatch(c.never.join(" "), /account, your name or your email/);
+  // Says what an account keeps, who stores it, the age rule and how to delete it.
+  assert.match(all, /13 or older, never the date/);
+  assert.match(all, /Supabase/);
+  assert.match(all, /Delete account/);
+  assert.match(all, /If you don't sign in: nothing about your problems/);
+  assert.doesNotMatch(c.summary, /no accounts/);
+  assert.match(accountCopy(false).summary, /no accounts/);
+});

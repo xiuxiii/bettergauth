@@ -132,3 +132,74 @@ function tutorOnlyRouting(cfg: RoutingConfig): { providers: ProviderId[]; lines:
   if (!cfg.deepseekVision) lines.push("Photos always go to Claude, never to DeepSeek.");
   return { providers, lines };
 }
+
+// ---------------------------------------------------------------------------
+// Accounts (Supabase): what changes on the page when they're switched on.
+// ---------------------------------------------------------------------------
+
+export const ACCOUNT_STORE = {
+  company: "Supabase",
+  policy: "https://supabase.com/privacy",
+};
+
+/**
+ * The "keeps", "never does" and account lines, for accounts on or off
+ * (lib/supabase/config.ts). Off, the page says exactly what it always did;
+ * on, it must not claim MindGap keeps nothing or uses one cookie, because a
+ * signed-in student's problems are kept and the sign-in itself is a cookie.
+ */
+export function accountCopy(enabled: boolean): {
+  summary: string;
+  keeps: string[];
+  never: string[];
+  account: string[] | null;
+} {
+  const totals =
+    "Daily totals, like how many problems were checked or how many hints were asked for, and roughly how many devices visited. They show whether MindGap is working and can't be traced back to you. Kept for 90 days.";
+  const limits =
+    "To stop overuse, requests are counted against a scrambled code made from your connection, never the address itself. Those counts clear within a day.";
+  const logs = "The company that hosts MindGap keeps short technical logs, like any website.";
+  const ads = "Show ads, or sell anything about you.";
+  const trackers = "Use trackers or analytics from other companies.";
+
+  if (!enabled) {
+    return {
+      summary:
+        "The short version: what you photograph and type is sent to an AI tutor so it can answer you, and kept on this device as your history. MindGap has no accounts, no ads and no tracking, and it doesn't keep your problems.",
+      keeps: [
+        "Nothing about your problems: no photos, no text, no conversations.",
+        totals,
+        limits,
+        "If you entered an access code, a cookie remembers that it was accepted. It's the only cookie MindGap uses.",
+        logs,
+      ],
+      never: ["Ask for an account, your name or your email.", ads, trackers],
+      account: null,
+    };
+  }
+  return {
+    summary:
+      "The short version: what you photograph and type is sent to an AI tutor so it can answer you, and kept on this device as your history. An account is optional: sign in and your problems are kept in your account too, so they're on every device, until you delete them. No ads and no tracking.",
+    keeps: [
+      "If you don't sign in: nothing about your problems. No photos, no text, no conversations.",
+      "If you sign in: what's listed under \"With an account\" below, until you delete it.",
+      totals,
+      limits,
+      "Cookies only to keep you signed in, and to remember an access code if you entered one. No others.",
+      logs,
+    ],
+    never: [
+      "Make you sign up. Everything works without an account.",
+      ads,
+      trackers,
+    ],
+    account: [
+      "Accounts are for ages 13 and up. We ask your birth month and year once, and keep only that you're 13 or older, never the date.",
+      "Your account keeps your email (and, with Google, your name and picture), your problems, photos, conversations, progress and settings, so they're on every device you sign in on.",
+      `They're stored by ${ACCOUNT_STORE.company}, which runs MindGap's database. Only you can see them: each account can only read its own.`,
+      "Signing in with Google tells Google you used it to sign in to MindGap. Google doesn't see your problems.",
+      "Delete one problem and it's deleted on every device. Delete your account (Account → Delete account) and everything in it is erased for good.",
+      "Signing out takes your account's problems off that device. They stay in your account.",
+    ],
+  };
+}

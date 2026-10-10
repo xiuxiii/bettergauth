@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
 import { serverSupabase } from "@/lib/supabase/server";
-import { afterSignIn } from "@/lib/account/afterSignIn";
+import { afterSignIn, redirectHere } from "@/lib/account/afterSignIn";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +11,11 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const supabase = await serverSupabase();
   const code = url.searchParams.get("code");
-  if (!supabase || !code) return NextResponse.redirect(new URL("/signin?error=link", url.origin));
+  if (!supabase || !code) return redirectHere("/signin?error=link");
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
     console.error("[auth] code exchange failed:", error.message);
-    return NextResponse.redirect(new URL("/signin?error=link", url.origin));
+    return redirectHere("/signin?error=link");
   }
-  return NextResponse.redirect(new URL(await afterSignIn(supabase, url.searchParams.get("next")), url.origin));
+  return redirectHere(await afterSignIn(supabase, url.searchParams.get("next")));
 }

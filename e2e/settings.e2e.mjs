@@ -44,8 +44,7 @@ async function openSettings(p, base, query = "") {
 
 export default async function settingsSpec(t) {
   await t.test("Each change saves the moment it's made, and survives a reload", async () => {
-    // prefs: false, or the harness would write its own preferences over ours
-    // on the reload.
+    // prefs: false: starts from no saved preferences, as a first visit does.
     const { p } = await t.page({ prefs: false });
     await openSettings(p, t.base);
     t.ok("no submit button on the page", (await p.getByRole("button", { name: /^(Save|Submit|Done)$/ }).count()) === 0);

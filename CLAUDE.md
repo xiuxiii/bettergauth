@@ -22,7 +22,13 @@ is the verification gate; for any UI change, finish with `npm run e2e`.
 `npm run e2e` (`e2e/run.mjs`) runs every `e2e/*.e2e.mjs` spec in a phone-sized
 Chromium (with a fake camera) against `next start` servers it starts and stops
 itself, one per env profile (`PROFILES` in `e2e/harness.mjs`: default,
-TUTOR_SWITCH on, Claude only, access gate). `--only <spec>` runs one. Specs
+TUTOR_SWITCH on, Claude only, access gate, accounts). `--only <spec>` runs one.
+The accounts profile runs against `e2e/fakeSupabase.mjs`, an in-memory
+Supabase (auth, the two tables with the migration's row-level security, the
+photos bucket) the runner starts on port 54399, so the real Supabase clients
+run end to end; specs read its state as `t.supabase`. Its NEXT_PUBLIC values
+are baked in at build, so it has its own build in `.next-e2e-accounts`
+(`NEXT_DIST_DIR`), which the runner remakes whenever it is older than `.next`. Specs
 answer every AI route in the browser (`mock`); anything unmocked gets a 503
 and is printed, and the server's provider URLs point at a closed port, so the
 suite never spends credits. Screenshots and server logs land in `e2e/out/`
@@ -122,7 +128,8 @@ Next leaves generated types behind. After removing e.g. `app/dev-preview/`,
 .next/types/app/dev-preview/page.ts(2,24): error TS2307: Cannot find module ...
 ```
 
-The source file is genuinely gone; the stale type isn't. `rm -rf .next` clears it.
+The source file is genuinely gone; the stale type isn't. `rm -rf .next .next-e2e-accounts`
+clears it (the e2e accounts build keeps its own copy of the types).
 Don't go hunting for a real type error.
 
 ### Vercel build logs are not readable from here
@@ -221,7 +228,11 @@ access gate (middleware `OPEN_PATHS`) so a parent can read it first (which is
 why its `?back=` goes through `safeBackPath`, `lib/safePath.ts`: a crafted
 link must never lead off-site), and is
 linked from the unlock page, the tour's last slide, Settings and the home
-footer.
+footer. With accounts on, its summary, "keeps", "never" and "With an account"
+lists switch to `accountCopy(true)` (`lib/privacyCopy.ts`, tested): signed in,
+MindGap does keep problems and uses a sign-in cookie, so the accounts-off
+lines ("keeps nothing", "the only cookie", "never asks for an account")
+must not show. Change what an account stores, and update `accountCopy`.
 
 **Photos are taken with MindGap's own camera, never the phone's.** Every
 "take a photo" goes through `components/CameraScanner.tsx` (getUserMedia +
@@ -236,7 +247,10 @@ Sheet's transform would otherwise clip its full-screen overlay.
 **Accounts are optional and 13+ only (Supabase).** With the Supabase env set,
 students can sign in (Google, or an emailed link; `/signin`, returning via
 `/auth/callback` for a code or `/auth/confirm` for the email template's
-token_hash, both open past the access gate). The access gate stays in front of
+token_hash, both open past the access gate). Both redirect with a relative
+Location (`redirectHere`): under `next start`, `req.url` names the bind
+address (localhost), and a redirect built from it dropped the session cookie
+just set for the host the student used. The access gate stays in front of
 the app. `middleware.ts` refreshes the session cookie on every request it lets
 through. After the first sign-in, `/account/age` asks birth month + year;
 `/api/account/age` decides with `checkAge` (`lib/account/age.ts`,
@@ -266,8 +280,10 @@ reports saves, deletes and clears through `setWriteHooks`; sync's own writes
 pass `{ quiet: true }`. Photos missing here download on demand
 (`getImageSynced`). Signing out removes the account's synced records from the
 device (shared phones); unsynced and signed-out ones stay. Preferences sync to
-`profiles.preferences` (the account's copy wins on the first pass); the theme
-stays per device on purpose. Lists re-read on `HISTORY_SYNCED_EVENT`.
+`profiles.preferences` both ways: the account's copy wins on the first pass,
+after that a change made on another device (its `updated_at` moved, compared
+for equality so clocks don't matter) is taken unless this device has an unsent
+one; the theme stays per device on purpose. Lists re-read on `HISTORY_SYNCED_EVENT`.
 
 **Sheets go through `components/ui/Sheet.tsx`.** It owns drag-to-dismiss,
 Escape, the focus trap and handing focus back to the opener. The composer and

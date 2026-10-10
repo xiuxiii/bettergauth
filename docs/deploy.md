@@ -87,6 +87,50 @@ Before sharing beyond people you trust:
   limit in each. That is the hard backstop; the app shows "The tutor is taking
   a break" when one is hit.
 
+## Accounts (optional): sign-in and history on every device
+
+Until these steps are done, MindGap has no accounts and keeps everything on
+the student's device. After them, students can sign in with Google or an
+emailed link, and their problems follow them to every device. Each value
+below says whether it's a **secret** (turn Vercel's *Sensitive* on, never
+share it) or **config** (safe to show anyone).
+
+1. **Create the database.** Vercel → your project → **Storage** → Create
+   Database → **Supabase** → free plan, a region near your students → connect
+   it to this project, all environments. Vercel adds:
+   - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or
+     `…_PUBLISHABLE_KEY`): **config**. Public by design; the database's rules
+     are what keep each student's data private.
+   - `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`): **secret**.
+     Server-only; it records the 13+ check and deletes accounts.
+2. **Create the tables.** Open the Supabase dashboard (Vercel → Storage →
+   your database → *Open in Supabase*) → **SQL Editor** → paste all of
+   `supabase/migrations/0001_accounts.sql` → **Run**. It's safe to run again.
+3. **Tell Supabase where MindGap lives.** Supabase → **Authentication → URL
+   Configuration**: *Site URL* `https://<your-app>.vercel.app`, and under
+   *Redirect URLs* add `https://<your-app>.vercel.app/**`.
+4. **Make the email link work on phones.** Supabase → **Authentication →
+   Email Templates** → *Magic Link* (and *Confirm signup*): change the link to
+   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`.
+   Without this, a link opened in the mail app's own browser fails.
+5. **Google sign-in.** In Google Cloud Console → APIs & Services →
+   Credentials → *Create OAuth client ID* (Web application). Authorized
+   redirect URI: the callback URL Supabase shows under **Authentication →
+   Providers → Google**. Paste the client ID (**config**) and client secret
+   (**secret**) into that Supabase page and enable Google. These live in
+   Supabase, not in Vercel.
+6. **Send emails properly.** Supabase's built-in email only sends a few an
+   hour, fine for testing. For real use, make a free [Resend](https://resend.com)
+   account and enter it under Supabase → **Authentication → SMTP Settings**.
+   Its API key is a **secret** (stored in Supabase).
+7. **Redeploy** (Deployments → ⋯ → Redeploy). Then on your phone: tap
+   **Sign in** on home, continue with Google, confirm your age, solve a
+   problem; sign in on a laptop and it's there.
+
+To delete everything a student saved: they use Account → Delete account. In
+an emergency, delete the user in Supabase → Authentication → Users (their
+rows go with it; photos are in Storage → `photos/<user id>/`).
+
 ## Debugging from your phone
 
 If something errors, set these env vars in Vercel (Settings → Environment

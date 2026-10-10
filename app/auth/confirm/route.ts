@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { serverSupabase } from "@/lib/supabase/server";
-import { afterSignIn } from "@/lib/account/afterSignIn";
+import { afterSignIn, redirectHere } from "@/lib/account/afterSignIn";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +18,12 @@ export async function GET(req: Request) {
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type") as EmailOtpType | null;
   if (!supabase || !tokenHash || !type || !EMAIL_TYPES.has(type)) {
-    return NextResponse.redirect(new URL("/signin?error=link", url.origin));
+    return redirectHere("/signin?error=link");
   }
   const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
   if (error) {
     console.error("[auth] email link failed:", error.message);
-    return NextResponse.redirect(new URL("/signin?error=link", url.origin));
+    return redirectHere("/signin?error=link");
   }
-  return NextResponse.redirect(new URL(await afterSignIn(supabase, url.searchParams.get("next")), url.origin));
+  return redirectHere(await afterSignIn(supabase, url.searchParams.get("next")));
 }

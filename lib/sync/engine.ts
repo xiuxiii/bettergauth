@@ -11,7 +11,8 @@
  *   3. rows changed in the account since the last pull (by the server's
  *      clock, `changed_at`) → written or deleted here;
  *   4. preferences: the account's copy wins on the first pass after
- *      signing in, after that local changes are pushed.
+ *      signing in; after that a change made on another device is taken, and
+ *      one made here is pushed (syncPrefs).
  * The rules for every conflict are in lib/sync/merge.ts (unit-tested).
  *
  * Passes run when the account is known, after local writes (debounced), on
@@ -77,7 +78,7 @@ const KEY = {
   cursor: (u: string) => `mindgap:sync:${u}:cursor`,
   deletes: (u: string) => `mindgap:sync:${u}:deletes`,
   uploaded: (u: string) => `mindgap:sync:${u}:uploaded`,
-  prefsPulled: (u: string) => `mindgap:sync:${u}:prefs`,
+  prefsSeen: (u: string) => `mindgap:sync:${u}:prefs-seen`,
   importDeclined: (u: string) => `mindgap:sync:${u}:import-declined`,
 };
 
@@ -249,11 +250,22 @@ async function pullRecords(sb: SupabaseClient, uid: string): Promise<boolean> {
 let applyingPrefs = false;
 let prefsDirty = false;
 
+/**
+ * Preferences, both ways. The account's `updated_at` as last seen here tells
+ * whether another device changed them since: if so they are taken, unless
+ * this device has its own unsent change, which is sent instead (last write
+ * wins). On the first pass for an account nothing has been seen, so the
+ * account's copy wins. Compared for equality only, so device clocks don't
+ * matter.
+ */
 async function syncPrefs(sb: SupabaseClient, uid: string) {
-  if (!read<boolean>(KEY.prefsPulled(uid), false)) {
-    const { data, error } = await sb.from("profiles").select("preferences").eq("id", uid).maybeSingle();
+  const seen = read<string | null>(KEY.prefsSeen(uid), null);
+  if (!prefsDirty || seen === null) {
+    const { data, error } = await sb.from("profiles").select("preferences, updated_at").eq("id", uid).maybeSingle();
     if (error) throw error;
-    if (data?.preferences) {
+    if (!data?.preferences) {
+      prefsDirty = true; // the account has none yet: send this device's
+    } else if (data.updated_at !== seen) {
       applyingPrefs = true;
       try {
         savePreferences({ ...DEFAULT_PREFERENCES, ...(data.preferences as Partial<TutorPreferences>) });
@@ -261,19 +273,23 @@ async function syncPrefs(sb: SupabaseClient, uid: string) {
         applyingPrefs = false;
       }
       prefsDirty = false;
-    } else {
-      prefsDirty = true; // the account has none yet: send this device's
+      write(KEY.prefsSeen(uid), data.updated_at);
+      return;
     }
-    write(KEY.prefsPulled(uid), true);
   }
   if (!prefsDirty) return;
   const local = loadPreferences();
   if (local) {
-    const { error } = await sb
+    const stamp = new Date().toISOString();
+    const { data, error } = await sb
       .from("profiles")
-      .update({ preferences: local, updated_at: new Date().toISOString() })
-      .eq("id", uid);
+      .update({ preferences: local, updated_at: stamp })
+      .eq("id", uid)
+      .select("updated_at")
+      .maybeSingle();
     if (error) throw error;
+    // As the database stores it, so the next pass sees it as this device's own.
+    write(KEY.prefsSeen(uid), data?.updated_at ?? stamp);
   }
   prefsDirty = false;
 }
@@ -373,7 +389,7 @@ async function leave(uid: string) {
   }
   write(KEY.cursor(uid), undefined);
   write(KEY.uploaded(uid), undefined);
-  write(KEY.prefsPulled(uid), undefined);
+  write(KEY.prefsSeen(uid), undefined);
   write(KEY.uid, undefined);
   setStatus({ state: "off", lastSyncAt: null, guestCount: 0 });
   window.dispatchEvent(new Event(HISTORY_SYNCED_EVENT));

@@ -18,9 +18,11 @@
  */
 
 import { execSync } from "node:child_process";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ANON_KEY, FAKE_SUPABASE_URL, SERVICE_KEY } from "./fakeSupabase.mjs";
 
 export const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const OUT = path.join(ROOT, "e2e", "out");
@@ -49,6 +51,20 @@ export const PROFILES = {
     DEBUG_CODE: "e2e-debug",
     ACCESS_SECRET: "e2e-secret",
   },
+  /**
+   * Accounts on, against the fake Supabase (fakeSupabase.mjs), which the
+   * runner starts for this profile. NEXT_PUBLIC_* are baked in at build time,
+   * so this profile has its own build in NEXT_DIST_DIR, which the runner
+   * makes whenever it is older than .next.
+   */
+  accounts: {
+    DEEPSEEK_API_KEY: "e2e",
+    ANTHROPIC_API_KEY: "e2e",
+    NEXT_PUBLIC_SUPABASE_URL: FAKE_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY,
+    NEXT_DIST_DIR: ".next-e2e-accounts",
+  },
 };
 
 /** Every variable the app reads, cleared before a profile is applied. */
@@ -58,6 +74,8 @@ const APP_VARS = [
   "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "KV_REST_API_URL", "KV_REST_API_TOKEN",
   "EVAL_BYPASS_TOKEN", "DEBUG_CODE", "DEBUG_ERRORS", "DEBUG_TOKENS", "AI_PROVIDER",
   "TUTOR_SWITCH", "DETECT_PROVIDER", "DETECT_GRID", "DEEPSEEK_MODEL", "DEEPSEEK_VISION",
+  "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY", "NEXT_DIST_DIR",
 ];
 
 /** The environment for `next start` under a profile. */
@@ -119,7 +137,8 @@ export async function newPage(browser, base, { theme = "light", prefs = true, wi
   await c.addInitScript(
     ({ theme, prefs }) => {
       try {
-        if (prefs) {
+        // Only into an empty slot: a reload keeps what the test changed.
+        if (prefs && localStorage.getItem("mindgap:preferences") === null) {
           localStorage.setItem(
             "mindgap:preferences",
             JSON.stringify({ grade: null, assistanceStyle: "hint_first", goal: "both" }),
@@ -172,10 +191,14 @@ export async function mock(p, base, route, handler) {
   return calls;
 }
 
-/** Write history records straight into IndexedDB (lib/history/db.ts, v1). */
-export function seed(p, records) {
+/**
+ * Write history records straight into IndexedDB (lib/history/db.ts, v1),
+ * and photos by id into its images store (`{ img1: PHOTO }`, a file path).
+ */
+export function seed(p, records, photos = {}) {
+  const images = Object.entries(photos).map(([id, file]) => [id, fs.readFileSync(file).toString("base64")]);
   return p.evaluate(
-    (records) =>
+    ({ records, images }) =>
       new Promise((resolve, reject) => {
         const req = indexedDB.open("mindgap", 1);
         req.onupgradeneeded = () => {
@@ -187,13 +210,33 @@ export function seed(p, records) {
         };
         req.onerror = () => reject(req.error);
         req.onsuccess = () => {
-          const tx = req.result.transaction("sessions", "readwrite");
+          const tx = req.result.transaction(["sessions", "images"], "readwrite");
           for (const r of records) tx.objectStore("sessions").put(r);
+          for (const [id, b64] of images) {
+            const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+            tx.objectStore("images").put(new Blob([bytes], { type: "image/jpeg" }), id);
+          }
           tx.oncomplete = () => resolve(true);
           tx.onerror = () => reject(tx.error);
         };
       }),
-    records,
+    { records, images },
+  );
+}
+
+/** The ids in the photo store. */
+export function imageIds(p) {
+  return p.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const req = indexedDB.open("mindgap");
+        req.onsuccess = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains("images")) return resolve([]);
+          const all = db.transaction("images").objectStore("images").getAllKeys();
+          all.onsuccess = () => resolve(all.result);
+        };
+      }),
   );
 }
 
