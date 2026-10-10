@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   BookOpen,
   ChevronLeft,
+  CircleUser,
   GraduationCap,
   Lightbulb,
   Sparkles,
@@ -15,6 +16,7 @@ import {
 import type { TutorPreferences } from "@/lib/tutor/types";
 import { DEFAULT_PREFERENCES, loadPreferences, savePreferences } from "@/lib/preferences";
 import { useAiChoice } from "@/lib/aiChoice";
+import { useAccount } from "@/lib/account/useAccount";
 import { clearAll, listSessions } from "@/lib/history/db";
 import { safeBackPath } from "@/lib/safePath";
 import {
@@ -56,6 +58,7 @@ export default function SettingsView() {
   const [prefs, setPrefs] = useState<TutorPreferences>(DEFAULT_PREFERENCES);
   const [theme, chooseTheme] = useThemeChoice();
   const ai = useAiChoice();
+  const account = useAccount();
   const [sheet, setSheet] = useState<"goal" | "grade" | null>(null);
 
   // Loaded after mount: reading storage during render would disagree with the
@@ -129,6 +132,23 @@ export default function SettingsView() {
       </header>
 
       <div className="space-y-6">
+        {/* Only when accounts are set up, and once the session is known. */}
+        {(account.status === "signedIn" || account.status === "signedOut") && (
+          <SettingsGroup title="Account">
+            <SettingsRow
+              icon={CircleUser}
+              label={account.status === "signedIn" ? (account.email ?? "Your account") : "Sign in"}
+              description={
+                account.status === "signedIn"
+                  ? "Signed in"
+                  : "Keep your problems and progress on every device"
+              }
+              value=""
+              onClick={() => router.push(account.status === "signedIn" ? "/account" : "/signin?next=/settings")}
+            />
+          </SettingsGroup>
+        )}
+
         <SettingsGroup title="Tutoring">
           <SettingsRow
             icon={Lightbulb}

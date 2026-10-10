@@ -83,6 +83,8 @@ and steer the run to the wrong provider.
 | `TUTOR_SWITCH` | `on` shows students the DeepSeek / Claude switch in Settings and the session popover (needs both keys). Unset = no switch: DeepSeek answers and Claude is only its automatic backup, because Claude costs far more. Off, the server ignores `x-ai-provider` (`chooseProvider`, `lib/ai/choose.ts`) except on an eval request, so a pick saved while the switch was on, or set by hand, can't move spend to Claude. |
 | `DETECT_PROVIDER` | `anthropic` or `deepseek`: question detection (`/api/detect-questions`) on that provider whoever tutors (`getDetectionProvider`). Unset, unknown or not configured = the tutor's provider, as before. An eval request (valid `x-eval-bypass`) can still pick via `x-ai-provider`. `/privacy` names it. **Set to `anthropic` in production** (detect eval, 2026-10-10: Claude 37/44 boxes, DeepSeek 16/44). |
 | `DETECT_GRID` | `on` = the cropper draws a labelled 10% coordinate grid (`lib/detectGrid.ts`) on the image it sends for detection and the prompt says to read coordinates off it. Reaches the client through `/api/providers`. **Off**: it didn't help DeepSeek (15/44 vs 16/44 without) in the 2026-10-10 detect eval. |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `_PUBLISHABLE_KEY`) | Accounts (Supabase). Public by design: the database's row-level security (`supabase/migrations/`) is what protects data. Unset = no account UI anywhere, everything on-device as before (`lib/supabase/config.ts`). Set by Vercel's Supabase integration; inlined at build, so redeploy. |
+| `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`) | **Secret.** Server-only (`lib/supabase/admin.ts`): records the 13+ check and deletes accounts. Never reachable from client code. |
 | `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_VISION` | Model (default `deepseek-flash`, which takes photos), endpoint, and `off` to send every photo straight to Claude. |
 
 Vercel applies env vars **at build time** — after adding one, redeploy or it won't
@@ -230,6 +232,24 @@ option hands off to the phone's camera app, which felt like leaving the app
 and saved a copy of every homework photo to the gallery. No `capture`
 attribute anywhere. The scanner renders into `<body>` (a portal) because the
 Sheet's transform would otherwise clip its full-screen overlay.
+
+**Accounts are optional and 13+ only (Supabase).** With the Supabase env set,
+students can sign in (Google, or an emailed link; `/signin`, returning via
+`/auth/callback` for a code or `/auth/confirm` for the email template's
+token_hash, both open past the access gate). The access gate stays in front of
+the app. `middleware.ts` refreshes the session cookie on every request it lets
+through. After the first sign-in, `/account/age` asks birth month + year;
+`/api/account/age` decides with `checkAge` (`lib/account/age.ts`,
+unit-tested, conservative in the birthday month) and keeps only
+`profiles.age_ok_at`, never the date; under 13 the account is deleted on the
+spot. `age_ok_at` and `plan` (Stripe, later) are server-written only (column
+grants in the migration), and row-level security only admits a student's own
+rows once `age_ok_at` is set. `/api/account/delete` removes their photos, then
+the auth user (rows cascade). Signing out or deleting never touches the
+device's own history. Account UI reads one store, `useAccount`
+(`lib/account/useAccount.ts`), and `browserSupabase()` loads the library on
+first use, not with the page (~70 KB). The SQL lives in
+`supabase/migrations/`; run new files in Supabase's SQL editor.
 
 **Sheets go through `components/ui/Sheet.tsx`.** It owns drag-to-dismiss,
 Escape, the focus trap and handing focus back to the opener. The composer and
