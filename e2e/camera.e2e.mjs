@@ -8,7 +8,7 @@ import { PHOTO, analysis, checkFrames, mock, practiceProblem, record, seed } fro
 
 export const profile = "default";
 
-export default async function (t) {
+export default async function cameraSpec(t) {
   const camera = (p) => p.getByRole("dialog", { name: "Camera" });
   const focused = (p) => p.evaluate(() => document.activeElement?.textContent?.trim());
 
