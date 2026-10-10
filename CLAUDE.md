@@ -71,8 +71,8 @@ and steer the run to the wrong provider.
 | `DEBUG_TOKENS` | Logs per-call token usage, including whether prompt caching is hitting. |
 | `AI_PROVIDER` | Default provider, `deepseek` or `anthropic`. Unset = DeepSeek if its key is set, else Anthropic. Any other value throws on the first AI call. |
 | `TUTOR_SWITCH` | `on` shows students the DeepSeek / Claude switch in Settings and the session popover (needs both keys). Unset = no switch: DeepSeek answers and Claude is only its automatic backup, because Claude costs far more. Off, the server ignores `x-ai-provider` (`chooseProvider`, `lib/ai/choose.ts`) except on an eval request, so a pick saved while the switch was on, or set by hand, can't move spend to Claude. |
-| `DETECT_PROVIDER` | `anthropic` or `deepseek`: question detection (`/api/detect-questions`) on that provider whoever tutors (`getDetectionProvider`). Unset, unknown or not configured = the tutor's provider, as before. An eval request (valid `x-eval-bypass`) can still pick via `x-ai-provider`. `/privacy` names it. Off until the detect eval decides. |
-| `DETECT_GRID` | `on` = the cropper draws a labelled 10% coordinate grid (`lib/detectGrid.ts`) on the image it sends for detection and the prompt says to read coordinates off it. Reaches the client through `/api/providers`. Off until the detect eval decides. |
+| `DETECT_PROVIDER` | `anthropic` or `deepseek`: question detection (`/api/detect-questions`) on that provider whoever tutors (`getDetectionProvider`). Unset, unknown or not configured = the tutor's provider, as before. An eval request (valid `x-eval-bypass`) can still pick via `x-ai-provider`. `/privacy` names it. **Set to `anthropic` in production** (detect eval, 2026-10-10: Claude 37/44 boxes, DeepSeek 16/44). |
+| `DETECT_GRID` | `on` = the cropper draws a labelled 10% coordinate grid (`lib/detectGrid.ts`) on the image it sends for detection and the prompt says to read coordinates off it. Reaches the client through `/api/providers`. **Off**: it didn't help DeepSeek (15/44 vs 16/44 without) in the 2026-10-10 detect eval. |
 | `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_VISION` | Model (default `deepseek-flash`, which takes photos), endpoint, and `off` to send every photo straight to Claude. |
 
 Vercel applies env vars **at build time** — after adding one, redeploy or it won't
@@ -143,8 +143,11 @@ come back in the pixel space of the image actually sent, so `imageForDetection`
 returns its own width/height: sending the preview's 2200px dimensions alongside a
 1600px image would scale every box by 0.73 and land them on the wrong questions.
 Box placement is measured by `npm run eval -- --kind detect` (with `--provider`,
-`--grid`), and both of its switches, `DETECT_PROVIDER` and `DETECT_GRID`, stay
-off until that eval says which helps. The grid is drawn only on the sent
+`--grid`, or the three Box placement runs on `/owner`). The 2026-10-10 run
+decided its two switches: boxes found / mean IoU were DeepSeek 16/44 / 0.32
+(boxes consistently too high), Claude 37/44 / 0.66, DeepSeek + grid 15/44 /
+0.42. So `DETECT_PROVIDER=anthropic` and `DETECT_GRID` off; rerun the eval
+before changing either. The grid is drawn only on the sent
 detection image, in its pixel space, never on the photo the student sees; its
 spec in `lib/detectGrid.ts` is shared with the eval's images, so change both
 together. Detection's provider must stay reflected in `/privacy` (`tutorRouting`
