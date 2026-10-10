@@ -166,7 +166,10 @@ Box placement is measured by `npm run eval -- --kind detect` (with `--provider`,
 decided its two switches: boxes found / mean IoU were DeepSeek 16/44 / 0.32
 (boxes consistently too high), Claude 37/44 / 0.66, DeepSeek + grid 15/44 /
 0.42. So `DETECT_PROVIDER=anthropic` and `DETECT_GRID` off; rerun the eval
-before changing either. The grid is drawn only on the sent
+before changing either. An exercise list (a number, an instruction like "Solve
+for x", then lettered parts that are each their own equation) is boxed per part,
+labelled "2(o)"; parts sharing a setup stay one box (`DETECT_SYSTEM`). Case 25
+(`--only 25-detect-exercise-list` in `make-images.mjs`) measures it. The grid is drawn only on the sent
 detection image, in its pixel space, never on the photo the student sees; its
 spec in `lib/detectGrid.ts` is shared with the eval's images, so change both
 together. Detection's provider must stay reflected in `/privacy` (`tutorRouting`
@@ -314,6 +317,15 @@ to box each question and hands the student a draggable box. The Otsu ink-boundin
 heuristic in `lib/image.ts` survives *only* as that cropper's offline fallback, where
 it seeds an editable box. It must never decide a crop on its own — it was wrong often
 enough that silent cropping was the bug.
+
+The photo sits inside a gutter (`GUTTER_X`/`GUTTER_Y`), never edge to edge: a
+full-width box put its handles on the screen's edge, which Android gives to the
+back gesture, so the box couldn't be dragged at all. Pressing the photo outside
+the box draws a new one (drag across a question), and a tap picks the detected
+question under it. Detection gets 20s (`DETECT_TIMEOUT_MS`) and 3000 output
+tokens: a 25-part worksheet outran the old 8s / 1200 and came back with
+nothing; the box is editable while it waits. `?debug=boxes` says when it timed
+out.
 
 **History lives in IndexedDB as Blobs, never localStorage.** Measured: a
 normalized worksheet photo is ~367KB as JPEG, ~489KB as a base64 data URL, so

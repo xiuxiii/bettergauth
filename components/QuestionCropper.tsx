@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type {
   DetectedQuestion,
@@ -17,10 +17,24 @@ import { Spinner } from "@/components/States";
 type Handle = "move" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
 
 const FULL: NormalizedRect = { x: 0, y: 0, w: 1, h: 1 };
-const MIN_SIZE = 0.06; // smallest crop, as a fraction of the image
+const MIN_SIZE = 0.03; // smallest crop, as a fraction of the image: one printed line
 const AUTO_PAD = 0.015; // breathing room around a detected question
-/** Ceiling on the detection call, after which the local seed box is all there is. */
-const DETECT_TIMEOUT_MS = 8000;
+/**
+ * Space between the photo and the stage's sides. Drawn edge to edge, a box on
+ * the photo's edge put its handles on the screen's edge, which on Android is
+ * the system back gesture's strip: the drag went to the phone, not the box.
+ */
+const GUTTER_X = 32;
+const GUTTER_Y = 20;
+/** Below this many pixels of travel a press on the photo is a tap, not a drag. */
+const TAP_SLOP = 8;
+/**
+ * Ceiling on the detection call, after which the local seed box is all there
+ * is. Generous on purpose: the box is editable the whole time, and a dense
+ * worksheet (25 numbered parts, ~30 output tokens each) outran the old 8s and
+ * came back with nothing.
+ */
+const DETECT_TIMEOUT_MS = 20000;
 
 /**
  * How long detection waits to learn whether to draw the coordinate grid
@@ -153,6 +167,9 @@ export default function QuestionCropper({
   );
   const [debugInfo, setDebugInfo] = useState<DetectionDebug | null>(null);
   const [debugDenied, setDebugDenied] = useState(false);
+  // Why detection gave nothing, for the debug panel: a timeout looks exactly
+  // like "no questions" on screen otherwise.
+  const [debugFailure, setDebugFailure] = useState<string | null>(null);
   const [debugSent, setDebugSent] = useState<{
     w: number;
     h: number;
@@ -198,7 +215,12 @@ export default function QuestionCropper({
     // Without this the request had no ceiling at all: a hung call left
     // "Finding the questions…" on screen forever, because the only
     // setDetecting(false) sat after the await.
-    const timer = setTimeout(() => controller.abort(), DETECT_TIMEOUT_MS);
+    let timedOut = false;
+    const started = Date.now();
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, DETECT_TIMEOUT_MS);
 
     async function detect() {
       let result: QuestionDetection | null = null;
@@ -235,6 +257,7 @@ export default function QuestionCropper({
             }),
             signal: controller.signal,
           });
+          if (!res.ok && debugBoxes) setDebugFailure(`HTTP ${res.status} after ${Date.now() - started} ms`);
           if (res.ok) {
             result = (await res.json()) as QuestionDetection;
             lastDetection = { image, grid, result };
@@ -244,9 +267,16 @@ export default function QuestionCropper({
             }
           }
         }
-      } catch {
+      } catch (err) {
         // Aborted, offline, or a bad response. The phase-1 box already gives
         // the student a usable screen, so there is nothing to recover here.
+        if (debugBoxes && !cancelled) {
+          setDebugFailure(
+            timedOut
+              ? `timed out after ${DETECT_TIMEOUT_MS} ms`
+              : `failed after ${Date.now() - started} ms: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
       }
       if (cancelled) return;
 
@@ -307,7 +337,8 @@ export default function QuestionCropper({
 
   const fit = useMemo(() => {
     if (!stage.w || !stage.h || !img.w || !img.h) return null;
-    const scale = Math.min(stage.w / img.w, stage.h / img.h);
+    const scale = Math.min((stage.w - 2 * GUTTER_X) / img.w, (stage.h - 2 * GUTTER_Y) / img.h);
+    if (scale <= 0) return null;
     const w = img.w * scale;
     const h = img.h * scale;
     return { w, h, x: (stage.w - w) / 2, y: (stage.h - h) / 2 };
@@ -315,11 +346,41 @@ export default function QuestionCropper({
 
   // --- Drag / resize / move --------------------------------------------------
   const drag = useRef<{
-    handle: Handle;
+    /** "draw": a press on the photo outside the box, which draws a new one. */
+    handle: Handle | "draw";
     startX: number;
     startY: number;
     rect: NormalizedRect;
+    /** draw only: where the press landed on the photo, normalized. */
+    anchor?: { x: number; y: number };
+    /** draw only: travelled past TAP_SLOP, so it is a drag, not a tap. */
+    moved?: boolean;
   } | null>(null);
+
+  /** A pointer position as a point on the photo, normalized and clamped. */
+  const photoPoint = (clientX: number, clientY: number) => {
+    const stageBox = stageRef.current?.getBoundingClientRect();
+    if (!stageBox || !fit) return null;
+    return {
+      x: clamp((clientX - stageBox.left - fit.x) / fit.w, 0, 1),
+      y: clamp((clientY - stageBox.top - fit.y) / fit.h, 0, 1),
+    };
+  };
+
+  // Pressing the photo anywhere outside the box: drag across a question to
+  // box it in one stroke (the quickest crop there is), or tap a detected
+  // question to pick it. The box's own handlers stop propagation, so this
+  // only sees presses that missed it.
+  const startDraw = (e: React.PointerEvent) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    // The overlays inside the stage (not-work, debug) keep their own clicks.
+    if (notWork || (e.target as HTMLElement).closest("button, a")) return;
+    const anchor = photoPoint(e.clientX, e.clientY);
+    if (!anchor) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { handle: "draw", startX: e.clientX, startY: e.clientY, rect, anchor, moved: false };
+  };
 
   const startDrag = (handle: Handle) => (e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === "mouse") return;
@@ -331,44 +392,77 @@ export default function QuestionCropper({
     drag.current = { handle, startX: e.clientX, startY: e.clientY, rect };
   };
 
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      const d = drag.current;
-      if (!d || !fit) return;
-      const dx = (e.clientX - d.startX) / fit.w;
-      const dy = (e.clientY - d.startY) / fit.h;
-      const r = d.rect;
-      let { x, y, w, h } = r;
-      const right = r.x + r.w;
-      const bottom = r.y + r.h;
-
-      if (d.handle === "move") {
-        x = clamp(r.x + dx, 0, 1 - r.w);
-        y = clamp(r.y + dy, 0, 1 - r.h);
-      } else {
-        if (d.handle.includes("w")) {
-          x = clamp(r.x + dx, 0, right - MIN_SIZE);
-          w = right - x;
-        }
-        if (d.handle.includes("e")) {
-          w = clamp(r.w + dx, MIN_SIZE, 1 - r.x);
-        }
-        if (d.handle.includes("n")) {
-          y = clamp(r.y + dy, 0, bottom - MIN_SIZE);
-          h = bottom - y;
-        }
-        if (d.handle.includes("s")) {
-          h = clamp(r.h + dy, MIN_SIZE, 1 - r.y);
-        }
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || !fit) return;
+    if (d.handle === "draw") {
+      if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < TAP_SLOP) return;
+      if (!d.moved) {
+        d.moved = true;
+        touchedRef.current = true;
+        setTouched(true);
       }
-      setRect({ x, y, w, h });
-    },
-    [fit],
-  );
+      const p = photoPoint(e.clientX, e.clientY);
+      const a = d.anchor;
+      if (!p || !a) return;
+      // Grow from the anchor towards the finger, at least MIN_SIZE each way,
+      // and never past the photo.
+      const span = (from: number, to: number) => {
+        const size = clamp(Math.abs(to - from), MIN_SIZE, 1);
+        const start = to >= from ? from : from - size;
+        return { start: clamp(start, 0, 1 - size), size };
+      };
+      const sx = span(a.x, p.x);
+      const sy = span(a.y, p.y);
+      setRect({ x: sx.start, y: sy.start, w: sx.size, h: sy.size });
+      return;
+    }
+    const dx = (e.clientX - d.startX) / fit.w;
+    const dy = (e.clientY - d.startY) / fit.h;
+    const r = d.rect;
+    let { x, y, w, h } = r;
+    const right = r.x + r.w;
+    const bottom = r.y + r.h;
 
-  const endDrag = useCallback(() => {
+    if (d.handle === "move") {
+      x = clamp(r.x + dx, 0, 1 - r.w);
+      y = clamp(r.y + dy, 0, 1 - r.h);
+    } else {
+      if (d.handle.includes("w")) {
+        x = clamp(r.x + dx, 0, right - MIN_SIZE);
+        w = right - x;
+      }
+      if (d.handle.includes("e")) {
+        w = clamp(r.w + dx, MIN_SIZE, 1 - r.x);
+      }
+      if (d.handle.includes("n")) {
+        y = clamp(r.y + dy, 0, bottom - MIN_SIZE);
+        h = bottom - y;
+      }
+      if (d.handle.includes("s")) {
+        h = clamp(r.h + dy, MIN_SIZE, 1 - r.y);
+      }
+    }
+    setRect({ x, y, w, h });
+  };
+
+  const endDrag = (e: React.PointerEvent) => {
+    const d = drag.current;
     drag.current = null;
-  }, []);
+    // A tap on the photo picks the detected question under it (the smallest,
+    // where boxes nest). A tap anywhere else leaves the box alone.
+    if (d?.handle === "draw" && !d.moved && e.type === "pointerup") {
+      const p = photoPoint(e.clientX, e.clientY);
+      if (!p) return;
+      let best = -1;
+      questions.forEach((q, i) => {
+        const r = q.rect;
+        const inside = p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+        if (inside && (best < 0 || r.w * r.h < questions[best].rect.w * questions[best].rect.h)) best = i;
+      });
+      if (best >= 0) selectQuestion(best);
+    }
+  };
 
   // --- Confirm / cancel ------------------------------------------------------
   const [cropping, setCropping] = useState(false);
@@ -416,10 +510,10 @@ export default function QuestionCropper({
   const instruction = asking
     ? "Frame what you're asking about"
     : multi
-    ? "Crop the question, or tap a number"
+    ? "Tap a question, or drag across one"
     : questions.length === 1
       ? "Drag the box to frame the question"
-      : "Drag the box around the question";
+      : "Drag across the question";
   const count = multi
     ? `${questions.length} questions found`
     : detecting && !asking
@@ -465,6 +559,7 @@ export default function QuestionCropper({
            the dark theme, which turned these bars into cream slabs. Matches the
            dimming mask's literal below. */
         className="relative min-h-0 flex-1 touch-none select-none overflow-hidden bg-[rgb(32_27_20)]"
+        onPointerDown={startDraw}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
@@ -571,6 +666,7 @@ export default function QuestionCropper({
             gridFlag={gridFlag}
             preview={img}
             detecting={detecting}
+            failure={debugFailure}
           />
         )}
 
@@ -811,6 +907,7 @@ function DebugPanel({
   gridFlag,
   preview,
   detecting,
+  failure,
 }: {
   info: DetectionDebug | null;
   denied: boolean;
@@ -818,6 +915,7 @@ function DebugPanel({
   gridFlag: boolean;
   preview: { w: number; h: number };
   detecting: boolean;
+  failure: string | null;
 }) {
   const r = (n: number) => Math.round(n);
   return (
@@ -829,7 +927,7 @@ function DebugPanel({
       {denied ? (
         <p>debug not allowed: add &amp;code=… (the server&apos;s DEBUG_CODE)</p>
       ) : !info ? (
-        <p>{detecting ? "detecting…" : "no debug data (detection failed or cached)"}</p>
+        <p>{detecting ? "detecting…" : failure ? `detection ${failure}` : "no debug data (detection failed or cached)"}</p>
       ) : (
         <>
           <p>

@@ -94,7 +94,9 @@ export class AnthropicProvider implements AIProvider {
   ): Promise<QuestionDetection> {
     const res = await this.client.messages.parse({
       model: this.detectionModel,
-      max_tokens: 1200,
+      // A worksheet of 25 numbered parts is ~30 output tokens a box; 1200
+      // cut such a page off mid-JSON, which came back as no boxes at all.
+      max_tokens: 3000,
       // Thinking would only add latency to a localisation task. On Sonnet 5
       // this has to be said explicitly, because OMITTING `thinking` there runs
       // adaptive thinking rather than none. Haiku 4.5 doesn't take this shape

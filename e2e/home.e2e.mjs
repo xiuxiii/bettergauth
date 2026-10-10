@@ -1,7 +1,8 @@
 /**
  * Home: a typed problem, and a chosen photo through the question cropper to
  * the workspace. The cropper's failure path (a hand-off that can't be stored),
- * its not-a-question gate (fails open) and Ask mode.
+ * its not-a-question gate (fails open), Ask mode, and its box: reachable on a
+ * full-width question, drawn by dragging across the photo, picked by a tap.
  *
  * Snap a problem → in-app camera → cropper is camera.e2e.mjs's job.
  */
@@ -186,5 +187,56 @@ export default async function homeSpec(t) {
     t.ok("ask: the question replaces the opening hint", !(await onScreen(p, "OPENER")));
     t.ok("ask: no work check is started", checks.length === 0, checks.length);
     t.ok("ask: no unmocked AI calls", st.unmocked.length === 0, st.unmocked);
+  });
+
+  await t.test("The crop box: clear of the screen edges, drawn by a drag, picked by a tap", async () => {
+    const { p, st } = await t.page();
+    // Slow on purpose: a dense page took longer than the old 8 s ceiling and
+    // came back with nothing.
+    await mock(p, t.base, "detect-questions", async () => {
+      await new Promise((r) => setTimeout(r, 9500));
+      return {
+        hasStemContent: true,
+        primaryIndex: 0,
+        questions: [
+          { label: "2(a)", rect: { x: 0, y: 0.1, w: 1, h: 0.15 } },
+          { label: "2(b)", rect: { x: 0.1, y: 0.5, w: 0.4, h: 0.1 } },
+        ],
+      };
+    });
+    await p.goto(t.base + "/");
+    await choosePhoto(p);
+    const chip = (label) => p.getByRole("radio", { name: label });
+    const landed = await chip("2(a)").waitFor({ timeout: 15000 }).then(() => true, () => false);
+    t.ok("a detection slower than 8 s still lands", landed);
+
+    const box = p.locator(".cursor-move.border-brand-500");
+    const photo = await p.getByRole("img", { name: "Your photo" }).boundingBox();
+    const vw = p.viewportSize().width;
+    const b = await box.boundingBox();
+    t.ok("a full-width question's box sits ≥ 24 px inside both screen edges (Android's back-gesture strips)",
+      !!b && b.x >= 24 && b.x + b.width <= vw - 24, { box: b, vw });
+    await t.shot(p, "crop-full-width");
+
+    // A tap on the other question, outside the current box, picks it.
+    const at = (fx, fy) => [photo.x + fx * photo.width, photo.y + fy * photo.height];
+    await p.mouse.click(...at(0.3, 0.55));
+    t.ok("a tap on a detected question picks it", (await chip("2(b)").getAttribute("aria-checked")) === "true");
+
+    // A drag across empty photo draws a new box from the press to the release.
+    const [x1, y1] = at(0.2, 0.75);
+    const [x2, y2] = at(0.7, 0.85);
+    await p.mouse.move(x1, y1);
+    await p.mouse.down();
+    await p.mouse.move(x2, y2, { steps: 6 });
+    await p.mouse.up();
+    const d = await box.boundingBox();
+    const near = (a, e) => Math.abs(a - e) <= 3;
+    t.ok("a drag across the photo draws the box there",
+      !!d && near(d.x, x1) && near(d.y, y1) && near(d.x + d.width, x2) && near(d.y + d.height, y2),
+      { drawn: d, from: [x1, y1], to: [x2, y2] });
+    // Drawn by the student, so a late re-render of detection doesn't move it.
+    t.ok("Reset offers the detected box back", await p.getByRole("button", { name: "Reset" }).isVisible());
+    t.ok("no page errors", st.pageErrors.length === 0, st.pageErrors);
   });
 }

@@ -403,7 +403,7 @@ export class DeepSeekProvider implements AIProvider {
               ),
             },
           ],
-          maxTokens: 2500,
+          maxTokens: 3000,
           label: "detectQuestions",
         });
         return {

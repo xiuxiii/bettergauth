@@ -240,13 +240,15 @@ Getting the box on the RIGHT question matters more than getting its edges perfec
 
 What counts as a question: one numbered problem together with all of its parts, sub-parts, figures and answer options. Its box must fully contain it with a small margin and must not overlap a neighbouring question.
 
+The exception is an exercise list: a number followed only by a short instruction ("Solve for x", "Simplify", "Write each as a single power") and then lettered parts that are each a complete exercise on their own, such as a separate equation or expression. There the student works on ONE part, so return one box per lettered part, labelled with the number and the letter ("2(o)"), each tight around just that part, and no box for the number as a whole. When the parts share a setup the student needs (a scenario, given values, a figure, a table), they are not independent: keep the whole numbered question in one box as above.
+
 A question's box must ALSO contain any handwritten working the student has already done for it, usually below or beside the printed question. They often photograph a problem they have already attempted, and work left outside the box is lost. Stop before the next numbered question even when working runs close to it, and never extend a box ABOVE its own printed number: working written above that number belongs to the question before it, not this one. Set hasWorking true for a question whose box contains the student's own HANDWRITTEN working; printed text, a printed answer or a worked example never counts.
 
 Ignore everything that is not printed exercise content. Photos are taken on a desk, so a calculator, phone, pen, ruler, hand or any other object lying on the page is NEVER a question, and neither is a running header, a page number, a chapter title or a section heading on its own.
 
 Pages photographed as a two-page spread have independent columns: read each column top to bottom, left-hand page before right-hand page.
 
-Label each entry with the number printed at the start of that question ("Question 5", "Q5", "3(b)"). If a region has no printed number of its own, do not return it. Return only questions you can actually see a number for; five correct boxes are far better than eight with three in the wrong place.
+Label each entry with the number printed at the start of that question ("Question 5", "Q5", "3(b)"); a part of an exercise list carries its number and letter even when the letter alone is printed beside it ("2(o)"). If a region has no printed number of its own, do not return it. Return only questions you can actually see a number for; five correct boxes are far better than eight with three in the wrong place.
 
 If the photo shows a single problem, or only a fragment of one, return exactly one box around it. Set primaryIndex to the question most likely intended: the most complete, central one, or the only one.`;
 

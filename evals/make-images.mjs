@@ -9,10 +9,12 @@
  * only after editing the pages below:
  *
  *   node evals/make-images.mjs
+ *   node evals/make-images.mjs --only 25-detect-exercise-list   one detection page
  *
  * It also renders the question-DETECTION pages (DETECT_PAGES: a two-column
  * textbook page, a worksheet with working, the same textbook page tilted on a
- * desk) and writes their cases, evals/cases/22-24-detect-*.json, with each
+ * desk, an exercise list whose lettered parts are each their own exercise)
+ * and writes their cases, evals/cases/22-25-detect-*.json, with each
  * question's true box measured from the DOM. Then it draws the coordinate
  * grid (lib/detectGrid.ts, the app's own drawer) on every detection image,
  * including the real photographed spread of case 21, as <name>.grid.jpg.
@@ -30,6 +32,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+/** `--only <case id>`: render just that detection page (and its grid). */
+const ONLY = (() => {
+  const i = process.argv.indexOf("--only");
+  return i >= 0 ? process.argv[i + 1] : null;
+})();
 const OUT = path.join(HERE, "images");
 const CASES = path.join(HERE, "cases");
 const ROOT = path.join(HERE, "..");
@@ -207,11 +214,52 @@ const WORKSHEET = [
   { n: "6", stem: "A spring with k = 200 N/m is stretched by 5.0 cm. Find the elastic potential energy stored in it.", space: 0 },
 ];
 
+/**
+ * An exercise list, like a real algebra worksheet: under one number and a
+ * short instruction, lettered parts that are each a whole exercise. The
+ * student works on one, so each part is its own question ("2(f)"). Question 3
+ * is the other kind: its parts share a setup, so it stays one box.
+ */
+const EXERCISES = [
+  {
+    n: "1",
+    instr: "Write each expression as a single power of 2.",
+    cols: 4,
+    parts: ["4<sup>3</sup> × 8", "√32", "16<sup>x</sup> ÷ 2", "(8<sup>2</sup>)<sup>x</sup>"],
+  },
+  {
+    n: "2",
+    instr: "Solve for x. Check your answers by substitution.",
+    cols: 3,
+    parts: [
+      "2<sup>x</sup> = 64",
+      "3<sup>x+1</sup> = 81",
+      "5<sup>2x</sup> = 125",
+      "9<sup>x</sup> = 27",
+      "4<sup>x−1</sup> = 8<sup>x</sup>",
+      "2<sup>−x</sup> = 1/16",
+      "3<sup>x+1</sup> + 3<sup>x</sup> = 36",
+      "2<sup>x</sup> − 2<sup>x−1</sup> = 2<sup>−3</sup>",
+      "27<sup>x</sup> = 9<sup>2x−1</sup>",
+      "125<sup>2x−1</sup> = 25<sup>x+4</sup>",
+      "49(7/12)<sup>2x</sup> = 144",
+      "6<sup>2x</sup> − 5(6<sup>x</sup>) − 6 = 0",
+    ],
+  },
+  {
+    n: "3",
+    stem: "A culture of bacteria doubles every 3 hours. At noon there are 500 bacteria.",
+    parts: ["Write a model for the number of bacteria t hours after noon.", "At what time will there be 8000 bacteria?"],
+  },
+];
+
 const DETECT_PAGES = [
   { id: "22-detect-two-column", file: "detect-two-column.jpg", html: () => textbookHtml({ tilt: false }) },
   { id: "23-detect-worksheet", file: "detect-worksheet.jpg", html: () => worksheetHtml() },
   { id: "24-detect-tilted-spread", file: "detect-tilted-spread.jpg", html: () => textbookHtml({ tilt: true }) },
-];
+  { id: "25-detect-exercise-list", file: "detect-exercise-list.jpg", html: () => exerciseListHtml() },
+].filter((p) => !ONLY || p.id === ONLY);
+if (ONLY && !DETECT_PAGES.length) throw new Error(`--only ${ONLY}: no such detection page`);
 
 const letters = (i) => String.fromCharCode(97 + i);
 function partsHtml(parts) {
@@ -284,6 +332,39 @@ function worksheetHtml() {
     <p class="instr">Show all your working. Take g = 9.81 m/s².</p>
     ${WORKSHEET.map(questionHtml).join("")}
   </div>${handwritingScript(hash("detect-worksheet.jpg"))}</body></html>`;
+}
+
+function exerciseListHtml() {
+  const block = (q) => {
+    if (q.stem) {
+      return `<div class="dq" data-label="${q.n}"><span class="num">${q.n}.</span><div class="body"><div>${q.stem}</div>${partsHtml(q.parts)}</div></div>`;
+    }
+    // Each part is measured on its own; the number and instruction belong to no box.
+    const parts = q.parts
+      .map((p, i) => `<div class="dq part" data-label="${q.n}(${letters(i)})"><span class="tag">(${letters(i)})</span><span>${p}</span></div>`)
+      .join("");
+    return `<div class="exr"><span class="num">${q.n}.</span><div><div class="ins">${q.instr}</div><div class="grid" style="grid-template-columns: repeat(${q.cols}, 1fr)">${parts}</div></div></div>`;
+  };
+  return `<!doctype html><html><head><style>
+    html, body { margin: 0; }
+    body { width: 900px; height: 1200px; overflow: hidden; background: #f4f1ea; }
+    .page { position: absolute; inset: 0; box-sizing: border-box; padding: 60px 64px 0;
+      background: #fdfdfb; color: #1d1d1d; font: 21px/1.4 "Liberation Serif", "DejaVu Serif", serif; }
+    h1 { font: 700 25px/1.2 "Liberation Sans", "DejaVu Sans", sans-serif; letter-spacing: 0.04em; text-align: center; margin: 0 0 8px; }
+    .note { text-align: center; font-size: 16px; margin: 0 0 34px; }
+    .exr, .dq:not(.part) { display: grid; grid-template-columns: 34px 1fr; margin-bottom: 40px; }
+    .num { font-weight: 700; }
+    .ins { margin-bottom: 18px; }
+    .grid { display: grid; row-gap: 44px; column-gap: 18px; }
+    .part { display: flex; gap: 10px; align-items: baseline; }
+    .tag { min-width: 30px; }
+    .li { display: grid; grid-template-columns: 34px 1fr; }
+    sup { font-size: 0.68em; }
+  </style></head><body><div class="page">
+    <h1>SOLVING EXPONENTIAL EQUATIONS</h1>
+    <p class="note">All work must be shown on a separate sheet.</p>
+    ${EXERCISES.map(block).join("")}
+  </div></body></html>`;
 }
 
 /**
@@ -446,7 +527,7 @@ tab.on("pageerror", (e) => {
   console.error("page script failed:", e.message);
   process.exit(1);
 });
-for (const page of PAGES) {
+for (const page of ONLY ? [] : PAGES) {
   await tab.setContent(html(page), { waitUntil: "load" });
   await tab.screenshot({ path: path.join(OUT, page.file), type: "jpeg", quality: 82 });
   console.log("wrote", path.join("evals/images", page.file));
@@ -471,7 +552,7 @@ for (const page of DETECT_PAGES) {
 // Grid variants, for every detection image. Case 21's photo is committed
 // (rebuilt once by rebuild-spread.mjs); its case must match its real size.
 const SPREAD = { file: "spread-gas-laws.jpg", case: "21-detect-spread.json" };
-for (const file of [SPREAD.file, ...DETECT_PAGES.map((p) => p.file)]) {
+for (const file of [...(ONLY ? [] : [SPREAD.file]), ...DETECT_PAGES.map((p) => p.file)]) {
   if (!fs.existsSync(path.join(OUT, file))) {
     console.warn("missing", path.join("evals/images", file), "- no grid drawn");
     continue;
