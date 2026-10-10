@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import AccountButton from "@/components/AccountButton";
+import AccountPrompts from "@/components/AccountPrompts";
 import HomeDashboard from "@/components/HomeDashboard";
 import HomeUploader from "@/components/HomeUploader";
 import MindGapMark from "@/components/MindGapMark";
@@ -39,6 +40,7 @@ export default function HomePage() {
         {/* Where they left off and what keeps going wrong, from on-device
             history. Renders nothing for a brand-new student. */}
         <div className="mt-8 md:mt-0">
+          <AccountPrompts />
           <HomeDashboard />
         </div>
       </div>

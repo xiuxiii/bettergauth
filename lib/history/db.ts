@@ -43,8 +43,14 @@ export interface SessionRecord {
   createdAt: number;
   updatedAt: number;
   schemaVersion: number;
-  /** Always null for now — see the note above. */
+  /** The updatedAt last saved to the account (lib/sync), or null if never. */
   syncedAt: number | null;
+  /**
+   * The account this record belongs to (lib/sync). Absent on a record made
+   * signed out: it stays on this device unless the student brings it into
+   * their account.
+   */
+  ownerId?: string | null;
   analysis: ProblemAnalysis;
   messages: StoredMessage[];
   /** The concept signal this whole feature exists to accumulate. */
@@ -147,10 +153,34 @@ export async function getImage(id: string): Promise<Blob | null> {
   return blob ?? null;
 }
 
-export async function saveSession(record: SessionRecord): Promise<boolean> {
+/**
+ * What sync (lib/sync/engine.ts) hears about: a save to push, a delete or a
+ * clear to pass on to the account. Sync's own writes pass `quiet` so they
+ * don't echo back.
+ */
+type WriteHooks = {
+  saved?: (record: SessionRecord) => void;
+  deleted?: (record: SessionRecord) => void;
+  /** Before a clear, while the records can still be read. */
+  clearing?: (records: SessionRecord[]) => Promise<void>;
+};
+let hooks: WriteHooks = {};
+export function setWriteHooks(next: WriteHooks): void {
+  hooks = next;
+}
+type Quiet = { quiet?: boolean };
+
+export async function saveSession(record: SessionRecord, opts: Quiet = {}): Promise<boolean> {
   const ok = await tx(SESSIONS, "readwrite", (t) =>
     wrap(t.objectStore(SESSIONS).put(record)),
   );
+  if (ok !== null && !opts.quiet) hooks.saved?.(record);
+  return ok !== null;
+}
+
+/** Store a photo under a known id: one fetched back from the account. */
+export async function putImageAt(id: string, blob: Blob): Promise<boolean> {
+  const ok = await tx(IMAGES, "readwrite", (t) => wrap(t.objectStore(IMAGES).put(blob, id)));
   return ok !== null;
 }
 
@@ -181,7 +211,7 @@ export async function listSessions(limit = 200): Promise<SessionRecord[]> {
 }
 
 /** Deletes the record AND its photos — otherwise the Blobs leak forever. */
-export async function deleteSession(id: string): Promise<boolean> {
+export async function deleteSession(id: string, opts: Quiet = {}): Promise<boolean> {
   const rec = await getSession(id);
   if (!rec) return false;
   const imageIds = collectImageIds(rec);
@@ -191,10 +221,12 @@ export async function deleteSession(id: string): Promise<boolean> {
     await Promise.all(imageIds.map((i) => wrap(images.delete(i))));
     return true;
   });
+  if (ok !== null && !opts.quiet) hooks.deleted?.(rec);
   return ok !== null;
 }
 
 export async function clearAll(): Promise<boolean> {
+  if (hooks.clearing) await hooks.clearing(await listSessions(100_000));
   const ok = await tx([SESSIONS, IMAGES], "readwrite", async (t) => {
     await wrap(t.objectStore(SESSIONS).clear());
     await wrap(t.objectStore(IMAGES).clear());
@@ -203,11 +235,16 @@ export async function clearAll(): Promise<boolean> {
   return ok !== null;
 }
 
-/** Every image this record owns: the problem photo plus any attempt photos. */
+/**
+ * Every image this record owns: the problem photo, attempt photos, and
+ * practice-answer photos (lib/history/record.ts externalise).
+ */
 export function collectImageIds(rec: SessionRecord): string[] {
   const ids = rec.imageId ? [rec.imageId] : [];
   for (const m of rec.messages) {
     if (typeof m.attemptImageId === "string") ids.push(m.attemptImageId);
+    const practice = (m as { practiceState?: { attempt?: { imageId?: unknown } } }).practiceState;
+    if (typeof practice?.attempt?.imageId === "string") ids.push(practice.attempt.imageId);
   }
   return ids;
 }

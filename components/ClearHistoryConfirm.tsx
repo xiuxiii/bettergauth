@@ -8,17 +8,21 @@
  */
 export default function ClearHistoryConfirm({
   count,
+  account = false,
   onConfirm,
   onCancel,
 }: {
   count: number;
+  /** Signed in: the delete reaches the account (every device) too. */
+  account?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   return (
     <div className="rounded-md border border-danger-200 bg-danger-50 p-3 text-center">
       <p className="text-sm text-danger-800">
-        Delete all {count} saved {count === 1 ? "problem" : "problems"}, including the photos?
+        Delete all {count} saved {count === 1 ? "problem" : "problems"}, including the photos
+        {account ? ", from this device and your account" : ""}?
       </p>
       <div className="mt-3 flex justify-center gap-2">
         <button

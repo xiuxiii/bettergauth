@@ -50,7 +50,8 @@ import {
   savePreferences,
 } from "@/lib/preferences";
 import { resumeSession, saveProgress, startSession } from "@/lib/history/record";
-import { getImage, getSession } from "@/lib/history/db";
+import { getSession } from "@/lib/history/db";
+import { getImageSynced } from "@/lib/sync/engine";
 import { blobToDataUrl } from "@/lib/image";
 import ProblemCard from "@/components/ProblemCard";
 import MessageBubble from "@/components/MessageBubble";
@@ -408,7 +409,7 @@ export default function TutorWorkspace() {
           return;
         }
         if (rec.imageId) {
-          const blob = await getImage(rec.imageId);
+          const blob = await getImageSynced(rec.imageId);
           if (blob) {
             try {
               setImage(await blobToDataUrl(blob));
@@ -439,7 +440,7 @@ export default function TutorWorkspace() {
               msg.practiceState?.attempt as { imageId?: string } | undefined
             )?.imageId;
             if (practicePhotoId && msg.practiceState?.attempt) {
-              const blob = await getImage(practicePhotoId);
+              const blob = await getImageSynced(practicePhotoId);
               if (blob) {
                 try {
                   const dataUrl = await blobToDataUrl(blob);
@@ -454,7 +455,7 @@ export default function TutorWorkspace() {
               }
             }
             if (msg.attemptImageId) {
-              const blob = await getImage(msg.attemptImageId);
+              const blob = await getImageSynced(msg.attemptImageId);
               if (blob) {
                 try {
                   msg.attemptImage = await blobToDataUrl(blob);

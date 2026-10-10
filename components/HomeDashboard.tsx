@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { listSessions, type SessionRecord } from "@/lib/history/db";
+import { HISTORY_SYNCED_EVENT } from "@/lib/sync/events";
 import { rankConcepts, type ConceptProgress } from "@/lib/tutor/progress";
 import { formatRelativeDate } from "@/lib/utils";
 import { InlineRichText } from "@/components/RichText";
@@ -23,12 +24,17 @@ export default function HomeDashboard() {
   const [concepts, setConcepts] = useState<ConceptProgress[]>([]);
 
   useEffect(() => {
-    void listSessions().then((rows) => {
-      setSessions(rows);
-      setConcepts(
-        rankConcepts(rows.map((r) => ({ memory: r.memory, at: r.createdAt }))),
-      );
-    });
+    const load = () =>
+      void listSessions().then((rows) => {
+        setSessions(rows);
+        setConcepts(
+          rankConcepts(rows.map((r) => ({ memory: r.memory, at: r.createdAt }))),
+        );
+      });
+    load();
+    // Problems arriving from (or removed on) another device.
+    window.addEventListener(HISTORY_SYNCED_EVENT, load);
+    return () => window.removeEventListener(HISTORY_SYNCED_EVENT, load);
   }, []);
 
   if (!sessions || sessions.length === 0) return null;

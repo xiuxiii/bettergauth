@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { HISTORY_SYNCED_EVENT } from "@/lib/sync/events";
+import { useAccount } from "@/lib/account/useAccount";
 import Link from "next/link";
 import { ChevronLeft, Trash2 } from "lucide-react";
 import {
@@ -33,6 +35,7 @@ export default function HistoryView() {
   const [summaryBusy, setSummaryBusy] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const account = useAccount();
 
   const load = useCallback(async () => {
     const rows = await listSessions();
@@ -44,6 +47,10 @@ export default function HistoryView() {
 
   useEffect(() => {
     void load();
+    // Problems arriving from (or removed on) another device.
+    const reload = () => void load();
+    window.addEventListener(HISTORY_SYNCED_EVENT, reload);
+    return () => window.removeEventListener(HISTORY_SYNCED_EVENT, reload);
   }, [load]);
 
   async function explain() {
@@ -224,6 +231,7 @@ export default function HistoryView() {
             {confirmClear ? (
               <ClearHistoryConfirm
                 count={visible.length}
+                account={account.status === "signedIn"}
                 onConfirm={removeEverything}
                 onCancel={() => setConfirmClear(false)}
               />

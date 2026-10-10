@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, LogOut, Trash2 } from "lucide-react";
+import { ChevronLeft, CloudCheck, CloudOff, LogOut, RefreshCw, Trash2 } from "lucide-react";
 import AccountAvatar from "@/components/AccountAvatar";
 import { Spinner } from "@/components/States";
 import { browserSupabase } from "@/lib/supabase/client";
 import { apiFetch, NetworkError, readApiError } from "@/lib/apiClient";
 import { refreshAccount, useAccount } from "@/lib/account/useAccount";
+import { syncNow, useSyncStatus, type SyncStatus } from "@/lib/sync/engine";
 
 /**
  * The signed-in student's account: who they are signed in as, sign out, and
@@ -18,6 +19,7 @@ import { refreshAccount, useAccount } from "@/lib/account/useAccount";
 export default function AccountView() {
   const router = useRouter();
   const account = useAccount();
+  const sync = useSyncStatus();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState<"signout" | "delete" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +91,8 @@ export default function AccountView() {
         </div>
       </section>
 
+      <SyncRow sync={sync} />
+
       <div className="mt-6 space-y-2">
         <button
           type="button"
@@ -99,7 +103,9 @@ export default function AccountView() {
           {busy === "signout" ? <Spinner className="h-5 w-5" /> : <LogOut size={18} strokeWidth={1.75} aria-hidden="true" />}
           Sign out
         </button>
-        <p className="px-1 text-xs text-slate-500">Problems already on this device stay here after you sign out.</p>
+        <p className="px-1 text-xs text-slate-500">
+          Signing out takes your account&apos;s problems off this device. They stay saved in your account.
+        </p>
       </div>
 
       <div className="mt-10">
@@ -110,7 +116,7 @@ export default function AccountView() {
             </h2>
             <p className="mt-1 text-sm text-danger-700">
               This removes your account and every problem, conversation and photo saved to it,
-              for good. This device&apos;s own history stays.
+              on all your devices, for good. Problems made here without signing in stay.
             </p>
             <div className="mt-4 flex gap-2">
               <button
@@ -149,4 +155,43 @@ export default function AccountView() {
       </div>
     </main>
   );
+}
+
+function SyncRow({ sync }: { sync: SyncStatus }) {
+  const ago = sync.lastSyncAt ? relative(sync.lastSyncAt) : null;
+  const [text, icon, tone] =
+    sync.state === "syncing"
+      ? ["Saving to your account…", <RefreshCw key="i" size={18} strokeWidth={1.75} className="animate-spin" aria-hidden="true" />, "text-slate-600"]
+      : sync.state === "offline"
+        ? ["Offline. Your problems will save when you're back online.", <CloudOff key="i" size={18} strokeWidth={1.75} aria-hidden="true" />, "text-slate-600"]
+        : sync.state === "error"
+          ? ["Couldn't save to your account just now.", <CloudOff key="i" size={18} strokeWidth={1.75} aria-hidden="true" />, "text-danger-700"]
+          : [ago ? `Your problems are saved to your account · ${ago}` : "Your problems are saved to your account", <CloudCheck key="i" size={18} strokeWidth={1.75} aria-hidden="true" />, "text-slate-600"];
+  return (
+    <section
+      aria-live="polite"
+      className={`mt-3 flex items-center gap-3 rounded-lg border border-hairline bg-surface px-4 py-3 text-sm ${tone}`}
+    >
+      <span className="flex-shrink-0">{icon}</span>
+      <span className="flex-1">{text}</span>
+      {sync.state === "error" && (
+        <button
+          type="button"
+          onClick={() => void syncNow()}
+          className="h-9 rounded-md px-3 text-sm font-medium text-brand-700 transition hover:bg-brand-50"
+        >
+          Try again
+        </button>
+      )}
+    </section>
+  );
+}
+
+function relative(at: number): string {
+  const s = Math.round((Date.now() - at) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `${h} h ago` : new Date(at).toLocaleDateString();
 }

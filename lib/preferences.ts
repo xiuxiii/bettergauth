@@ -43,6 +43,9 @@ export function loadPreferences(): TutorPreferences | null {
   }
 }
 
+/** Fired on window after every save, for account sync (lib/sync/engine.ts). */
+export const PREFS_SAVED_EVENT = "mindgap:preferences-saved";
+
 /** Persist preferences. No-op if storage is unavailable. */
 export function savePreferences(prefs: TutorPreferences): void {
   if (typeof window === "undefined") return;
@@ -51,6 +54,7 @@ export function savePreferences(prefs: TutorPreferences): void {
   } catch {
     /* storage blocked — preferences simply won't persist */
   }
+  window.dispatchEvent(new Event(PREFS_SAVED_EVENT));
 }
 
 /**

@@ -55,10 +55,26 @@ create table if not exists public.sessions (
   deleted_at bigint,
   -- The device's SessionRecord minus syncedAt; null once deleted.
   record jsonb,
+  -- When the server last saw a write, by the server's clock. Devices pull
+  -- "changed since" by this, never by updated_at: a phone whose clock runs
+  -- behind would otherwise write rows the others never ask for.
+  changed_at timestamptz not null default now(),
   primary key (user_id, id)
 );
 
-create index if not exists sessions_user_updated on public.sessions (user_id, updated_at);
+create index if not exists sessions_user_changed on public.sessions (user_id, changed_at);
+
+create or replace function public.touch_changed_at() returns trigger
+language plpgsql as $$
+begin
+  new.changed_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists sessions_changed_at on public.sessions;
+create trigger sessions_changed_at before insert or update on public.sessions
+  for each row execute function public.touch_changed_at();
 
 alter table public.sessions enable row level security;
 

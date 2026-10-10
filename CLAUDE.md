@@ -251,6 +251,24 @@ device's own history. Account UI reads one store, `useAccount`
 first use, not with the page (~70 KB). The SQL lives in
 `supabase/migrations/`; run new files in Supabase's SQL editor.
 
+**History syncs to the account; the device copy stays the one screens read.**
+`lib/sync/engine.ts` runs behind IndexedDB: deletes go up as tombstones,
+changed records (and their photos, private bucket `photos/<uid>/<id>.jpg`)
+are pushed, then rows changed since the last pull come down. Pulls page by the
+server's own clock (`changed_at`, set by a trigger) and id, never by the
+device's `updated_at`: a phone with a slow clock would otherwise write rows
+nobody pulls. Every conflict rule is in `lib/sync/merge.ts` (unit-tested): last
+write wins by `updatedAt`, a delete loses to a later edit, and a record made
+signed out (no `ownerId`) is never pushed, overwritten or deleted by sync
+unless the student brings it in (home's prompt, `importGuestRecords`). Records
+made after this device linked to the account count as its own. `db.ts`
+reports saves, deletes and clears through `setWriteHooks`; sync's own writes
+pass `{ quiet: true }`. Photos missing here download on demand
+(`getImageSynced`). Signing out removes the account's synced records from the
+device (shared phones); unsynced and signed-out ones stay. Preferences sync to
+`profiles.preferences` (the account's copy wins on the first pass); the theme
+stays per device on purpose. Lists re-read on `HISTORY_SYNCED_EVENT`.
+
 **Sheets go through `components/ui/Sheet.tsx`.** It owns drag-to-dismiss,
 Escape, the focus trap and handing focus back to the opener. The composer and
 ChoiceSheet both use it; don't grow a second sheet.

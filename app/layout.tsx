@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, Newsreader } from "next/font/google";
 import "./globals.css";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
+import SyncAgent from "@/components/SyncAgent";
 import ThemeWatcher from "@/components/ThemeWatcher";
 
 // MindGap's type system: Hanken Grotesk for UI, Newsreader for display/serif.
@@ -65,6 +66,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-dvh font-sans">
         <ThemeWatcher />
+        <SyncAgent />
         {children}
       </body>
     </html>

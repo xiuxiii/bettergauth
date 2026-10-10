@@ -271,6 +271,7 @@ export default function SettingsView() {
               <div className="mt-1 w-full">
                 <ClearHistoryConfirm
                   count={historyCount}
+                  account={account.status === "signedIn"}
                   onConfirm={clearHistory}
                   onCancel={() => setConfirmClear(false)}
                 />
