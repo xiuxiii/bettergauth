@@ -45,6 +45,7 @@ export type UsageCounter =
   | "resolved"
   | "practice.generate"
   | `practice.${PracticeVerdict}`
+  | `noWork.${"check" | "practice"}`
   | "detect"
   | `provider.${"deepseek" | "anthropic"}`
   | `ms.${UsageRoute}`

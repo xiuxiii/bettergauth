@@ -62,6 +62,7 @@ import SessionToggles from "@/components/SessionToggles";
 import { GOAL_OPTIONS, STYLE_OPTIONS, optionOf } from "@/components/PreferenceFields";
 import RecurringBanner from "@/components/RecurringBanner";
 import Wordmark from "@/components/Wordmark";
+import { NO_WORK_SEEN } from "@/lib/noWork";
 import {
   EmptyState,
   ErrorState,
@@ -111,7 +112,10 @@ type TutorStreamFrame =
 type CheckStreamFrame =
   | { t: "stage"; stage: "thinking" | "writing" }
   | { t: "done"; check: WorkCheck }
-  | { t: "error"; message: string };
+  | { t: "error"; message: string; code?: string };
+
+/** check-work saw no attempt in what was sent (lib/noWork.ts): nothing to retry. */
+class NoWorkError extends Error {}
 
 /** "notWork": the photo holds no study material at all (dinner, the floor, an
  *  accidental shot) — shown as "Question not detected", not as an error. */
@@ -160,7 +164,8 @@ export default function TutorWorkspace() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [turnBusy, setTurnBusy] = useState(false);
-  const [turnError, setTurnError] = useState<string | null>(null);
+  // `title` replaces "Something went wrong" where it isn't one (no working seen).
+  const [turnError, setTurnError] = useState<{ message: string; title?: string } | null>(null);
   // Id of the message currently streaming in, or null. Distinct from turnBusy:
   // controls stay locked until the turn completes, but the "thinking" dots give
   // way as soon as there is real text to read.
@@ -685,7 +690,7 @@ export default function TutorWorkspace() {
     } catch (err) {
       retryRef.current = () =>
         void requestTurn(action, problem, history, studentText);
-      setTurnError(err instanceof Error ? err.message : "Tutor failed.");
+      setTurnError({ message: err instanceof Error ? err.message : "Tutor failed." });
     } finally {
       setStreamingId(null);
       setTurnBusy(false);
@@ -823,7 +828,9 @@ export default function TutorWorkspace() {
     for await (const frame of readNdjson<CheckStreamFrame>(res)) {
       if (frame.t === "stage") onStage?.(frame.stage);
       else if (frame.t === "done") return frame.check;
-      else if (frame.t === "error") throw new Error(frame.message);
+      else if (frame.t === "error") {
+        throw frame.code === NO_WORK_SEEN ? new NoWorkError(frame.message) : new Error(frame.message);
+      }
     }
     // The connection dropped before the result arrived.
     throw new Error("The check was cut off. Please try again.");
@@ -872,9 +879,16 @@ export default function TutorWorkspace() {
         },
       ]);
     } catch (err) {
+      // Sending the same photo again would see the same nothing: no Try
+      // again, they retake it through Check my work.
+      if (err instanceof NoWorkError) {
+        retryRef.current = null;
+        setTurnError({ title: "No working to check", message: err.message });
+        return;
+      }
       retryRef.current = () =>
         void sendCheckWork(attempt, forProblem, undefined, retryOf);
-      setTurnError(err instanceof Error ? err.message : "Check failed.");
+      setTurnError({ message: err instanceof Error ? err.message : "Check failed." });
     } finally {
       setCheckStage(null);
       setTurnBusy(false);
@@ -1116,8 +1130,9 @@ export default function TutorWorkspace() {
 
             {turnError && (
               <ErrorState
-                message={turnError}
-                onRetry={() => retryRef.current?.()}
+                title={turnError.title}
+                message={turnError.message}
+                onRetry={retryRef.current ? () => retryRef.current?.() : undefined}
               />
             )}
           </div>

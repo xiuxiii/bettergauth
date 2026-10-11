@@ -5,6 +5,7 @@ import { trackUsage, usageScope, type Usage } from "@/lib/usageServer";
 import { CLIENT_CLOSED } from "@/lib/usage";
 import { CheckWorkRequestSchema, parseBody } from "@/lib/api/schemas";
 import type { WorkCheck } from "@/lib/tutor/types";
+import { noWorkRefusal } from "@/lib/noWork";
 
 export const runtime = "nodejs";
 
@@ -12,7 +13,9 @@ export const runtime = "nodejs";
  * POST /api/check-work
  * Body: CheckWorkRequest
  * Returns: NDJSON — `{t:"stage", stage}` frames while the model reasons, then
- * one `{t:"done", check}`, or `{t:"error", message}` if it fails mid-stream.
+ * one `{t:"done", check}`, or `{t:"error", message}` if it fails mid-stream,
+ * or `{t:"error", code:"no_work_seen", message}` when the model saw no
+ * attempt at this problem (lib/noWork.ts): then nothing is marked.
  *
  * Streamed because the diagnosis now thinks before it answers, and a silent
  * multi-second wait reads as broken. The stages come from the model's own
@@ -80,6 +83,12 @@ async function handle(req: Request, usage: Usage): Promise<Response> {
       async start(controller) {
         const send = (e: { type: string; stage?: string; check?: WorkCheck }) => {
           if (cancelled) return;
+          const refusal = e.type === "done" && e.check ? noWorkRefusal(body.attempt, e.check) : null;
+          if (refusal) {
+            usage.add("noWork.check");
+            controller.enqueue(line({ t: "error", code: refusal.code, message: refusal.error }));
+            return;
+          }
           tally(e);
           controller.enqueue(frame(e));
         };

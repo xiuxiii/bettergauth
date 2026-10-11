@@ -4,6 +4,7 @@ import { errorResponse } from "@/lib/apiError";
 import { rateLimited } from "@/lib/rateLimit";
 import { trackUsage, usageScope, type Usage } from "@/lib/usageServer";
 import { EvaluatePracticeRequestSchema, parseBody } from "@/lib/api/schemas";
+import { noWorkRefusal } from "@/lib/noWork";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,13 @@ async function handle(req: Request, usage: Usage): Promise<Response> {
         imageDataUrl: body.attempt.imageDataUrl,
       },
     });
+    // Nothing to mark in what they sent: say so, and keep the solution back
+    // so the problem isn't spent.
+    const refusal = noWorkRefusal(body.attempt, evaluation);
+    if (refusal) {
+      usage.add("noWork.practice");
+      return NextResponse.json(refusal, { status: 422 });
+    }
     usage.add(`practice.${evaluation.verdict}`);
     return NextResponse.json(evaluation);
   } catch (err) {

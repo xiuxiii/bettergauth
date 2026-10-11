@@ -157,15 +157,17 @@ export function ProblemCardSkeleton() {
 }
 
 export function ErrorState({
+  title = "Something went wrong",
   message,
   onRetry,
 }: {
+  title?: string;
   message: string;
   onRetry?: () => void;
 }) {
   return (
     <div className="rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 text-danger-800">
-      <p className="text-sm font-medium">Something went wrong</p>
+      <p className="text-sm font-medium">{title}</p>
       <p className="mt-0.5 text-sm text-danger-700">{message}</p>
       {onRetry && (
         <button

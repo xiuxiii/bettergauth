@@ -103,14 +103,18 @@ const EARLY_ERROR_FIELDS = ["line", "locate", "nudge", "diagnosis", "fix"];
  */
 export function scoreCase(c, check, analysis) {
   const saidCorrect = check?.verdict === "correct";
+  // expect.noWork: the attempt holds no working (a photo of something else),
+  // so the only right result is check-work refusing it (`{ noWork: true }`).
+  // Marking it at all is the miss; refusing real work is a wrong verdict.
+  const noWork = !!check?.noWork;
   const r = {
     id: c.id,
     expectedCorrect: !!c.expect.correct,
-    verdict: check?.verdict ?? "(none)",
-    verdictRight: saidCorrect === !!c.expect.correct,
+    verdict: noWork ? "(no work seen)" : check?.verdict ?? "(none)",
+    verdictRight: c.expect.noWork ? noWork : !noWork && saidCorrect === !!c.expect.correct,
     // The worst failure: a correct student told they're wrong.
     falseAlarm: !!c.expect.correct && !saidCorrect,
-    missed: !c.expect.correct && saidCorrect,
+    missed: c.expect.noWork ? !noWork : !c.expect.correct && saidCorrect,
     category: check?.firstError?.category ?? null,
     categoryRight: null,
     lineRight: null,
@@ -121,7 +125,7 @@ export function scoreCase(c, check, analysis) {
     kind: "check",
   };
 
-  if (!c.expect.correct && !saidCorrect) {
+  if (!c.expect.correct && !saidCorrect && !noWork) {
     if (c.expect.categories?.length) {
       r.categoryRight = c.expect.categories.includes(r.category);
     }

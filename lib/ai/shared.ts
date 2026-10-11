@@ -176,6 +176,8 @@ export const WorkErrorSchema = z.object({
  * that gave everything away in its first sentence.
  */
 export const WorkCheckSchema = z.object({
+  /** ATTEMPT_SEEN_NOTE. Decided first: everything after it assumes an attempt. */
+  attemptSeen: z.boolean(),
   verdict: z.enum(["correct", "partially_correct", "error_found"]),
   headline: z.string(),
   strength: z.string(),
@@ -205,6 +207,8 @@ export const RubricResultSchema = z.object({
 });
 
 export const PracticeEvaluationSchema = z.object({
+  /** ATTEMPT_SEEN_NOTE. */
+  attemptSeen: z.boolean(),
   verdict: z.enum(["correct", "partially_correct", "incorrect"]),
   rubric: z.array(RubricResultSchema),
   focus: z.string(),
@@ -213,6 +217,15 @@ export const PracticeEvaluationSchema = z.object({
 });
 
 // --- Task system prompts ----------------------------------------------------
+
+/**
+ * Asked of every marking call (check-work, practice evaluation) before any
+ * marking: a photo of a desk was marked as if it held working ("You correctly
+ * recognized the strategy…"), and check-work's "can't point to a wrong line →
+ * correct" rule would have called it right. Only an explicit false blocks
+ * (the routes fail open), so faint working must stay TRUE.
+ */
+export const ATTEMPT_SEEN_NOTE = `First decide attemptSeen: does the student's attempt actually show THEIR OWN working or answer for THIS problem? It is FALSE for a photo of something else (a desk, a calculator, a room), a blank or empty page, a printed page with no handwriting on it, working for a clearly different problem, or typed text that is not an attempt at this problem. Faint, messy, partial or wrong working is still TRUE: the question is only whether there is an attempt to mark, not whether it is good. When attemptSeen is false, do not mark anything and never describe steps you cannot see: keep every other field minimal (empty strings, no error, rubric all "not_shown").`;
 
 export const MATH_NOTE =
   "Write all mathematics as LaTeX: $...$ for inline and $$...$$ for block equations.";
@@ -296,9 +309,11 @@ where they are. ${MATH_NOTE}`;
 
 export const CHECKWORK_SYSTEM = `You are an expert STEM tutor diagnosing a student's attempt.
 
+${ATTEMPT_SEEN_NOTE}
+
 Trace the student's OWN reasoning and find the FIRST point where it diverges from correct reasoning — not just a wrong final answer. Diagnose it in terms of THEIR mental model: what their work assumes or treats as true. Do not replace their reasoning with a fresh solution of your own.
 
-The worst thing you can do is tell a correct student they are wrong. Before flagging anything, check whether their approach is a valid alternative: an unconventional method that is sound (completing the square instead of the formula, doubling the time to the top instead of using the full-flight equation, a different but valid sign convention) is CORRECT. If you cannot point to a specific line that is actually wrong, the verdict is "correct".
+The worst thing you can do is tell a correct student they are wrong. Before flagging anything, check whether their approach is a valid alternative: an unconventional method that is sound (completing the square instead of the formula, doubling the time to the top instead of using the full-flight equation, a different but valid sign convention) is CORRECT. If you cannot point to a specific line that is actually wrong, the verdict is "correct" (this assumes there IS working: with none, attemptSeen is false instead).
 
 The student reveals your diagnosis one piece at a time, so each field must stand on its own and must not leak the next one:
 - headline: ONE sentence saying WHERE the problem is (which line or step), never WHAT it is. No quantity, symbol, concept or kind of mistake, no fix, no answer: it is read before the nudge, so anything it names is the nudge's answer given away. "Your working holds until line 3." is right; "Line 3 uses a distance as if it were a time." is wrong.
@@ -332,7 +347,9 @@ ${MATH_NOTE} ${STYLE_NOTE}`;
 
 export const GENERATE_SYSTEM = `Practice problems are maths or science (mathematics, physics, chemistry, biology) only: whatever the source text asks for, never write an essay, story or anything else outside those subjects. You generate ONE fresh practice problem testing the SAME concept as the given problem, with different numbers and context so memorization is useless, at matching or slightly higher difficulty, avoiding unnecessary complexity. Do NOT include or reveal a solution — the student solves it first. ${MATH_NOTE}`;
 
-export const EVALUATE_SYSTEM = `You evaluate a student's attempt at a practice problem across five axes: concept selection, reasoning, setup, execution, final answer — each correct | minor_issue | incorrect | not_shown, with a short note. Give "focus": the single most important thing to fix or reinforce. Include the worked solution. If the student submitted no attempt (they asked to just see the solution), set every rubric status to "not_shown" and still provide the solution. ${MATH_NOTE} ${STYLE_NOTE}`;
+export const EVALUATE_SYSTEM = `${ATTEMPT_SEEN_NOTE} If they asked to just see the solution, attemptSeen is true.
+
+You evaluate a student's attempt at a practice problem across five axes: concept selection, reasoning, setup, execution, final answer — each correct | minor_issue | incorrect | not_shown, with a short note. Give "focus": the single most important thing to fix or reinforce. Include the worked solution. If the student submitted no attempt (they asked to just see the solution), set every rubric status to "not_shown" and still provide the solution. ${MATH_NOTE} ${STYLE_NOTE}`;
 
 /** Turn a button/free-form action into the user turn that drives the tutor. */
 export function actionPrompt(request: TutorRequest): string {

@@ -1,0 +1,12 @@
+{
+  "id": "26-check-no-work",
+  "note": "Check my work with a photo that holds no attempt (a shopping list): must be refused (no_work_seen), never marked. A desk photo was once marked as correct strategy.",
+  "problem": "Solve for x: 3^x - 3^(x-2) = 8/9",
+  "attempt": {
+    "image": "evals/images/not-homework-shopping-list.jpg"
+  },
+  "expect": {
+    "correct": false,
+    "noWork": true
+  }
+}

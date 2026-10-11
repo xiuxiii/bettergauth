@@ -1,11 +1,13 @@
 /**
  * The workspace: the check revealed one piece at a time, the key idea held
  * back until the session is resolved, chips that follow the stage, old
- * records read safely, and tutor turns that stream (or fail) cleanly.
+ * records read safely, tutor turns that stream (or fail) cleanly, and the
+ * attempt gate: no working in what was sent means no marking at all.
  * Preferences are the harness default: hint first.
  */
 import {
   ANSWER,
+  PHOTO,
   FIRST_ERROR,
   KEY_IDEA,
   allSessions,
@@ -13,6 +15,7 @@ import {
   check,
   checkFrames,
   mock,
+  practiceProblem,
   record,
   seed,
   turnFrames,
@@ -309,5 +312,66 @@ export default async function workspaceSpec(t) {
     await p.waitForTimeout(400);
     await t.shot(p, "check-revealed-dark");
     t.ok("dark: no unmocked AI calls", st.unmocked.length === 0, st.unmocked);
+  });
+
+  await t.test("Check my work: no working in what was sent is said plainly, never marked", async () => {
+    const { p, st } = await t.page();
+    await mock(p, t.base, "analyze", () => analysis({ studentWork: { present: true }, attemptText: TYPED_WORK }));
+    await mock(p, t.base, "check-work", () => ({
+      ndjson: [
+        { t: "stage", stage: "thinking" },
+        { t: "error", code: "no_work_seen", message: "NOWORK I can't see your working." },
+      ],
+    }));
+    await p.goto(t.base + "/");
+    await p.getByRole("textbox", { name: "Type or paste a problem" }).fill(
+      `A ball is dropped from 20 m. Find its speed at the ground. My working: ${TYPED_WORK}`,
+    );
+    await p.getByRole("button", { name: "Start this problem" }).click();
+    await p.waitForURL(/\/workspace/);
+    await visible(p, "NOWORK").waitFor({ timeout: 10000 });
+    t.ok("no work: its own title, not \"Something went wrong\"",
+      (await onScreen(p, "No working to check")) && !(await onScreen(p, "Something went wrong")));
+    t.ok("no work: no Try again (the same photo would see the same nothing)",
+      (await p.getByRole("button", { name: "Try again" }).count()) === 0);
+    t.ok("no work: no verdict card", !(await onScreen(p, "HEADLINE")));
+    await p.waitForTimeout(800); // give a stray save the chance to happen
+    const recs = await allSessions(p);
+    t.ok("no work: nothing marked is stored, and memory is untouched",
+      recs.every((r) => !r.messages?.some((m) => m.workCheck) && !(r.memory?.errors?.length)),
+      recs.map((r) => ({ msgs: r.messages?.length, errors: r.memory?.errors })));
+    t.ok("no work: no page errors", st.pageErrors.length === 0, st.pageErrors);
+  });
+
+  await t.test("Practice: a photo with no working keeps the problem and asks for another", async () => {
+    const { p, st } = await t.page();
+    await mock(p, t.base, "practice/generate", () => practiceProblem());
+    const evals = await mock(p, t.base, "practice/evaluate", () => ({
+      status: 422,
+      json: { code: "no_work_seen", error: "NOWORKP I can't see your working for this problem in that photo." },
+    }));
+    await p.goto(t.base + "/");
+    await seed(p, [record("np", { messages: [{ id: "p1", role: "tutor", content: "", createdAt: 1, practiceFor: analysis() }] })]);
+    await p.goto(t.base + "/workspace?session=np");
+    await p.getByText("PRACTICE-Q").waitFor();
+    const [chooser] = await Promise.all([
+      p.waitForEvent("filechooser"),
+      p.getByRole("button", { name: "Choose from your photos" }).click(),
+    ]);
+    await chooser.setFiles(PHOTO);
+    await p.getByText("Photo attached").waitFor();
+    await p.getByRole("button", { name: "Submit for feedback" }).first().click();
+    await visible(p, "NOWORKP").waitFor({ timeout: 10000 });
+    t.ok("practice no work: the photo was sent once", evals.length === 1, evals.length);
+    t.ok("practice no work: no rubric, no verdict, no solution",
+      !(await onScreenI(p, "Concept selection")) && !(await onScreen(p, "Let's regroup")) && !(await onScreen(p, "Your answer")));
+    t.ok("practice no work: the problem is still there to solve", await onScreen(p, "PRACTICE-Q"));
+    t.ok("practice no work: the bad photo is cleared, ready for another",
+      (await p.getByText("Photo attached").count()) === 0 &&
+        (await p.getByRole("button", { name: /Take a photo of your work/ }).isVisible()));
+    const rec = (await allSessions(p)).find((r) => r.id === "np");
+    const ps = rec?.messages?.find((m) => m.id === "p1")?.practiceState;
+    t.ok("practice no work: no evaluation is saved", !ps?.evaluation, ps);
+    t.ok("practice no work: no page errors", st.pageErrors.length === 0, st.pageErrors);
   });
 }

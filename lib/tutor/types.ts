@@ -646,6 +646,12 @@ export interface WorkError {
  * recorded exactly that misconception as DEMONSTRATED.
  */
 export interface WorkCheck {
+  /**
+   * False when the model saw no attempt at this problem (a photo of a desk, a
+   * blank page). The route turns that into a `no_work_seen` error, so a
+   * stored check never has it; absent means an ordinary check.
+   */
+  attemptSeen?: boolean;
   verdict: CheckVerdict;
   /** One sentence. No fix, no answer. */
   headline: string;
@@ -699,6 +705,8 @@ export function normalizeWorkCheck(raw: unknown): WorkCheck {
       : undefined,
     continueFrom: s(c.continueFrom),
     concept: s(c.concept) || undefined,
+    // Only an explicit false travels: a check without it is a normal one.
+    ...(c.attemptSeen === false ? { attemptSeen: false } : {}),
   };
 }
 
@@ -777,6 +785,8 @@ export interface RubricResult {
 
 /** The tutor's evaluation of a practice attempt, with the solution revealed. */
 export interface PracticeEvaluation {
+  /** As WorkCheck.attemptSeen: false never reaches the client. */
+  attemptSeen?: boolean;
   verdict: "correct" | "partially_correct" | "incorrect";
   /** All five axes, in display order. */
   rubric: RubricResult[];

@@ -172,6 +172,14 @@ function selftest() {
   r = scoreCase(wrongCase, good, { concept: "Time of flight using the vertical component" });
   t("a label naming the method is a spoiler", r.labelSpoilers.length === 1);
 
+  const noWorkCase = { id: "n", expect: { correct: false, noWork: true } };
+  r = scoreCase(noWorkCase, { noWork: true });
+  t("a photo with no working, refused, scores right", r.verdictRight && !r.missed && !r.falseAlarm);
+  r = scoreCase(noWorkCase, { verdict: "correct", headline: "", strength: "", continueFrom: "" });
+  t("a photo with no working, marked anyway, is a miss", r.missed && !r.verdictRight);
+  r = scoreCase(rightCase, { noWork: true });
+  t("real working refused as no work is a false alarm", r.falseAlarm && !r.verdictRight);
+
   const s = summarize([
     scoreCase(rightCase, { ...good, verdict: "error_found" }),
     scoreCase(rightCase, { verdict: "correct", headline: "", strength: "", continueFrom: "" }),

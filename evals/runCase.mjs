@@ -36,6 +36,9 @@ function lastCheck(ndjson) {
   for (const line of ndjson.split("\n").filter(Boolean)) {
     const f = JSON.parse(line);
     if (f.t === "done") return f.check;
+    // The attempt gate (lib/noWork.ts): a refusal is a result, scored by
+    // scoreCase, not a failed run.
+    if (f.t === "error" && f.code === "no_work_seen") return { noWork: true };
     if (f.t === "error") throw new Error(`check-work: ${f.message}`);
   }
   throw new Error("check-work: stream ended without a result");

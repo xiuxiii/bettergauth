@@ -197,6 +197,17 @@ beats detection). Only an explicit `false` blocks; a missing field never turns a
 real problem away, and the cropper overlay keeps a "Use this photo anyway" link
 for a faint page misread as empty.
 
+**Nothing is marked that isn't there.** Check-work and practice marking
+first decide `attemptSeen` (`ATTEMPT_SEEN_NOTE`, `lib/ai/shared.ts`): a photo
+of a desk was once marked "You correctly recognized the strategy…", and
+check-work's "no wrong line → correct" rule would call it right. An explicit
+false (fail open, as above) becomes `no_work_seen` (`noWorkRefusal`,
+`lib/noWork.ts`, unit-tested): a 422 from `/api/practice/evaluate` (so the
+solution isn't spent), an error frame from `/api/check-work`. Nothing is stored
+or put in memory, and there is no Try again: the same photo would see the same
+nothing. "Show solution" sends no attempt and is never refused. Eval case 26
+(`expect.noWork`) keeps it measured.
+
 **A photo with working starts the check alongside the analysis, not after.**
 Detection marks each question `hasWorking`; if the chosen one has it, the cropper
 passes a hint (`WORK_HINT_KEY`) and `runAnalysis` fires `/api/check-work` in
