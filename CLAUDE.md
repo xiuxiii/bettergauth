@@ -4,6 +4,22 @@ Mobile-first AI STEM tutor. A student photographs a problem; the app diagnoses t
 first point where *their* reasoning diverges rather than handing back an answer.
 Next.js 15 (App Router) + TypeScript + Tailwind, deployed on Vercel.
 
+## Learning mode
+
+The owner is learning to code through this project, so every task should leave
+them understanding more, not just with working code. After each task (skip
+trivial ones like typos or copy tweaks):
+
+- Add a dated entry to `LEARNING.md` (create it if missing): the concepts the
+  change used, explained simply; why this approach over the obvious
+  alternative; and each file touched with one line on its role.
+- In that entry, set one small exercise (roughly 10–20 lines) for the owner to
+  write next time: what it should do, where it goes, and how to check it works.
+  Describe it in `LEARNING.md` only. Never leave it half-done in the code:
+  pushes auto-deploy.
+- When the owner shares their attempt, review it like a teacher first (what's
+  right, what's off, and why) before changing anything yourself.
+
 ## Commands
 
 ```bash
